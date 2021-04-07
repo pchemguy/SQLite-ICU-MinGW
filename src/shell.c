@@ -86,7 +86,7 @@
 #include <string.h>
 #include <stdio.h>
 #include <assert.h>
-#include "sqlite3.h"
+#include "sqlite2.h"
 typedef sqlite3_int64 i64;
 typedef sqlite3_uint64 u64;
 typedef unsigned char u8;

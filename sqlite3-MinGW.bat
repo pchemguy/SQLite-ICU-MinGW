@@ -1,15 +1,60 @@
 @echo off
 
 set Path=G:\ProgramsMisc\Anaconda\msys2\mingw32\bin;%Path%
-set SRC_DIR=.\src
-set INC_DIR=.\include
-set BIN_DIR=.\bin
+set SRCDIR=.\src
+set INCLUDES=-I. -I.\include
+set LIBRARIES=-L. -L.\lib
+set BINOUT=.\bin
+set LIBOUT=.\lib
 set LIBS=-lpthread -ldl -lm
-set SOURCES="%SRC_DIR%\shell.c" "%SRC_DIR%\sqlite3.c" "%SRC_DIR%\test_sqllog.c"
+set LIBNAME=sqlite3
+set SHELLNAME=%LIBNAME%
+if not "%~3" == "" set LIBNAME=%~3
+
 
 rem Get ICU compile options
 set CLI=pkg-config --cflags --libs --static icu-i18n
 for /f "usebackq delims=" %%i in (`%CLI%`) do (set ICU_OPTIONS=%%i)
+
+
+if /I "%~2" == "stdcall" (
+  set STDCALL=1
+  set ABI=^
+    -DSQLITE_API=^__declspec^(dllexport^) ^
+    -DSQLITE_APICALL=__stdcall
+)
+
+if /I "%~1" == "dll" (
+  if not defined "%STDCALL%" (
+    set SOURCES="%SRCDIR%\sqlite3.c" "%SRCDIR%\test_sqllog.c"
+    set SQLLOG=-DSQLITE_ENABLE_SQLLOG
+  ) else (
+    set SOURCES="%SRCDIR%\sqlite3.c"
+  )
+  set BINNAM=lib%LIBNAME%-0.dll
+  set SHARED=-shared
+  set LIBFLAGS=-Wl,--subsystem,windows,--kill-at,--output-def,"%LIBOUT%\%LIBNAME%.def",--out-implib,"%LIBOUT%\lib%LIBNAME%.a"
+)
+if /I "%~1" == "exe" (
+  if not defined "%STDCALL%" (
+    set SOURCES="%SRCDIR%\shell.c" "%SRCDIR%\sqlite3.c" "%SRCDIR%\test_sqllog.c"
+    set SQLLOG=-DSQLITE_ENABLE_SQLLOG
+  ) else (
+    set SOURCES="%SRCDIR%\shell.c" "%SRCDIR%\sqlite3.c"
+  )
+  set BINNAM=%SHELLNAME%.exe
+)
+if /I "%~1" == "shell" (
+  set SOURCES="%SRCDIR%\shell.c"
+  set BINNAM=%SHELLNAME%.exe
+  set LIBS=%LIBS% -l%LIBNAME%
+)
+
+if /I "%~1" == "" (
+  echo Build target must be specified
+  exit /b 1
+)
+
 
 set FEATURES=^
 -DSQLITE_DQS=0 ^
@@ -36,14 +81,21 @@ set FEATURES=^
 -DSQLITE_ENABLE_RTREE ^
 -DSQLITE_ENABLE_STMTVTAB ^
 -DSQLITE_ENABLE_STAT4 ^
--DSQLITE_ENABLE_SQLLOG ^
+%SQLLOG% ^
 -DSQLITE_SOUNDEX
 
 
-gcc -I"%INC_DIR%" ^
+gcc ^
+  %INCLUDES% ^
+  %LIBRARIES% ^
   %SOURCES% ^
   %LIBS% ^
   %ICU_OPTIONS% ^
+  %ABI% ^
   %FEATURES% ^
-  -o %BIN_DIR%\sqlite3.exe
+  %SHARED% ^
+  %LIBFLAGS% ^
+  -o "%BINOUT%\%BINNAM%"
 
+
+rem   -O2 ^
