@@ -10,7 +10,7 @@ set LIBS=-lpthread -ldl -lm
 set LIBNAME=sqlite3
 set SHELLNAME=%LIBNAME%
 if not "%~3" == "" set LIBNAME=%~3
-
+if exist "%SRCDIR%\test_sqllog.c" set TEST_LOG="%SRCDIR%\test_sqllog.c"
 
 rem Get ICU compile options
 set CLI=pkg-config --cflags --libs --static icu-i18n
@@ -26,8 +26,8 @@ if /I "%~2" == "stdcall" (
 
 if /I "%~1" == "dll" (
   if not defined "%STDCALL%" (
-    set SOURCES="%SRCDIR%\sqlite3.c" "%SRCDIR%\test_sqllog.c"
-    set SQLLOG=-DSQLITE_ENABLE_SQLLOG
+    set SOURCES="%SRCDIR%\sqlite3.c" %TEST_LOG%
+    if exist "%SRCDIR%\test_sqllog.c" set SQLLOG=-DSQLITE_ENABLE_SQLLOG
   ) else (
     set SOURCES="%SRCDIR%\sqlite3.c"
   )
@@ -37,8 +37,8 @@ if /I "%~1" == "dll" (
 )
 if /I "%~1" == "exe" (
   if not defined "%STDCALL%" (
-    set SOURCES="%SRCDIR%\shell.c" "%SRCDIR%\sqlite3.c" "%SRCDIR%\test_sqllog.c"
-    set SQLLOG=-DSQLITE_ENABLE_SQLLOG
+    set SOURCES="%SRCDIR%\shell.c" "%SRCDIR%\sqlite3.c" %TEST_LOG%
+    if exist "%SRCDIR%\test_sqllog.c" set SQLLOG=-DSQLITE_ENABLE_SQLLOG
   ) else (
     set SOURCES="%SRCDIR%\shell.c" "%SRCDIR%\sqlite3.c"
   )
