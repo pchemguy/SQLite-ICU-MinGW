@@ -33,7 +33,7 @@ if /I "%~1" == "dll" (
   )
   set BINNAM=lib%LIBNAME%-0.dll
   set SHARED=-shared
-  set LIBFLAGS=-Wl,--subsystem,windows,--kill-at,--output-def,"%LIBOUT%\%LIBNAME%.def",--out-implib,"%LIBOUT%\lib%LIBNAME%.a"
+  set LIBFLAGS=-static-libgcc -static-libstdc++ -Wl,--subsystem,windows,--kill-at,--output-def,"%LIBOUT%\%LIBNAME%.def",--out-implib,"%LIBOUT%\lib%LIBNAME%.a"
 )
 if /I "%~1" == "exe" (
   if not defined "%STDCALL%" (
@@ -43,10 +43,12 @@ if /I "%~1" == "exe" (
     set SOURCES="%SRCDIR%\shell.c" "%SRCDIR%\sqlite3.c"
   )
   set BINNAM=%SHELLNAME%.exe
+  set LIBFLAGS=-static-libgcc -static-libstdc++
 )
 if /I "%~1" == "shell" (
   set SOURCES="%SRCDIR%\shell.c"
   set BINNAM=%SHELLNAME%.exe
+  set LIBFLAGS=-static-libgcc -static-libstdc++
   set LIBS=%LIBS% -l%LIBNAME%
 )
 
@@ -95,6 +97,7 @@ gcc ^
   %FEATURES% ^
   %SHARED% ^
   %LIBFLAGS% ^
+  -Wall ^
   -o "%BINOUT%\%BINNAM%"
 
 
