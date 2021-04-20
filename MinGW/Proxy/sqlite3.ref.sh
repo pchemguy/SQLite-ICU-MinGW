@@ -27,7 +27,8 @@ readonly BUILDDIR=${DBDIR}/build
 CFLAGS_EXTRAS=""
 LIBS=""
 OPT_FEATURE_FLAGS=""
-
+SERVER_API=""
+CLIENT_API=""
 
 get_sqlite() {
   cd "${BASEDIR}" || ( echo "Cannot enter ${BASEDIR}" && exit 101 )
@@ -188,8 +189,22 @@ set_sqlite3_extra_options() {
     -DSQLITE_ENABLE_STAT4 \
     -DSQLITE_SOUNDEX \
     -DNDEBUG"
-  
-  OPT_FEATURE_FLAGS="${FEATURES}"
+    
+  CALLING_CONVENTION=" \
+    -DSQLITE_CDECL=__cdecl \
+    -DSQLITE_APICALL=__stdcall \
+    -DSQLITE_CALLBACK=__stdcall \
+    -DSQLITE_SYSAPI=__stdcall \
+    -DSQLITE_TCLAPI=__cdecl"
+
+  if [[ -n "${STDCALL:-}" ]]; then
+    FEATURES+="${CALLING_CONVENTION}"
+  fi
+
+  SERVER_API="-DSQLITE_API=__declspec(dllexport)"
+  CLIENT_API="-DSQLITE_API=__declspec(dllimport)"
+
+  OPT_FEATURE_FLAGS="${FEATURES//    /}"
   
   export CFLAGS_EXTRAS OPT_FEATURE_FLAGS LIBS
   return 0
@@ -226,10 +241,3 @@ main() {
 
 
 main "$@"
-
-
-
-#
-###############################################################################
-#all: 
-#	$(MAKE) all dll
