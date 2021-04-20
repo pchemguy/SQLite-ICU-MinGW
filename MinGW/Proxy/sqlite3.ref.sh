@@ -24,8 +24,9 @@ BASEDIR="$(dirname "$(realpath "$0")")"
 readonly BASEDIR
 readonly DBDIR="sqlite3"
 readonly BUILDDIR=${DBDIR}/build
-ICU_CPPGLAGS=""
-ICU_LDFLAGS=""
+CFLAGS_EXTRAS=""
+LIBS=""
+OPT_FEATURE_FLAGS=""
 
 
 get_sqlite() {
@@ -97,7 +98,7 @@ libtool_sys_lib_path() {
   echo "_____________________________________"
   echo "Cleaning up libtool's sys_lib_path..."
   echo "-------------------------------------"
-  local msys_root
+  local msys_rot
   msys_root="$(cygpath -m /)"
   msys_root="${msys_root%/}"
   local folders
@@ -139,6 +140,62 @@ patch_sqlite3_libtool() {
 }
 
 
+set_sqlite3_extra_options() {
+  DEFAULT_LIBS="-lpthread -lm -ldl"
+  LIBOPTS="-static-libgcc -static-libstdc++"
+  LIBS+="${LIBOPTS}"
+  
+  ICU_CFLAGS="$(icu-config --cflags --cppflags)"
+  CFLAGS_EXTRAS+="${ICU_CFLAGS}"
+  ICU_LDFLAGS="$(icu-config --ldflags --ldflags-system)"
+  LIBS+="${ICU_LDFLAGS}"
+  local libraries
+  IFS=$' \n\t'
+    libraries=( ${DEFAULT_LIBS} )
+  IFS=$'\n\t'
+  local library
+  for library in "${libraries[@]}"; do
+    if [[ -n "${LIBS##*${library}*}" ]]; then
+      LIBS+=" ${library}"
+    fi
+  done
+  
+  FEATURES=" \
+    -D_HAVE_SQLITE_CONFIG_H \
+    -DSQLITE_DQS=0 \
+    -DSQLITE_LIKE_DOESNT_MATCH_BLOBS \
+    -DSQLITE_MAX_EXPR_DEPTH=0 \
+    -DSQLITE_OMIT_DEPRECATED \
+    -DSQLITE_DEFAULT_FOREIGN_KEYS=1 \
+    -DSQLITE_DEFAULT_SYNCHRONOUS=1 \
+    -DSQLITE_ENABLE_COLUMN_METADATA \
+    -DSQLITE_ENABLE_DBPAGE_VTAB \
+    -DSQLITE_ENABLE_DBSTAT_VTAB \
+    -DSQLITE_ENABLE_EXPLAIN_COMMENTS \
+    -DSQLITE_ENABLE_FTS3 \
+    -DSQLITE_ENABLE_FTS3_PARENTHESIS \
+    -DSQLITE_ENABLE_FTS3_TOKENIZER \
+    -DSQLITE_ENABLE_FTS4 \
+    -DSQLITE_ENABLE_FTS5 \
+    -DSQLITE_ENABLE_GEOPOLY \
+    -DSQLITE_ENABLE_MATH_FUNCTIONS \
+    -DSQLITE_ENABLE_JSON1 \
+    -DSQLITE_ENABLE_QPSG \
+    -DSQLITE_ENABLE_RBU \
+    -DSQLITE_ENABLE_ICU \
+    -DSQLITE_ENABLE_RTREE \
+    -DSQLITE_ENABLE_STMTVTAB \
+    -DSQLITE_ENABLE_STAT4 \
+    -DSQLITE_SOUNDEX \
+    -DNDEBUG"
+  
+  OPT_FEATURE_FLAGS="${FEATURES}"
+  
+  export CFLAGS_EXTRAS OPT_FEATURE_FLAGS LIBS
+  return 0
+}
+
+
 main() {
   export LOG_FILE=${LOG_FILE:-${BASEDIR}/makelog.log}
   echo "$0" "$@" >>"${LOG_FILE}"
@@ -159,11 +216,20 @@ main() {
     (( EXITCODE != 0 )) && echo "Error patching <libtool>" && exit 203
   fi
 
-  cp "${BASEDIR}/sqlite3.ref.mk" "${BASEDIR}/${BUILDDIR}" \
-    || ( echo "Cannot copy make file" && exit 204 )
-  make -C "${BASEDIR}/${BUILDDIR}" -f "sqlite3.ref.mk" all
+  set_sqlite3_extra_options || EXITCODE=$?
+
+  cd "${BASEDIR}/${BUILDDIR}" \
+    || ( echo "Cannot enter ./${BUILDDIR}" && exit 204 )
+  make all dll
   return 0
 }
 
 
 main "$@"
+
+
+
+#
+###############################################################################
+#all: 
+#	$(MAKE) all dll
