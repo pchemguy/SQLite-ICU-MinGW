@@ -100,5 +100,4 @@ gcc ^
   -Wall ^
   -o "%BINOUT%\%BINNAM%"
 
-
 rem   -O2 ^
