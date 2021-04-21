@@ -30,6 +30,7 @@ OPT_FEATURE_FLAGS=""
 SERVER_API=""
 CLIENT_API=""
 
+
 get_sqlite() {
   cd "${BASEDIR}" || ( echo "Cannot enter ${BASEDIR}" && exit 101 )
   local SQLite_URL="https://www.sqlite.org/src/tarball/sqlite.tar.gz?r=release"
@@ -132,7 +133,8 @@ patch_sqlite3_libtool() {
   echo "___________________________"
   echo "Patching SQLite3 libtool..."
   echo "---------------------------"
-  local mingw_ld="$(which ld.exe)"
+  local mingw_ld
+  mingw_ld="$(which ld.exe)"
   sed -e 's|^\(deplibs_check_method=\)"file_magic\(.*\)$|#\0\n\1"pass_all"|;' \
       -e "s|^LD=\(.*\)\$|LD=\"${mingw_ld}\"|;" \
       -e "s|^\(sys_lib_search_path_spec=\)\(.*\)\$|\1\"${sys_lib_path}\"|;" \
@@ -190,15 +192,16 @@ set_sqlite3_extra_options() {
     -DSQLITE_SOUNDEX \
     -DNDEBUG"
     
-  CALLING_CONVENTION=" \
+  ABI_STDCALL=" \
     -DSQLITE_CDECL=__cdecl \
     -DSQLITE_APICALL=__stdcall \
     -DSQLITE_CALLBACK=__stdcall \
     -DSQLITE_SYSAPI=__stdcall \
     -DSQLITE_TCLAPI=__cdecl"
 
-  if [[ -n "${STDCALL:-}" ]]; then
-    FEATURES+="${CALLING_CONVENTION}"
+  if [[ "${ABI:-}" == "STDCALL" ]]; then
+    echo "Using Stdcall ABI"
+    FEATURES+="${ABI_STDCALL}"
   fi
 
   SERVER_API="-DSQLITE_API=__declspec(dllexport)"
@@ -213,9 +216,11 @@ set_sqlite3_extra_options() {
 
 main() {
   export LOG_FILE=${LOG_FILE:-${BASEDIR}/makelog.log}
-  echo "$0" "$@" >>"${LOG_FILE}"
-  echo "###############################################################" >>"${LOG_FILE}"
-  echo "" >>"${LOG_FILE}"
+  { 
+    echo "$0" "$@";
+    echo "###############################################################";
+    echo "";
+  } >>"${LOG_FILE}"
 
   get_sqlite || EXITCODE=$?
   (( EXITCODE != 0 )) && echo "Error downloading SQLite3" && exit 201
@@ -235,7 +240,7 @@ main() {
 
   cd "${BASEDIR}/${BUILDDIR}" \
     || ( echo "Cannot enter ./${BUILDDIR}" && exit 204 )
-  make all dll
+  make -j 6 all dll
   return 0
 }
 
