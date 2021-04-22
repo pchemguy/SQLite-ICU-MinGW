@@ -59,9 +59,10 @@ configure_sqlite() {
   mkdir -p "./${BUILDDIR}"
   cd "${BASEDIR}/${BUILDDIR}" \
     || ( echo "Cannot enter ./${BUILDDIR}" && exit 104 )
-  [[ ! -r ../configure ]] && echo "Error accessing SQLite configure" && exit 105
 
   if [[ ! -f ./Makefile ]]; then
+    [[ ! -r ../configure ]] && echo "Error accessing SQLite configure"
+      && exit 105
     echo "______________________"
   	echo "Configuring SQLite3..."
     echo "----------------------"
