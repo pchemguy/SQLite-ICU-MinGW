@@ -61,13 +61,13 @@ configure_sqlite() {
     || ( echo "Cannot enter ./${BUILDDIR}" && exit 104 )
 
   if [[ ! -f ./Makefile ]]; then
-    [[ ! -r ../configure ]] && echo "Error accessing SQLite configure"
+    [[ ! -r ../configure ]] && echo "Error accessing SQLite configure" \
       && exit 105
     echo "______________________"
   	echo "Configuring SQLite3..."
     echo "----------------------"
     ../configure --enable-fts3 --enable-memsys5 --enable-update-limit \
-      --enable-all --with-tcl="${MINGW_PREFIX}/lib/tcl8" || EXITCODE=$?
+      --enable-all --with-tcl="${MINGW_PREFIX}/lib" || EXITCODE=$?
     (( EXITCODE != 0 )) && echo "Error configuring SQLite" && exit 106
   else
     echo "____________________________________________"
