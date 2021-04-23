@@ -66,8 +66,29 @@ configure_sqlite() {
     echo "______________________"
   	echo "Configuring SQLite3..."
     echo "----------------------"
-    ../configure --enable-fts3 --enable-memsys5 --enable-update-limit \
-      --enable-all --with-tcl="${MINGW_PREFIX}/lib" || EXITCODE=$?
+
+    local msys_root
+    msys_root="$(cygpath -m /)"
+    msys_root="${msys_root%/}"
+    local readline_inc
+    readline_inc=$(pkg-config --cflags --static readline)
+    readline_inc=${readline_inc//${msys_root}/}
+    local readline_lib
+    readline_lib=$(pkg-config --libs --static readline)
+    readline_lib=${readline_lib//${msys_root}/}
+    
+    local CONFIGURE_OPTS
+    CONFIGURE_OPTS=(
+      --enable-all
+      --enable-fts3
+      --enable-memsys5
+      --enable-update-limit
+      --with-tcl=${MINGW_PREFIX}/lib
+      --with-readline-lib="${readline_lib}"
+      --with-readline-inc="${readline_inc}"
+    )
+
+    ../configure ${CONFIGURE_OPTS[@]} || EXITCODE=$?
     (( EXITCODE != 0 )) && echo "Error configuring SQLite" && exit 106
   else
     echo "____________________________________________"
