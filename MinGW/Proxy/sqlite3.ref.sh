@@ -36,14 +36,14 @@ get_sqlite() {
   local SQLite_URL="https://www.sqlite.org/src/tarball/sqlite.tar.gz?r=release"
   if [[ ! -f ./sqlite.tar.gz ]]; then
     echo "____________________________________________"
-  	echo "Downloading the current release of SQLite..."
+    echo "Downloading the current release of SQLite..."
     echo "--------------------------------------------"
     wget -c "${SQLite_URL}" --no-check-certificate -O sqlite.tar.gz \
       || EC=$?
     (( EC != 0 )) && echo "Error downloading SQLite ${EC}." && exit 102
   else
     echo "________________________________________________"
-  	echo "Using previously downloaded archive of SQLite..."
+    echo "Using previously downloaded archive of SQLite..."
     echo "------------------------------------------------"
   fi
 
@@ -64,7 +64,7 @@ configure_sqlite() {
     [[ ! -r ../configure ]] && echo "Error accessing SQLite configure" \
       && exit 105
     echo "______________________"
-  	echo "Configuring SQLite3..."
+    echo "Configuring SQLite3..."
     echo "----------------------"
 
     local msys_root
@@ -93,7 +93,7 @@ configure_sqlite() {
     (( EXITCODE != 0 )) && echo "Error configuring SQLite" && exit 106
   else
     echo "____________________________________________"
-  	echo "Makefile found. Skipping configuring SQLite3"
+    echo "Makefile found. Skipping configuring SQLite3"
     echo "--------------------------------------------"
   fi
   return 0
@@ -136,46 +136,48 @@ set_sqlite3_extra_options() {
     fi
   done
   
-  FEATURES=" \
-    -D_HAVE_SQLITE_CONFIG_H \
-    -DSQLITE_DQS=0 \
-    -DSQLITE_LIKE_DOESNT_MATCH_BLOBS \
-    -DSQLITE_MAX_EXPR_DEPTH=0 \
-    -DSQLITE_OMIT_DEPRECATED \
-    -DSQLITE_DEFAULT_FOREIGN_KEYS=1 \
-    -DSQLITE_DEFAULT_SYNCHRONOUS=1 \
-    -DSQLITE_ENABLE_COLUMN_METADATA \
-    -DSQLITE_ENABLE_DBPAGE_VTAB \
-    -DSQLITE_ENABLE_DBSTAT_VTAB \
-    -DSQLITE_ENABLE_EXPLAIN_COMMENTS \
-    -DSQLITE_ENABLE_FTS3 \
-    -DSQLITE_ENABLE_FTS3_PARENTHESIS \
-    -DSQLITE_ENABLE_FTS3_TOKENIZER \
-    -DSQLITE_ENABLE_MATH_FUNCTIONS \
-    -DSQLITE_ENABLE_QPSG \
-    -DSQLITE_ENABLE_RBU \
-    -DSQLITE_ENABLE_ICU \
-    -DSQLITE_ENABLE_STMTVTAB \
-    -DSQLITE_ENABLE_STAT4 \
-    -DSQLITE_SOUNDEX \
-    -DNDEBUG"
+  FEATURES=(
+    -D_HAVE_SQLITE_CONFIG_H
+    -DSQLITE_DQS=0
+    -DSQLITE_LIKE_DOESNT_MATCH_BLOBS
+    -DSQLITE_MAX_EXPR_DEPTH=0
+    -DSQLITE_OMIT_DEPRECATED
+    -DSQLITE_DEFAULT_FOREIGN_KEYS=1
+    -DSQLITE_DEFAULT_SYNCHRONOUS=1
+    -DSQLITE_ENABLE_COLUMN_METADATA
+    -DSQLITE_ENABLE_DBPAGE_VTAB
+    -DSQLITE_ENABLE_DBSTAT_VTAB
+    -DSQLITE_ENABLE_EXPLAIN_COMMENTS
+    -DSQLITE_ENABLE_FTS3
+    -DSQLITE_ENABLE_FTS3_PARENTHESIS
+    -DSQLITE_ENABLE_FTS3_TOKENIZER
+    -DSQLITE_ENABLE_MATH_FUNCTIONS
+    -DSQLITE_ENABLE_QPSG
+    -DSQLITE_ENABLE_RBU
+    -DSQLITE_ENABLE_ICU
+    -DSQLITE_ENABLE_STMTVTAB
+    -DSQLITE_ENABLE_STAT4
+    -DSQLITE_SOUNDEX
+    -DNDEBUG
+  )
     
-  ABI_STDCALL=" \
-    -DSQLITE_CDECL=__cdecl \
-    -DSQLITE_APICALL=__stdcall \
-    -DSQLITE_CALLBACK=__stdcall \
-    -DSQLITE_SYSAPI=__stdcall \
-    -DSQLITE_TCLAPI=__cdecl"
+  ABI_STDCALL=(
+    -DSQLITE_CDECL=__cdecl
+    -DSQLITE_APICALL=__stdcall
+    -DSQLITE_CALLBACK=__stdcall
+    -DSQLITE_SYSAPI=__stdcall
+    -DSQLITE_TCLAPI=__cdecl
+  )
 
   if [[ "${ABI:-}" == "STDCALL" ]]; then
     echo "Using Stdcall ABI"
-    FEATURES+="${ABI_STDCALL}"
+    FEATURES=("${FEATURES[@]}" "${ABI_STDCALL[@]}")
   fi
 
   SERVER_API="-DSQLITE_API=__declspec(dllexport)"
   CLIENT_API="-DSQLITE_API=__declspec(dllimport)"
 
-  OPT_FEATURE_FLAGS="${FEATURES//    /}"
+  OPT_FEATURE_FLAGS="${FEATURES[@]}"
   
   export CFLAGS_EXTRAS OPT_FEATURE_FLAGS LIBS
   return 0
