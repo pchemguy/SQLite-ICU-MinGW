@@ -130,14 +130,14 @@ get_sqlite() {
   local SQLite_URL="https://www.sqlite.org/src/tarball/sqlite.tar.gz?r=release"
   if [[ ! -f ./sqlite.tar.gz ]]; then
     echo "____________________________________________"
-  	echo "Downloading the current release of SQLite..."
+    echo "Downloading the current release of SQLite..."
     echo "--------------------------------------------"
     wget -c "${SQLite_URL}" --no-check-certificate -O sqlite.tar.gz \
       || EC=$?
     (( EC != 0 )) && echo "Error downloading SQLite ${EC}." && exit 102
   else
     echo "________________________________________________"
-  	echo "Using previously downloaded archive of SQLite..."
+    echo "Using previously downloaded archive of SQLite..."
     echo "------------------------------------------------"
   fi
 
@@ -162,7 +162,7 @@ configure_sqlite() {
     [[ ! -r ../configure ]] && echo "Error accessing SQLite configure" \
       && exit 105
     echo "______________________"
-  	echo "Configuring SQLite3..."
+    echo "Configuring SQLite3..."
     echo "----------------------"
 
     local msys_root
@@ -190,11 +190,8 @@ configure_sqlite() {
       || EXITCODE=$?
     (( EXITCODE != 0 )) && echo "Error configuring SQLite" && exit 106
   else
-    echo "____________________________"
-    echo "Patching SQLite3 Makefile..."
-    echo "----------------------------"
     echo "____________________________________________"
-  	echo "Makefile found. Skipping configuring SQLite3"
+    echo "Makefile found. Skipping configuring SQLite3"
     echo "--------------------------------------------"
   fi
   return 0
