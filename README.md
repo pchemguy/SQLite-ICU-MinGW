@@ -190,6 +190,9 @@ configure_sqlite() {
       || EXITCODE=$?
     (( EXITCODE != 0 )) && echo "Error configuring SQLite" && exit 106
   else
+    echo "____________________________"
+    echo "Patching SQLite3 Makefile..."
+    echo "----------------------------"
     echo "____________________________________________"
   	echo "Makefile found. Skipping configuring SQLite3"
     echo "--------------------------------------------"
