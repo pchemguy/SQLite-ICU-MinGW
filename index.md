@@ -305,7 +305,7 @@ Required ICU libraries:
 
 ### Alternative Approach
 
-The approach discussed in the previous section is based on a single shell script, which prepares the environment and runs SQLite Makefile. Alternatively, a custom [make][CustomSQLiteMake] script can include the SQLite Makefile and run custom recipes. In this case, an associated shell [script][Custom SQLite Make Shell] the minimum preparation.
+The approach discussed in the previous section is based on a single shell script, which prepares the environment and runs SQLite Makefile. Alternatively, a custom [make][CustomSQLiteMake] script can `include` the SQLite Makefile and run custom recipes. In this case, the associated shell [script][Custom SQLite Make Shell] is responsible for minimum preparation.
 
 <!---
 ### References
