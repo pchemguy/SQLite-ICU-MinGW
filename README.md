@@ -1,18 +1,16 @@
-## Compile SQLite with ICU on Windows with MinGW
-
-This tutorial focuses on compiling SQLite with the ICU extension on Windows using the [MSYS2/MinGW][MSYS2] toolchain. Here, I provide additional information on the SQLite building process, which I learned from the source code. I also describe my development environment, the scripts that within such an environment automate the entire process, and some pitfalls.
+## How to Compile SQLite with ICU on Windows with MinGW
 
 ### Overview
 
-"[SQLite][SQLite] is the [most used][SQLite Use] database engine in the world." The engine features a particularly compact size, which is achieved, in part, via a modularized design: the most important functionalities comprise the engine core, with other features developed as extensions. The source code distribution includes the engine core and mature extensions. The official [precompiled binaries][SQLite Distros] featuring select extensions are also available for various platforms.  
+[SQLite][SQLite] is arguably the most used database engine worldwide, characterized by especially compact size and modular design. By design, the essential functions form the engine core, with other features developed as extensions. Since extensions provide widely used functions, most of them are available as a part of source code distributions. Select extensions are also enabled in the official [precompiled binaries][SQLite Distros] available for various platforms.
 
-A notable extension not included in the official binaries (at least for Windows) and not even listed in the "Extensions" section of the [official documentation][SQLite Docs] is [ICU][ICU]. This extension is responsible for small but important string-related functionality. Specifically, case insensitive string treatment, including string case conversion, is supported by the engine core for the Latin alphabet only. The ICU SQLite extension, when available, enables "case awareness" for non-ASCII Unicode symbols. Unfortunately, there is virtually no information on this extension in the [official documentation][SQLite Docs]. While some compilation instructions are provided ([here][How To Compile SQLite], [here][Compile-time Options], and [here][README.md]), no instructions are provided as to how to enable the ICU extension. Based on my own experience, and some googling, this process may not be particularly straightforward. I have done some digging and experimenting to figure it out and decided to summarize what I have learned in case this how-to might be helpful to others.
+A notable extension not included in the official SQLite binaries or [documentation][SQLite Docs] is [ICU][ICU]. It enables case insensitive string treatment and case conversion for non-ASCII Unicode symbols, whereas the core provides such functions for the Latin alphabet only. The official website has brief SQLite building instructions ([here][How To Compile SQLite], [here][Compile-time Options], and [here][README.md]) but no information on how to enable the ICU extension. Since figuring out the necessary steps was not straightforward because of several obscure issues, I share and discuss scripts that automate the entire process. I also give instructions for setting up [MSYS2/MinGW][MSYS2] toolchain from scratch.
 
 ### Development Environment
 
-I use [MSYS2/MinGW][MSYS2] as my Windows development environment. MSYS2 provides three mutually incompatible toolchains (MSYS2, MinGW x32, and MinGW x64), and any accidental mixing will likely fail the build process. More toolchains are available (see MSYS2 [package groups][MSYS2 Groups]), but for native compilation on a Windows x64 system, which is the focus of this tutorial, just two base toolchains (x32 and x64) are sufficient. The official x64 installer for a minimum MSYS2 environment can be downloaded from the [front page][MSYS2] or [directly][MSYS2 Setup x64].
+This tutorial relies on MSYS2/MinGW development environment. MSYS2 provides three mutually incompatible toolchains (MSYS2, MinGW x32, and MinGW x64), and any accidental mixing will likely fail the building process. More toolchains are available (see MSYS2 [package groups][MSYS2 Groups]), but for native compilation on a Windows x64 system, just two base toolchains (x32 and x64) are sufficient. The official x64 installer for a minimum MSYS2 environment can be downloaded from the [front page][MSYS2] or [directly][MSYS2 Setup x64].
 
-Let us assume that [MSYS2x64][MSYS2 Setup x64] is installed in the "msys64" folder, and the package cache is in the "msys2pkgs" folder. The installation folder does not need to be in the root folder of the system drive, but its path should not contain any spaces. For example, "B:\dev\msys64" contains MSYS2 and "B:\dev\msys2pkgs" contains cached packages. (While MSYS2 can be, for example, integrated with [ConEmu][ConEmu], this customization is not essential and is beyond the scope of this tutorial.) [Pacman][MSYS2 Pacman] package manager is available for interactive or script-based package management from the MSYS2 shell (msys64\msys2.exe). 
+Let us assume that the “msys64” folder ([e.g.](e.g.), “B:\dev\msys64”) contains MSYS2x64, and the “msys2pkgs” folder ([e.g.](e.g.), “B:\dev\msys2pkgs”) has cached packages. (While MSYS2 integrates with [ConEmu][ConEmu], this customization is beyond the scope of this tutorial.) [Pacman][MSYS2 Pacman] package manager is available for interactive or script-based package management from the MSYS2 shell (msys64\msys2.exe).
 
 ```bash
 #!/bin/bash
@@ -40,7 +38,7 @@ pkgs=( toolchain:m clang:m dlfcn:m icu:m nsis:m )
 pacboy --noconfirm --needed -S --cachedir "${PWD}/../msys2pkgs" ${pkgs[@]}
 ```
 
-At this point, both MinGWx32 and MinGWx64 environments have the same set of tools installed. In principle, the same workflow, commands, and scripts should work with either toolchain, yielding x32 and x64 applications. The active toolchain is selected based on the environment settings applied by the appropriate launcher (msys64/mingw32.exe or msys64/mingw64.exe).
+Both MinGWx32 and MinGWx64 environments now have the same set of tools installed. In principle, the same workflow, commands, and scripts should work with either toolchain, yielding x32 and x64 applications. The active toolchain is selected based on the environment settings applied by the proper launcher (msys64/mingw32.exe or msys64/mingw64.exe).
 
 In addition to these toolchains, there are several useful tools for checking library dependencies:
  - [Dependency Walker] is a powerful tool. Unfortunately, its development stopped a long time ago, resulting in a significant amount of "noise".
@@ -51,7 +49,7 @@ I have also used [ShellCheck] to check shell scripts.
 
 ### SQLite Source Code
 
-Four different variants of SQLite source code are available from the [downloads][SQLite Distros] and [repository readme][README.md] pages. The variant incorporating a snapshot of the SQLite source tree is the "master" distribution. It includes all individual source files for the engine core and extensions. Individual extensions can be built independently from their source files and loaded at runtime. The "master" snapshot can be used to generate other source code variants. The so-called "amalgamation" is a single combined C source code file. This file incorporates both the engine core and most of the extensions (both C and header files) and yields a single integrated library file. While the simplest way to compile SQLite is probably using the "amalgamation" source code as described on the official [how-to][How To Compile SQLite] page, the "master" release is more convenient for customized compilation, and it also provides additional insights. Thus, for this tutorial, the ["master" release][SQLite Source Release] will be used.
+Four different variants of SQLite source code are available from the [downloads][SQLite Distros] and [repository readme][README.md] pages. The variant incorporating a snapshot of the SQLite source tree is the "master" distribution. It includes all individual source files for the engine core and extensions. Individual extensions can be built independently from their source files and loaded at runtime. The "master" snapshot can be used to generate other source code variants. The so-called "amalgamation" is a single combined C source code file. This file incorporates both the engine core and most of the extensions (both C and header files) and yields a single integrated library file. While the simplest way to compile SQLite is probably using the "amalgamation" source code as described on the official [how-to][How To Compile SQLite] page, the "master" release is more convenient for custom building, and it also provides additional insights. Thus, for this tutorial, the ["master" release][SQLite Source Release] will be used.
 
 Start MinGW shell and issue commands:
 
@@ -65,16 +63,16 @@ tar xzf ./sqlite.tar.gz
 mv ./sqlite sqlite3
 ```
 
-In the root of the source folder (./sqlite3), there are three make files:
-- "Makefile&#46;in" is used by the configure/make GNU toolchain;
-- "main&#46;mk" is also a GNU make script, but is designated to be called from a parent make file that assigns toolchain variables;
+The source folder (./sqlite3) contains three make files:
+- "Makefile&#46;in" is a template used by the configure/make GNU toolchain;
+- "main&#46;mk" is a GNU make script designed to be called from a parent make file that assigns toolchain variables;
 - "Makefile.msc" is used by the Microsoft nmake.
 
-When I started digging into the SQLite build process on Windows, I was particularly interested in two features: enabling the ICU extension and enabling the "[__stdcall][Stdcall]" (see also [Calling convention]). The GNU make scripts, which primarily target non-Windows systems, do not support either feature. The Microsoft nmake script, on the other hand, supports both features (see the source), though I have not tried it myself. For the MSYS2/MinGW toolchain, GNU configure/Makefile scripts should be used.
+When I started digging into the SQLite build process on Windows, I was particularly interested in two features: enabling the ICU extension and enabling the "[__stdcall][Stdcall]" (see also [Calling convention]). The Microsoft nmake script supports both features (see the source), though I have not tried it myself. The GNU make scripts compatible with MSYS2/MinGW toolchain but primarily targeting non-Windows systems support neither feature.
 
 ### Default Build
 
-Let us create a "sqlite3/build" subfolder and attempt to run a default build:
+Let us create "sqlite3/build" subfolder and attempt to run a default build:
 
 ```bash
 #!/bin/bash
@@ -85,15 +83,15 @@ mkdir -p build && cd ./build
 make -j4
 ```
 
-Configure should create "Makefile" and five other files in the "build" folder and exit successfully. `make` should generate additional files/folders, but should fail in the middle of the process. The error message should contain references to files in /usr/include. But /usr/include files belong to the MSYS toolchain, so MinGW and MSYS toolchains have been mixed. `make` should only use files located inside ${MINGW_PREFIX} and its subfolders. Inspection of the compiler's command line should reveal "-I/usr/include" option.
+Configure should create "Makefile" and five other files in the "build" folder and exit successfully. `make` should generate additional files/folders but should fail. The error message should contain references to files in /usr/include. But /usr/include files belong to the MSYS toolchain, so MinGW and MSYS toolchains have been mixed. `make` should only use files located inside ${MINGW_PREFIX} and its subfolders. Inspection of the compiler's command line should reveal "-I/usr/include" option.
 
-The "sqlite3/build/Makefile" should be inspected next, and it provides a hint that this option has been generated by the configure script (compare with "sqlite3/Makefile.in") for the TCL library. TCL is used extensively by the SQLite build process for preprocessing of the source files. The make script also builds a TCL-SQLite interface. To determine TCL-related compiler options, the configure script looks for the "tclsh" file. The "tclsh" file can also have a version suffix, and "configure" checks for several versions with suffix first. At the same time, TCL is installed in all toolchains during the MSYS/MinGW setup described above. While MinGW binary directory is the first in the MinGW shell path, the MSYS binary directory is also included. The "tclsh" file from the MSYS package has a version suffix, whereas the one from the MinGW package does not. For this reason, configure picks the wrong TCL package. Also, note that "\$(READLINE_FLAGS)" in the "sqlite3/build/Makefile" points to the MSYS toolchain. The SQLite configure script has options:
+The “sqlite3/build/Makefile” should be inspected next, and it provides a hint that configure script generated this option for the TCL library (compare with “sqlite3/Makefile.in”). TCL is used extensively by the SQLite build process for preprocessing of the source files. The make script also builds a TCL-SQLite interface. To find TCL-related compiler options, the configure script looks for the “tclsh” file and checks for several versioned variants first. Note that MSYS/MinGW setup described above installs TCL is in all toolchains. The “tclsh” file from the MSYS package has a version suffix, whereas the one from the MinGW package does not. Because both MinGW and MSYS binary directories are in the path, configure picks the wrong TCL package. Also, note that “\$(READLINE_FLAGS)” in the “sqlite3/build/Makefile” points to the MSYS toolchain. The SQLite configure script has options:
 
 - "--with-tcl=DIR" - directory containing tcl configuration (tclConfig&#46;sh);
 - "--with-readline-lib" - specify readline library;
 - "--with-readline-inc" - specify readline include paths.
 
-Turns out that "\$(READLINE_FLAGS)" does not affect the build process, and we will fix it in the final script. Let us add the "--with-tcl=${MINGW_PREFIX}/lib" configure option only and run configure/Makefile again. "make" should fail again with a "libtool" error message regarding library linking. According to information available from the Internet, "libtool" has a bug. To skip the problematic code section, "configure" should be run as follows:
+It turns out that “\$(READLINE_FLAGS)” does not affect the build process, and we will fix it in the final script. Let us add the “--with-tcl=${MINGW_PREFIX}/lib” configure option only and run configure/Makefile again. “make” should fail with a “libtool” error message about library linking. According to information available from the Internet, “libtool” has a bug. To skip the problematic code section, “configure” should be executed as follows:
 
 ```bash
 lt_cv_deplibs_check_method="pass_all" ../configure "--with-tcl=${MINGW_PREFIX}/lib
@@ -124,7 +122,7 @@ ICU_LDFLAGS="$(pkg-config --libs --static icu-i18n)"
 These flags then need to be injected into the commands executed by the SQLite Makefile. Rather than manually editing the generated Makefile, we should go over the provided [shell script][SQLite Build Proxy Script].
 
 1. Downlad the source
-This routine checks if SQLite archive is present. If not, SQLite source is downloaded. If the "configure" script does not exist, unpack archive and rename the folder to "sqlite3".
+This routine checks if SQLite archive is present. If not, SQLite source is downloaded. If the “configure” script does not exist, it unpacks the archive and renames the folder to “sqlite3”.
 
 ```bash
 get_sqlite() {
@@ -152,7 +150,7 @@ get_sqlite() {
 ```
 
 2. Configure
-This routine creates a "build" subfolder inside the source folder. If "Makefile" is present in the "build" folder, configure is not run. `readline` flags are obtained via "pkg-config" as full Windows paths. The `$(cygpath -m /)` command returns the Windows path to the MSYS2 root folder, and this prefix is removed from the previously saved flags. Additional options to "configure" enable certain extensions, and "libtool" "lt_cv_deplibs_check_method" is set as a workaround.
+This routine creates a “build” subfolder inside the source folder. If “Makefile” is present in the “build” folder, configure is not run. `readline` flags are obtained via “pkg-config” as full Windows paths. The `$(cygpath -m /)` command returns the Windows path to the MSYS2 root folder, and this prefix is removed from the previously saved flags. Additional options to “configure” enable certain extensions, and “libtool” “lt_cv_deplibs_check_method” is set as a workaround.
 
 ```bash
 configure_sqlite() {
@@ -201,7 +199,7 @@ configure_sqlite() {
 ```
 
 3. Patch the Makefile
-This routine patches the generated SQLite Makefile in the "build" folder. It cleans up the $(TOP) variable and adjusts the script so that it takes ${CFLAGS}, ${CFLAGS_EXTRAS}, $(OPT_FEATURE_FLAGS), and $(LIBS) from the environment.
+This routine patches the generated SQLite Makefile in the “build” folder, cleaning up the $(TOP) variable and ensuring that the Makefile takes ${CFLAGS}, ${CFLAGS_EXTRAS}, $(OPT_FEATURE_FLAGS), and $(LIBS) variables from the environment.
 
 ```bash
 patch_sqlite3_makefile() {
@@ -290,7 +288,7 @@ set_sqlite3_extra_options() {
 }
 ```
 
-5. Run main routine
+5. Run "main" routine
 The main routine calls the above subroutines and, in the end, runs the Makefile.
 
 6. Required libraries (specific versions will change when the corresponding packages are updated)
@@ -307,7 +305,7 @@ Required ICU libraries:
 
 ### Alternative Approach
 
-The approach discussed in the previous section is based on a single shell script, which prepares the environment and runs SQLite Makefile. Alternatively, a custom [`make`][CustomSQLiteMake] script can include the SQLite Makefile and run custom recipes. In this case, an associated shell [script][Custom SQLite Make Shell] the minimum preparation.
+The approach discussed in the previous section is based on a single shell script, which prepares the environment and runs SQLite Makefile. Alternatively, a custom [make][CustomSQLiteMake] script can include the SQLite Makefile and run custom recipes. In this case, an associated shell [script][Custom SQLite Make Shell] the minimum preparation.
 
 <!---
 ### References
@@ -328,7 +326,6 @@ The approach discussed in the previous section is based on a single shell script
 [ShellCheck]: https://shellcheck.net
 
 [SQLite]: https://sqlite.org
-[SQLite Use]: https://www.sqlite.org/mostdeployed.html
 [SQLite Distros]: https://sqlite.org/download.html
 [SQLite Docs]: https://sqlite.org/docs.html
 [SQLite Source Release]: https://sqlite.org/src/tarball/sqlite.tar.gz?r=release
