@@ -10,7 +10,7 @@ A notable extension not included in the official SQLite binaries or [documentati
 
 This tutorial relies on MSYS2/MinGW development environment. MSYS2 provides three mutually incompatible toolchains (MSYS2, MinGW x32, and MinGW x64), and any accidental mixing will likely fail the building process. More toolchains are available (see MSYS2 [package groups][MSYS2 Groups]), but for native compilation on a Windows x64 system, just two base toolchains (x32 and x64) are sufficient. The official x64 installer for a minimum MSYS2 environment can be downloaded from the [front page][MSYS2] or [directly][MSYS2 Setup x64].
 
-Let us assume that the ìmsys64î folder ([e.g.](e.g.), ìB:\dev\msys64î) contains MSYS2x64, and the ìmsys2pkgsî folder ([e.g.](e.g.), ìB:\dev\msys2pkgsî) has cached packages. (While MSYS2 integrates with [ConEmu][ConEmu], this customization is beyond the scope of this tutorial.) [Pacman][MSYS2 Pacman] package manager is available for interactive or script-based package management from the MSYS2 shell (msys64\msys2.exe).
+Let us assume that the ‚Äúmsys64‚Äù folder ([e.g.](e.g.), ‚ÄúB:\dev\msys64‚Äù) contains MSYS2x64, and the ‚Äúmsys2pkgs‚Äù folder ([e.g.](e.g.), ‚ÄúB:\dev\msys2pkgs‚Äù) has cached packages. (While MSYS2 integrates with [ConEmu][ConEmu], this customization is beyond the scope of this tutorial.) [Pacman][MSYS2 Pacman] package manager is available for interactive or script-based package management from the MSYS2 shell (msys64\msys2.exe).
 
 ```bash
 #!/bin/bash
@@ -85,13 +85,13 @@ make -j4
 
 Configure should create "Makefile" and five other files in the "build" folder and exit successfully. `make` should generate additional files/folders but should fail. The error message should contain references to files in /usr/include. But /usr/include files belong to the MSYS toolchain, so MinGW and MSYS toolchains have been mixed. `make` should only use files located inside ${MINGW_PREFIX} and its subfolders. Inspection of the compiler's command line should reveal "-I/usr/include" option.
 
-The ìsqlite3/build/Makefileî should be inspected next, and it provides a hint that configure script generated this option for the TCL library (compare with ìsqlite3/Makefile.inî). TCL is used extensively by the SQLite build process for preprocessing of the source files. The make script also builds a TCL-SQLite interface. To find TCL-related compiler options, the configure script looks for the ìtclshî file and checks for several versioned variants first. Note that MSYS/MinGW setup described above installs TCL is in all toolchains. The ìtclshî file from the MSYS package has a version suffix, whereas the one from the MinGW package does not. Because both MinGW and MSYS binary directories are in the path, configure picks the wrong TCL package. Also, note that ì\$(READLINE_FLAGS)î in the ìsqlite3/build/Makefileî points to the MSYS toolchain. The SQLite configure script has options:
+The ‚Äúsqlite3/build/Makefile‚Äù should be inspected next, and it provides a hint that configure script generated this option for the TCL library (compare with ‚Äúsqlite3/Makefile.in‚Äù). TCL is used extensively by the SQLite build process for preprocessing of the source files. The make script also builds a TCL-SQLite interface. To find TCL-related compiler options, the configure script looks for the ‚Äútclsh‚Äù file and checks for several versioned variants first. Note that MSYS/MinGW setup described above installs TCL is in all toolchains. The ‚Äútclsh‚Äù file from the MSYS package has a version suffix, whereas the one from the MinGW package does not. Because both MinGW and MSYS binary directories are in the path, configure picks the wrong TCL package. Also, note that ‚Äú\$(READLINE_FLAGS)‚Äù in the ‚Äúsqlite3/build/Makefile‚Äù points to the MSYS toolchain. The SQLite configure script has options:
 
 - "--with-tcl=DIR" - directory containing tcl configuration (tclConfig&#46;sh);
 - "--with-readline-lib" - specify readline library;
 - "--with-readline-inc" - specify readline include paths.
 
-It turns out that ì\$(READLINE_FLAGS)î does not affect the build process, and we will fix it in the final script. Let us add the ì--with-tcl=${MINGW_PREFIX}/libî configure option only and run configure/Makefile again. ìmakeî should fail with a ìlibtoolî error message about library linking. According to information available from the Internet, ìlibtoolî has a bug. To skip the problematic code section, ìconfigureî should be executed as follows:
+It turns out that ‚Äú\$(READLINE_FLAGS)‚Äù does not affect the build process, and we will fix it in the final script. Let us add the ‚Äú--with-tcl=${MINGW_PREFIX}/lib‚Äù configure option only and run configure/Makefile again. ‚Äúmake‚Äù should fail with a ‚Äúlibtool‚Äù error message about library linking. According to information available from the Internet, ‚Äúlibtool‚Äù has a bug. To skip the problematic code section, ‚Äúconfigure‚Äù should be executed as follows:
 
 ```bash
 lt_cv_deplibs_check_method="pass_all" ../configure "--with-tcl=${MINGW_PREFIX}/lib
@@ -122,7 +122,7 @@ ICU_LDFLAGS="$(pkg-config --libs --static icu-i18n)"
 These flags then need to be injected into the commands executed by the SQLite Makefile. Rather than manually editing the generated Makefile, we should go over the provided [shell script][SQLite Build Proxy Script].
 
 1. Downlad the source
-This routine checks if SQLite archive is present. If not, SQLite source is downloaded. If the ìconfigureî script does not exist, it unpacks the archive and renames the folder to ìsqlite3î.
+This routine checks if SQLite archive is present. If not, SQLite source is downloaded. If the ‚Äúconfigure‚Äù script does not exist, it unpacks the archive and renames the folder to ‚Äúsqlite3‚Äù.
 
 ```bash
 get_sqlite() {
@@ -150,7 +150,7 @@ get_sqlite() {
 ```
 
 2. Configure
-This routine creates a ìbuildî subfolder inside the source folder. If ìMakefileî is present in the ìbuildî folder, configure is not run. `readline` flags are obtained via ìpkg-configî as full Windows paths. The `$(cygpath -m /)` command returns the Windows path to the MSYS2 root folder, and this prefix is removed from the previously saved flags. Additional options to ìconfigureî enable certain extensions, and ìlibtoolî ìlt_cv_deplibs_check_methodî is set as a workaround.
+This routine creates a ‚Äúbuild‚Äù subfolder inside the source folder. If ‚ÄúMakefile‚Äù is present in the ‚Äúbuild‚Äù folder, configure is not run. `readline` flags are obtained via ‚Äúpkg-config‚Äù as full Windows paths. The `$(cygpath -m /)` command returns the Windows path to the MSYS2 root folder, and this prefix is removed from the previously saved flags. Additional options to ‚Äúconfigure‚Äù enable certain extensions, and ‚Äúlibtool‚Äù ‚Äúlt_cv_deplibs_check_method‚Äù is set as a workaround.
 
 ```bash
 configure_sqlite() {
@@ -199,7 +199,7 @@ configure_sqlite() {
 ```
 
 3. Patch the Makefile
-This routine patches the generated SQLite Makefile in the ìbuildî folder, cleaning up the $(TOP) variable and ensuring that the Makefile takes ${CFLAGS}, ${CFLAGS_EXTRAS}, $(OPT_FEATURE_FLAGS), and $(LIBS) variables from the environment.
+This routine patches the generated SQLite Makefile in the ‚Äúbuild‚Äù folder, cleaning up the $(TOP) variable and ensuring that the Makefile takes ${CFLAGS}, ${CFLAGS_EXTRAS}, $(OPT_FEATURE_FLAGS), and $(LIBS) variables from the environment.
 
 ```bash
 patch_sqlite3_makefile() {
@@ -316,7 +316,6 @@ The approach discussed in the previous section is based on a single shell script
 [MSYS2]: https://msys2.org
 [MSYS2 Groups]: https://packages.msys2.org/group
 [MSYS2 Setup x64]: https://repo.msys2.org/distrib/msys2-x86_64-latest.exe
-[MSYS2 Setup x32]: https://repo.msys2.org/distrib/msys2-i686-latest.exe
 [MSYS2 Pacman]: https://www.msys2.org/docs/package-management
 [ConEmu]: https://conemu.github.io/en/CygwinMsysConnector.html
 [Dependency Walker]: https://dependencywalker.com
