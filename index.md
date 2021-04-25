@@ -193,6 +193,9 @@ configure_sqlite() {
     echo "____________________________________________"
   	echo "Makefile found. Skipping configuring SQLite3"
     echo "--------------------------------------------"
+    echo "____________________________"
+    echo "Patching SQLite3 Makefile..."
+    echo "----------------------------"
   fi
   return 0
 }  
