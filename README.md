@@ -1,4 +1,5 @@
 
+
 ## How to Compile SQLite with ICU on Windows with MinGW
 
 ### Overview
@@ -122,7 +123,7 @@ ICU_LDFLAGS="$(pkg-config --libs --static icu-i18n)"
 
 These flags then need to be injected into the commands executed by the SQLite Makefile. Rather than manually editing the generated Makefile, we should go over the provided [shell script][SQLite Build Proxy Script].
 
-1. Downlad the source
+1. Downlad the source  
 This routine checks if SQLite archive is present. If not, SQLite source is downloaded. If the “configure” script does not exist, it unpacks the archive and renames the folder to “sqlite3”.
 
 ```bash
@@ -149,8 +150,8 @@ get_sqlite() {
   return 0
 }
 ```
-
-2. Configure
+  
+2. Configure  
 This routine creates a “build” subfolder inside the source folder. If “Makefile” is present in the “build” folder, configure is not run. "readline" flags are obtained via “pkg-config” as full Windows paths. The "$(cygpath -m /)" command returns the Windows path to the MSYS2 root folder, and this prefix is removed from the previously saved flags. Additional options to “configure” enable certain extensions, and “libtool” “lt_cv_deplibs_check_method” is set as a workaround.
 
 ```bash
@@ -198,8 +199,8 @@ configure_sqlite() {
   return 0
 }  
 ```
-
-3. Patch the Makefile
+  
+3. Patch the Makefile  
 This routine patches the generated SQLite Makefile in the “build” folder, cleaning up the $(TOP) variable and ensuring that the Makefile takes ${CFLAGS}, ${CFLAGS_EXTRAS}, $(OPT_FEATURE_FLAGS), and $(LIBS) variables from the environment.
 
 ```bash
@@ -218,8 +219,8 @@ patch_sqlite3_makefile() {
   return 0
 }
 ```
-
-4. Set the variables from step 3
+  
+4. Set the variables from step 3  
 This routine sets default library flags, flags for static binding of the standard libraries, ICU flags, enables additional SQLite features and optionally changes the calling convention.
 
 ```bash
@@ -291,10 +292,10 @@ set_sqlite3_extra_options() {
 }
 ```
 
-5. Run "main" routine
+5. Run "main" routine  
 The main routine calls the above subroutines and, in the end, runs the Makefile.
 
-6. Required libraries (specific versions will change when the corresponding packages are updated)
+6. Required libraries (specific versions will change when the corresponding packages are updated)  
 
 The following general libraries, if not statically linked, may be required:
 - libgcc_s_dw2-1.dll
