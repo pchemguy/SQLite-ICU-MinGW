@@ -1,4 +1,3 @@
-
 ## How to Compile SQLite with ICU on Windows with MinGW
 
 ### Overview
@@ -38,7 +37,7 @@ pacman --noconfirm --needed -S --cachedir "${PWD}/../msys2pkgs" ${pkgs[@]}
 pkgs=( toolchain:m clang:m dlfcn:m icu:m nsis:m )
 pacboy --noconfirm --needed -S --cachedir "${PWD}/../msys2pkgs" ${pkgs[@]}
 ```
-
+<p> </p>
 Both MinGWx32 and MinGWx64 environments now have the same set of tools installed. In principle, the same workflow, commands, and scripts should work with either toolchain, yielding x32 and x64 applications. The active toolchain is selected based on the environment settings applied by the proper launcher (msys64/mingw32.exe or msys64/mingw64.exe).
 
 In addition to these toolchains, there are several useful tools for checking library dependencies:
@@ -63,7 +62,7 @@ wget -c "${SQLite_URL}" --no-check-certificate -O sqlite.tar.gz
 tar xzf ./sqlite.tar.gz
 mv ./sqlite sqlite3
 ```
-
+<p> </p>
 The source folder (./sqlite3) contains three "make" files:
 - "Makefile&#46;in" is a template used by the configure/make GNU toolchain;
 - "main&#46;mk" is a GNU make script designed to be called from a parent make file that assigns toolchain variables;
@@ -83,7 +82,7 @@ mkdir -p build && cd ./build
 ../configure
 make -j4
 ```
-
+<p> </p>
 Configure should create "Makefile" and five other files in the "build" folder and exit successfully. "make" should generate additional files/folders but should fail. The error message should contain references to files in /usr/include. But /usr/include files belong to the MSYS toolchain, so MinGW and MSYS toolchains have been mixed. "make" should only use files located inside ${MINGW_PREFIX} and its subfolders. Inspection of the compiler's command line should reveal "-I/usr/include" option.
 
 The “sqlite3/build/Makefile” should be inspected next, and it provides a hint that configure script generated this option for the TCL library (compare with “sqlite3/Makefile.in”). TCL is used extensively by the SQLite build process for preprocessing of the source files. The make script also builds a TCL-SQLite interface. To find TCL-related compiler options, the configure script looks for the “tclsh” file and checks for several versioned variants first. Note that MSYS/MinGW setup described above installs TCL is in all toolchains. The “tclsh” file from the MSYS package has a version suffix, whereas the one from the MinGW package does not. Because both MinGW and MSYS binary directories are in the path, configure picks the wrong TCL package. Also, note that “\$(READLINE_FLAGS)” in the “sqlite3/build/Makefile” points to the MSYS toolchain. The SQLite configure script has options:
@@ -97,7 +96,7 @@ It turns out that “\$(READLINE_FLAGS)” does not affect the build process, an
 ```bash
 lt_cv_deplibs_check_method="pass_all" ../configure "--with-tcl=${MINGW_PREFIX}/lib
 ```
-
+<p> </p>
 and "make" should now succeed.
  
 ### ICU-Enabled Build
@@ -119,12 +118,12 @@ via pkg-config
 ICU_CFLAGS="$(pkg-config --cflags icu-i18n)"
 ICU_LDFLAGS="$(pkg-config --libs --static icu-i18n)"
 ```
-
+<p> </p>
 These flags then need to be injected into the commands executed by the SQLite Makefile. Rather than manually editing the generated Makefile, we should go over the provided [shell script][SQLite Build Proxy Script].
 
-1. Downlad the source
-This routine checks if SQLite archive is present. If not, SQLite source is downloaded. If the “configure” script does not exist, it unpacks the archive and renames the folder to “sqlite3”.
-
+- Download the source  
+This routine checks if SQLite archive is present. If not, SQLite source is downloaded. If the “configure” script does not exist, it unpacks the archive and renames the folder to “sqlite3”.  
+  
 ```bash
 get_sqlite() {
   cd "${BASEDIR}" || ( echo "Cannot enter ${BASEDIR}" && exit 101 )
@@ -147,10 +146,10 @@ get_sqlite() {
     mv ./sqlite "${DBDIR}"
   fi
   return 0
-}
+} 
 ```
-
-2. Configure
+<p> </p>
+- Configure  
 This routine creates a “build” subfolder inside the source folder. If “Makefile” is present in the “build” folder, configure is not run. "readline" flags are obtained via “pkg-config” as full Windows paths. The "$(cygpath -m /)" command returns the Windows path to the MSYS2 root folder, and this prefix is removed from the previously saved flags. Additional options to “configure” enable certain extensions, and “libtool” “lt_cv_deplibs_check_method” is set as a workaround.
 
 ```bash
@@ -198,8 +197,8 @@ configure_sqlite() {
   return 0
 }  
 ```
-
-3. Patch the Makefile
+<p> </p>
+- Patch the Makefile  
 This routine patches the generated SQLite Makefile in the “build” folder, cleaning up the $(TOP) variable and ensuring that the Makefile takes ${CFLAGS}, ${CFLAGS_EXTRAS}, $(OPT_FEATURE_FLAGS), and $(LIBS) variables from the environment.
 
 ```bash
@@ -218,8 +217,8 @@ patch_sqlite3_makefile() {
   return 0
 }
 ```
-
-4. Set the variables from step 3
+<p> </p>
+- Set the variables from step 3  
 This routine sets default library flags, flags for static binding of the standard libraries, ICU flags, enables additional SQLite features and optionally changes the calling convention.
 
 ```bash
@@ -290,21 +289,22 @@ set_sqlite3_extra_options() {
   return 0
 }
 ```
-
-5. Run "main" routine
+<p> </p>
+- Run "main" routine  
 The main routine calls the above subroutines and, in the end, runs the Makefile.
 
-6. Required libraries (specific versions will change when the corresponding packages are updated)
+- Required libraries (specific versions will change when the corresponding packages are updated)  
+    The following general libraries, if not statically linked, may be required:
+    - libgcc_s_dw2-1.dll
+    - libstdc++-6.dll
+    - libwinpthread-1.dll
+    
+    ICU libraries:
+    - libicudt68.dll
+    - libicuin68.dll
+    - libicuuc68.dll
 
-The following general libraries, if not statically linked, may be required:
-- libgcc_s_dw2-1.dll
-- libstdc++-6.dll
-- libwinpthread-1.dll
-
-Required ICU libraries:
-- libicudt68.dll
-- libicuin68.dll
-- libicuuc68.dll
+    Copy these libraries from "${MINGW_PREFIX}/bin" to the folder containing SQLite binaries (system folder should also do the job).
 
 ### Alternative Approach
 
