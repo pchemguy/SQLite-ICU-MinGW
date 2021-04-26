@@ -64,7 +64,7 @@ tar xzf ./sqlite.tar.gz
 mv ./sqlite sqlite3
 ```
 
-The source folder (./sqlite3) contains three make files:
+The source folder (./sqlite3) contains three "make" files:
 - "Makefile&#46;in" is a template used by the configure/make GNU toolchain;
 - "main&#46;mk" is a GNU make script designed to be called from a parent make file that assigns toolchain variables;
 - "Makefile.msc" is used by the Microsoft nmake.
@@ -84,7 +84,7 @@ mkdir -p build && cd ./build
 make -j4
 ```
 
-Configure should create "Makefile" and five other files in the "build" folder and exit successfully. `make` should generate additional files/folders but should fail. The error message should contain references to files in /usr/include. But /usr/include files belong to the MSYS toolchain, so MinGW and MSYS toolchains have been mixed. `make` should only use files located inside ${MINGW_PREFIX} and its subfolders. Inspection of the compiler's command line should reveal "-I/usr/include" option.
+Configure should create "Makefile" and five other files in the "build" folder and exit successfully. "make" should generate additional files/folders but should fail. The error message should contain references to files in /usr/include. But /usr/include files belong to the MSYS toolchain, so MinGW and MSYS toolchains have been mixed. "make" should only use files located inside ${MINGW_PREFIX} and its subfolders. Inspection of the compiler's command line should reveal "-I/usr/include" option.
 
 The “sqlite3/build/Makefile” should be inspected next, and it provides a hint that configure script generated this option for the TCL library (compare with “sqlite3/Makefile.in”). TCL is used extensively by the SQLite build process for preprocessing of the source files. The make script also builds a TCL-SQLite interface. To find TCL-related compiler options, the configure script looks for the “tclsh” file and checks for several versioned variants first. Note that MSYS/MinGW setup described above installs TCL is in all toolchains. The “tclsh” file from the MSYS package has a version suffix, whereas the one from the MinGW package does not. Because both MinGW and MSYS binary directories are in the path, configure picks the wrong TCL package. Also, note that “\$(READLINE_FLAGS)” in the “sqlite3/build/Makefile” points to the MSYS toolchain. The SQLite configure script has options:
 
@@ -151,7 +151,7 @@ get_sqlite() {
 ```
 
 2. Configure
-This routine creates a “build” subfolder inside the source folder. If “Makefile” is present in the “build” folder, configure is not run. `readline` flags are obtained via “pkg-config” as full Windows paths. The `$(cygpath -m /)` command returns the Windows path to the MSYS2 root folder, and this prefix is removed from the previously saved flags. Additional options to “configure” enable certain extensions, and “libtool” “lt_cv_deplibs_check_method” is set as a workaround.
+This routine creates a “build” subfolder inside the source folder. If “Makefile” is present in the “build” folder, configure is not run. "readline" flags are obtained via “pkg-config” as full Windows paths. The "$(cygpath -m /)" command returns the Windows path to the MSYS2 root folder, and this prefix is removed from the previously saved flags. Additional options to “configure” enable certain extensions, and “libtool” “lt_cv_deplibs_check_method” is set as a workaround.
 
 ```bash
 configure_sqlite() {
@@ -308,7 +308,7 @@ Required ICU libraries:
 
 ### Alternative Approach
 
-The approach discussed in the previous section is based on a single shell script, which prepares the environment and runs SQLite Makefile. Alternatively, a custom [make][CustomSQLiteMake] script can `include` the SQLite Makefile and run custom recipes. In this case, the associated shell [script][Custom SQLite Make Shell] is responsible for minimum preparation.
+The approach discussed in the previous section is based on a single shell script, which prepares the environment and runs SQLite Makefile. Alternatively, a custom [make][CustomSQLiteMake] script can "include" the SQLite Makefile and run custom recipes. In this case, the associated shell [script][Custom SQLite Make Shell] is responsible for minimum preparation.
 
 <!---
 ### References
