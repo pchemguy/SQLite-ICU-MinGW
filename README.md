@@ -124,7 +124,7 @@ ICU_LDFLAGS="$(pkg-config --libs --static icu-i18n)"
 
 These flags then need to be injected into the commands executed by the SQLite Makefile. Rather than manually editing the generated Makefile, we should go over the provided [shell script][SQLite Build Proxy Script].
 
-1. Downlad the source  
+1. Download the source  
 This routine checks if SQLite archive is present. If not, SQLite source is downloaded. If the “configure” script does not exist, it unpacks the archive and renames the folder to “sqlite3”.
 
 ```bash
@@ -302,10 +302,12 @@ The main routine calls the above subroutines and, in the end, runs the Makefile.
     - libstdc++-6.dll
     - libwinpthread-1.dll
     
-    Required ICU libraries:
+    ICU libraries:
     - libicudt68.dll
     - libicuin68.dll
     - libicuuc68.dll
+
+    Copy these libraries from "${MINGW_PREFIX}/bin" to the folder containing SQLite binaries (system folder should also do the job).
 
 ### Alternative Approach
 
