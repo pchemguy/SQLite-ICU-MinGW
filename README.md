@@ -1,5 +1,6 @@
 
 
+
 ## How to Compile SQLite with ICU on Windows with MinGW
 
 ### Overview
@@ -296,16 +297,15 @@ set_sqlite3_extra_options() {
 The main routine calls the above subroutines and, in the end, runs the Makefile.
 
 6. Required libraries (specific versions will change when the corresponding packages are updated)  
-
-The following general libraries, if not statically linked, may be required:
-- libgcc_s_dw2-1.dll
-- libstdc++-6.dll
-- libwinpthread-1.dll
-
-Required ICU libraries:
-- libicudt68.dll
-- libicuin68.dll
-- libicuuc68.dll
+    The following general libraries, if not statically linked, may be required:
+    - libgcc_s_dw2-1.dll
+    - libstdc++-6.dll
+    - libwinpthread-1.dll
+    
+    Required ICU libraries:
+    - libicudt68.dll
+    - libicuin68.dll
+    - libicuuc68.dll
 
 ### Alternative Approach
 
