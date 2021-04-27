@@ -1,4 +1,5 @@
 ## How to Compile SQLite with ICU on Windows with MinGW
+<p></p>
 
 ### Overview
 
