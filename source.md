@@ -20,6 +20,7 @@ mv ./sqlite sqlite3
 ```
 <p> </p>
 The source folder (./sqlite3) contains three "make" files:
+
 - "Makefile&#46;in" is a template used by the configure/make GNU toolchain;
 - "main&#46;mk" is a GNU make script designed to be called from a parent make file that assigns toolchain variables;
 - "Makefile.msc" is used by the Microsoft nmake.
