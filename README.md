@@ -41,9 +41,10 @@ pacboy --noconfirm --needed -S --cachedir "${PWD}/../msys2pkgs" ${pkgs[@]}
 Both MinGWx32 and MinGWx64 environments now have the same set of tools installed. In principle, the same workflow, commands, and scripts should work with either toolchain, yielding x32 and x64 applications. The active toolchain is selected based on the environment settings applied by the proper launcher (msys64/mingw32.exe or msys64/mingw64.exe).
 
 In addition to these toolchains, there are several useful tools for checking library dependencies:
- - [Dependency Walker] is a powerful tool. Unfortunately, its development stopped a long time ago, resulting in a significant amount of "noise".
- - [Dependencies] partially replicates the functionality of Dependency Walker, while fixing the "noise" problem.
- - [Far Manager] with [ImpEx - PE & Resource browser] plugin is my favorite option.
+
+- [Dependency Walker] is a powerful tool. Unfortunately, its development stopped a long time ago, resulting in a significant amount of "noise".
+- [Dependencies] partially replicates the functionality of Dependency Walker, while fixing the "noise" problem.
+- [Far Manager] with [ImpEx - PE & Resource browser] plugin is my favorite option.
 
 I have also used [ShellCheck] to check shell scripts.
 
@@ -64,6 +65,7 @@ mv ./sqlite sqlite3
 ```
 
 The source folder (./sqlite3) contains three "make" files:
+
 - "Makefile&#46;in" is a template used by the configure/make GNU toolchain;
 - "main&#46;mk" is a GNU make script designed to be called from a parent make file that assigns toolchain variables;
 - "Makefile.msc" is used by the Microsoft nmake.
