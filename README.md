@@ -1,6 +1,3 @@
-
-
-
 ## How to Compile SQLite with ICU on Windows with MinGW
 
 ### Overview
@@ -13,7 +10,7 @@ A notable extension not included in the official SQLite binaries or [documentati
 
 This tutorial relies on MSYS2/MinGW development environment. MSYS2 provides three mutually incompatible toolchains (MSYS2, MinGW x32, and MinGW x64), and any accidental mixing will likely fail the building process. More toolchains are available (see MSYS2 [package groups][MSYS2 Groups]), but for native compilation on a Windows x64 system, just two base toolchains (x32 and x64) are sufficient. The official x64 installer for a minimum MSYS2 environment can be downloaded from the [front page][MSYS2] or [directly][MSYS2 Setup x64].
 
-Let us assume that the “msys64” folder ([e.g.](e.g.), “B:\dev\msys64”) contains MSYS2x64, and the “msys2pkgs” folder ([e.g.](e.g.), “B:\dev\msys2pkgs”) has cached packages. (While MSYS2 integrates with [ConEmu][ConEmu], this customization is beyond the scope of this tutorial.) [Pacman][MSYS2 Pacman] package manager is available for interactive or script-based package management from the MSYS2 shell (msys64\msys2.exe).
+Let us assume that the “msys64” folder (e.g., “B:\dev\msys64”) contains MSYS2x64, and the “msys2pkgs” folder (e.g., “B:\dev\msys2pkgs”) has cached packages. (While MSYS2 integrates with [ConEmu][ConEmu], this customization is beyond the scope of this tutorial.) [Pacman][MSYS2 Pacman] package manager is available for interactive or script-based package management from the MSYS2 shell (msys64\msys2.exe).
 
 ```bash
 #!/bin/bash
