@@ -18,12 +18,14 @@ cleanup_ERR() {
 }
 trap cleanup_ERR ERR
 
+
 EXITCODE=0
 EC=0
 BASEDIR="$(dirname "$(realpath "$0")")"
 readonly BASEDIR
 readonly DBDIR="sqlite3"
 readonly BUILDDIR=${DBDIR}/build
+
 
 get_sqlite() {
   cd "${BASEDIR}" || ( echo "Cannot enter ${BASEDIR}" && exit 101 )
@@ -48,6 +50,7 @@ get_sqlite() {
   return 0
 }
 
+
 configure_sqlite() {
   mkdir -p "./${BUILDDIR}"
   cd "${BASEDIR}/${BUILDDIR}" \
@@ -69,6 +72,7 @@ configure_sqlite() {
   return 0
 }  
 
+
 patch_sqlite3_makefile() {
   cd "${BASEDIR}/${BUILDDIR}" \
     || ( echo "Cannot enter ./${BUILDDIR}" && exit 108 )
@@ -81,6 +85,7 @@ patch_sqlite3_makefile() {
       -i Makefile
   return 0
 }
+
 
 sys_lib_path=""
 libtool_sys_lib_path() {
@@ -115,6 +120,7 @@ libtool_sys_lib_path() {
   return 0
 }
 
+
 patch_sqlite3_libtool() {
   cd "${BASEDIR}/${BUILDDIR}" \
     || ( echo "Cannot enter ./${BUILDDIR}" && exit 108 )
@@ -128,6 +134,7 @@ patch_sqlite3_libtool() {
       -i libtool
   return 0
 }
+
 
 main() {
   export LOG_FILE=${LOG_FILE:-${BASEDIR}/makelog.log}
@@ -154,5 +161,6 @@ main() {
   make -C "${BASEDIR}/${BUILDDIR}" -f "sqlite3.ref.mk" all
   return 0
 }
+
 
 main "$@"
