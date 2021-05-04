@@ -95,34 +95,34 @@ sqlite3.c: Makefile
 obj: sqlite3.o
 sqlite3.o: CLI = $(BASE_CC)
 sqlite3.o: sqlite3.c
-	@$(log_cli)
     ifeq ($(NDEBUG),)
-		$(CLI)
+		@$(log_cli)
     endif
+	$(CLI)
 
 def: sqlite3.def
 sqlite3.def: EXPORT_OPTS = $(MAKEDEF)
 sqlite3.def: CLI = $(BASE_LD)
 sqlite3.def: sqlite3.o
-	@$(log_cli)
     ifeq ($(NDEBUG),)
-		$(CLI)
+		@$(log_cli)
     endif
+	$(CLI)
 	rm $(<:.o=.dll)
 
 dll: sqlite3.dll
 sqlite3.dll: EXPORT_OPTS = $(MAKEDLL)
 sqlite3.dll: CLI = $(BASE_LD)
 sqlite3.dll: sqlite3.o
-	@$(log_cli)
     ifeq ($(NDEBUG),)
-		$(CLI)
+		@$(log_cli)
     endif
+	$(CLI)
 
 lib: libsqlite3.a
 libsqlite3.a: CLI = $(MAKELIB)
 libsqlite3.a: sqlite3.dll sqlite3.def
-	@$(log_cli)
     ifeq ($(NDEBUG),)
-		$(CLI)
+		@$(log_cli)
     endif
+	$(CLI)
