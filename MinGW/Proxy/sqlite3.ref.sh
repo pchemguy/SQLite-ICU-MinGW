@@ -202,7 +202,7 @@ main() {
 
   cd "${BASEDIR}/${BUILDDIR}" \
     || ( echo "Cannot enter ./${BUILDDIR}" && exit 204 )
-  make -j6 all dll
+  make -j6 ${1:-all dll}
   return 0
 }
 
