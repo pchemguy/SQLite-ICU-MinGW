@@ -1,5 +1,7 @@
 #!/usr/make
 #
+# The current directory is switched to the SQLite3 build directory via the "-C" flag,
+# and this file is copied to the the SQLite3 build directory by the shell script.
 #
 
 SQLITE3_DIR := $(abspath $(lastword $(MAKEFILE_LIST)))
