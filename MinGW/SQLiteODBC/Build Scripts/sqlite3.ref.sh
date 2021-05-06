@@ -24,7 +24,7 @@ EC=0
 BASEDIR="$(dirname "$(realpath "$0")")"
 readonly BASEDIR
 readonly DBDIR="sqlite3"
-readonly BUILDDIR=${DBDIR}/build
+readonly BUILDDIR="${DBDIR}/build"
 
 
 get_sqlite() {
