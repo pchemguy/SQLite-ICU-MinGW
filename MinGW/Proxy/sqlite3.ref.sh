@@ -111,6 +111,8 @@ patch_sqlite3_makefile() {
       -e 's|^\(TCC = \${CC} \${CFLAGS}\)\( [^$]\)|\1 \${CFLAGS_EXTRAS}\2|;' \
       -e 's|^OPT_FEATURE_FLAGS =\(.*\)$|OPT_FEATURE_FLAGS :=\1 \$(OPT_FEATURE_FLAGS)|;' \
       -e 's|\(--strip-all.*\$(REAL_LIBOBJ)\)\( \$(LIBS)\)*|\1 \$(LIBS)|;' \
+      -e "s| _//' >>sqlite3.def$|sqlite3_/sqlite3_/' >>sqlite3.def|;" \
+      -e "s/' T ' | grep ' _sqlite3_'/-E ' T .?sqlite3_'/;" \
       -i Makefile
   return 0
 }
@@ -202,7 +204,7 @@ main() {
 
   cd "${BASEDIR}/${BUILDDIR}" \
     || ( echo "Cannot enter ./${BUILDDIR}" && exit 204 )
-  make -j6 ${1:-all dll}
+  make -j6 all dll
   return 0
 }
 

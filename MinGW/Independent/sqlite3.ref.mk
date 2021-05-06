@@ -74,11 +74,11 @@ LOG_FMT_CLI    = >>$(LOG_FILE) sed -e 's/^[\t]* *//g; s/ +/ /g; s/ -/ \\\n-/g' <
 # FarManager Colorer does not like unpaired quotes even as a literal, hence this construct
 #QOUTE = $(shell echo '"')
 #SOURCES = $(addprefix $(QOUTE),$(addsuffix $(QOUTE),$^))
-BASE_CC = $(CC) -c $^ $(FEATURES) $(CFLAGS) -o $@
+BASE_CC = $(CC) -c $< $(FEATURES) $(CFLAGS) -o $@
 #
 # IMPORTANT: SOURCES MUST COME BEFORE ANY (REQUIRED) LIBRARIES IN THE LINK OR COMPILE/LINK COMMAND LINE!
 #
-BASE_LD = $(CC) -shared $^ $(LD_OPTS) $(CFLAGS) $(LIBS) $(LIBOPTS) $(EXPORT_OPTS) -o $(<:.o=.dll)
+BASE_LD = $(CC) -shared $^ $(LD_OPTS) $(CFLAGS) $(LIBS) $(LIBOPTS) $(EXPORT_OPTS)
 
 define log_cli
 	$(LOG_SECT_LABEL); \
@@ -104,7 +104,7 @@ sqlite3.o: sqlite3.c
 
 def: sqlite3.def
 sqlite3.def: EXPORT_OPTS = $(MAKEDEF)
-sqlite3.def: CLI = $(BASE_LD)
+sqlite3.def: CLI = $(BASE_LD) -o $(@:.def=.dll)
 sqlite3.def: sqlite3.o
     ifeq ($(NDEBUG),)
 		@$(log_cli)
@@ -114,7 +114,7 @@ sqlite3.def: sqlite3.o
 
 dll: sqlite3.dll
 sqlite3.dll: EXPORT_OPTS = $(MAKEDLL)
-sqlite3.dll: CLI = $(BASE_LD)
+sqlite3.dll: CLI = $(BASE_LD) -o $@
 sqlite3.dll: sqlite3.o
     ifeq ($(NDEBUG),)
 		@$(log_cli)
