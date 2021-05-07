@@ -29,31 +29,19 @@
 #define SEESTR2 ""
 #endif
 
-#define NUMDRVS 4
+#define NUMDRVS 1
 static char *DriverName[NUMDRVS] = {
-    "SQLite ODBC Driver",
-    "SQLite ODBC (UTF-8) Driver",
-    "SQLite3 ODBC Driver" SEESTR,
-    "SQLite4 ODBC Driver"
+    "SQLite3 ODBC Driver" SEESTR
 };
 static char *DSName[NUMDRVS] = {
-    "SQLite Datasource",
-    "SQLite UTF-8 Datasource",
-    "SQLite3 " SEESTR2 "Datasource",
-    "SQLite4 Datasource"
+    "SQLite3 " SEESTR2 "Datasource"
 };
 static char *DriverDLL[NUMDRVS] = {
-    "sqliteodbc.dll",
-    "sqliteodbcu.dll",
-    "sqlite3odbc" SEEEXT ".dll",
-    "sqlite4odbc.dll"
+    "sqlite3odbc" SEEEXT ".dll"
 };
 #ifdef WITH_SQLITE_DLLS
 static char *EngineDLL[NUMDRVS] = {
-    "sqlite.dll",
-    "sqliteu.dll",
-    "sqlite3.dll",
-    "sqlite4.dll"
+    "sqlite3.dll"
 };
 #endif
 
@@ -220,7 +208,7 @@ static BOOL InUn(int remove, char *drivername, char *dllname, char *dll2name, ch
                 }
             }
             if (nosys) {
-                goto done;
+                return TRUE;
             }
             sprintf(attr, "DSN=%s;Database=", dsname);
             p = attr;
@@ -231,7 +219,7 @@ static BOOL InUn(int remove, char *drivername, char *dllname, char *dll2name, ch
                 ++p;
             }
             SQLConfigDataSource(NULL, ODBC_REMOVE_SYS_DSN, drivername, attr);
-            goto done;
+            return TRUE;
         }
         if (GetFileAttributes(dllname) == INVALID_FILE_ATTRIBUTES) {
             return FALSE;
@@ -261,7 +249,7 @@ static BOOL InUn(int remove, char *drivername, char *dllname, char *dll2name, ch
             return FALSE;
         }
         if (nosys) {
-            goto done;
+            return TRUE;
         }
         sprintf(attr, "DSN=%s;Database=;", dsname);
         p = attr;
@@ -280,7 +268,6 @@ static BOOL InUn(int remove, char *drivername, char *dllname, char *dll2name, ch
         ProcessErrorMessages("SQLInstallDriverManager", 0);
         return FALSE;
     }
-done:
     return TRUE;
 }
 

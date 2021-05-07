@@ -150,9 +150,9 @@ set_icu() {
   cp "${MINGW_PREFIX}/bin/libicuuc68.dll" ./
   cp "${MINGW_PREFIX}/bin/libwinpthread-1.dll" ./
   cp "${MINGW_PREFIX}/bin/libstdc++-6.dll" ./
-  cp "${MINGW_PREFIX}/bin/libgcc_s_dw2-1.dll" ./ \
+  [[ "${MSYSTEM}" == "MINGW32" ]] \
+    && cp "${MINGW_PREFIX}/bin/libgcc_s_dw2-1.dll" \
     || cp "${MINGW_PREFIX}/bin/libgcc_s_seh-1.dll" ./
-
   ICU_CFLAGS="$(icu-config --cflags --cppflags)"
   ICU_LDFLAGS="$(icu-config --ldflags --ldflags-system)"
   ADD_CFLAGS+=" ${ICU_CFLAGS}"
@@ -200,14 +200,12 @@ main() {
   configure_sqlite
   gen_sqlite3_amalgamation
   set_icu
-  export ADD_CFLAGS ADD_LDFLAGS
+  export ADD_CFLAGS ADD_LDFLAGS ADD_NSIS
   build_odbc
-  make_nsis
+  #make_nsis
 
   return 0
 }
 
 
 main "$@"
-
-exit 0

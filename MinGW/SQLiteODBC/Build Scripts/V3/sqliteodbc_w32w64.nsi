@@ -108,6 +108,7 @@ Section "-Main (required)" InstallationInfo
 !endif
 
 ; Shortcuts
+ SetShellVarContext all
  !define SMROOT "$SMPROGRAMS\${PROD_NAME0}"
  SetOutPath "${SMROOT}"
  CreateShortCut "${SMROOT}\Re-install ODBC Drivers.lnk" \
@@ -118,8 +119,8 @@ Section "-Main (required)" InstallationInfo
    "$INSTDIR\uninstall.exe"
  CreateShortCut "${SMROOT}\View README.lnk" \
    "$INSTDIR\readme.txt"
- SetOutPath "${SMROOT}\Shells"
 !ifndef WITHOUT_SQLITE3_EXE
+ SetOutPath "${SMROOT}\Shells"
  CreateShortCut "${SMROOT}\Shells\SQLite 3.lnk" \
    "$INSTDIR\sqlite3.exe"
 !endif
@@ -155,6 +156,7 @@ RMDir /r "$INSTDIR"
 
 ; Remove start menu/program files subdirectory
 
+SetShellVarContext all
 RMDir /r "$SMPROGRAMS\${PROD_NAME0}"
   
 ; Delete Uninstaller And Unistall Registry Entries

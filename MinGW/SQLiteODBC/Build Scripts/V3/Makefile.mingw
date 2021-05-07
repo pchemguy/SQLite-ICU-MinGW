@@ -11,7 +11,6 @@ DRV_VER=	$(shell cat VERSION)
 
 CFLAGS=		-O2 -Wall -static-libgcc -static-libstdc++ -DNDEBUG=1 -DDRIVER_VER_INFO=\"$(DRV_VER)\"
 
-
 ifeq ($(MSVCRT),70)
 	CFLAGS += -D__MSVCRT_VERSION=0x0700
 	LMSVCRT = -nodefaultlibs -lmingw32 -lgcc_eh -lmoldname -lmingwex -lgcc -lmsvcr70
@@ -59,9 +58,11 @@ SQLITE3_A10N_FLAGS = \
 		-DSQLITE_SOUNDEX=1
 
 ODBC_FLAGS = -DHAVE_LONG_LONG=1 -DHAVE_SQLROWOFFSET=1
+WIN_BIT_TYPE = 32
 ifeq ($(MSYSTEM),MINGW64)
 	ODBC_FLAGS += -DHAVE_SQLLEN=1 -DHAVE_SQLULEN=1 -DHAVE_SQLROWCOUNT=1 \
 				  -DHAVE_SQLSETPOSIROW=1 -DPTRDIFF_T=ptrdiff_t
+	WIN_BIT_TYPE = 64
 endif
 ODBC_LIB = -lodbc
 
@@ -70,8 +71,15 @@ LOG_SECTION_LABEL = >>$(LOG_FILE) echo '_______________________________$@_______
 LOG_SECTION_SEP   = >>$(LOG_FILE) echo ""
 LOG_SED_SPLIT_CLI = >>$(LOG_FILE) sed -e 's/^[\t]* *//g; s/ +/ /g; s/ -/ \\\n-/g' <<<
 BASE_CC = $(CC) $(CFLAGS) $(ADD_CFLAGS) -I$(SQLITE3_INC) -I$(SQLITE3_INC)/build
+#
+# TODO:
+# This code possibly generates unusable lib file, needs to be fixed see
+# https://www.transmissionzero.co.uk/computing/advanced-mingw-dll-topics
+# section "Exporting Undecorated stdcall Functions"
+#
 BASE_LD = $(CC) $(CFLAGS) -shared $^ $(ADD_LDFLAGS) -o $@ \
-          -Wl,--kill-at -Wl,--strip-all -Wl,--out-implib,lib$(@:.dll=.a) \
+          -Wl,--kill-at -Wl,--strip-all \
+          -Wl,--out-implib,lib$(@:.dll=.a) \
           $(LMSVCRT) -lgdi32 -lcomdlg32 -ladvapi32 -lshell32 -luser32 -lkernel32
 
 define make_obj
@@ -88,10 +96,10 @@ define make_dll
 	$(LDEX)
 endef
 
-all: sqlite3odbc$(SEEEXT).dll \
+all: sqlite3odbc$(SEEEXT).dll $(SQLITE3_EXE) \
 	insta.exe instq.exe uninst.exe uninstq.exe \
 	adddsn.exe remdsn.exe addsysdsn.exe remsysdsn.exe \
-	SQLiteODBCInstaller.exe $(SQLITE3_EXE)
+	SQLiteODBCInstaller.exe sqliteodbc_w$(WIN_BIT_TYPE).exe
 
 all_sqlite3: sqlite3.c shell.c libshell.c sqlite3ex.c
 
@@ -176,9 +184,17 @@ SQLiteODBCInstaller.exe: SQLiteODBCInstaller.c sqliteres.o
 		$(CC) $^ $(CFLAGS) $(ADD_CFLAGS) -lkernel32 -luser32 -o $@
 		$(STRIP) $@
 
+sqliteodbc_w$(WIN_BIT_TYPE).exe: sqlite3odbc$(SEEEXT).dll
+	echo "==========================="; \
+	echo "Creating NSIS installer ..."; \
+	echo "==========================="; \
+ 	cp README readme.txt; \
+	cp license.terms license.txt; \
+	makensis $(ADD_NSIS) sqliteodbc_w32w64.nsi
+
+
 clean:
 		rm -f *.o sqliteodbc*.dll sqlite3odbc$(SEEEXT).dll \
 		    *inst.exe *dsn.exe sqlite*.exe sqliteres.rc *~ \
 		    core core.*
 		rm -f resource.h resource3.h
-
