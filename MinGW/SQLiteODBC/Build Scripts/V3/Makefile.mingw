@@ -189,12 +189,12 @@ SQLiteODBCInstaller.exe: SQLiteODBCInstaller.c sqliteres.o
 		$(STRIP) $@
 
 sqliteodbc_w$(WIN_BIT_TYPE).exe: sqlite3odbc$(SEEEXT).dll
-	echo "==========================="; \
-	echo "Creating NSIS installer ..."; \
-	echo "==========================="; \
- 	cp README readme.txt; \
-	cp license.terms license.txt; \
-	makensis $(ADD_NSIS) sqliteodbc_w32w64.nsi
+		echo "==========================="; \
+		echo "Creating NSIS installer ..."; \
+		echo "==========================="; \
+ 		cp README readme.txt; \
+		cp license.terms license.txt; \
+		makensis $(ADD_NSIS) sqliteodbc_w32w64.nsi
 
 
 clean:
