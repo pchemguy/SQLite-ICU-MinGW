@@ -35,7 +35,7 @@ pkgs=( toolchain:m clang:m dlfcn:m icu:m nsis:m )
 pacboy --noconfirm --needed -S --cachedir "${PWD}/../msys2pkgs" ${pkgs[@]}
 ```
 <p> </p>
-Both MinGWx32 and MinGWx64 environments now have the same set of tools installed. In principle, the same workflow, commands, and scripts should work with either toolchain, yielding x32 and x64 applications. The active toolchain is selected based on the environment settings applied by the proper launcher (msys64/mingw32.exe or msys64/mingw64.exe).
+Both MinGWx32 and MinGWx64 environments now have the same set of tools installed. The same workflow, commands, and scripts work with either toolchain, yielding x32 and x64 applications. The active toolchain is selected based on the environment settings applied by the proper launcher (msys64/mingw32.exe or msys64/mingw64.exe).
 
 In addition to these toolchains, there are several useful tools for checking library dependencies:
 
