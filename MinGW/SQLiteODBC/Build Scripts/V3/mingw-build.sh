@@ -1,5 +1,10 @@
 #!/bin/sh
 #
+# 
+# Generation of sqlite3.(dll|exe) is not implemented in this version, that is
+# only ${SQLITE_DLLS} = "" is supported.
+# It requires just a few extra lines, but I do not see the point in having it.
+#
 set -euo pipefail
 IFS=$'\n\t'
 
@@ -151,7 +156,7 @@ set_icu() {
   cp "${MINGW_PREFIX}/bin/libwinpthread-1.dll" ./
   cp "${MINGW_PREFIX}/bin/libstdc++-6.dll" ./
   [[ "${MSYSTEM}" == "MINGW32" ]] \
-    && cp "${MINGW_PREFIX}/bin/libgcc_s_dw2-1.dll" \
+    && cp "${MINGW_PREFIX}/bin/libgcc_s_dw2-1.dll" ./ \
     || cp "${MINGW_PREFIX}/bin/libgcc_s_seh-1.dll" ./
   ICU_CFLAGS="$(icu-config --cflags --cppflags)"
   ICU_LDFLAGS="$(icu-config --ldflags --ldflags-system)"
@@ -173,20 +178,6 @@ build_odbc() {
 }
 
 
-make_nsis() {
-  echo "==========================="
-  echo "Creating NSIS installer ..."
-  echo "==========================="
-  cd "${BASEDIR}"
-  cp README readme.txt && cp license.terms license.txt
-  IFS=$' \n\t'
-  ADD_NSIS=(${ADD_NSIS})
-  IFS=$'\n\t'
-  makensis ${ADD_NSIS[@]} sqliteodbc_w32w64.nsi
-  return 0
-}
-
-
 main() {
   LOG_FILE=${LOG_FILE:-makelog.log}
   { 
@@ -202,7 +193,6 @@ main() {
   set_icu
   export ADD_CFLAGS ADD_LDFLAGS ADD_NSIS
   build_odbc
-  #make_nsis
 
   return 0
 }
