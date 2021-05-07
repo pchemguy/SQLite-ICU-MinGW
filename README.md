@@ -297,7 +297,7 @@ The main routine calls the above subroutines and, in the end, runs the Makefile.
 
 6. Required libraries (specific versions will change when the corresponding packages are updated)  
     The following general libraries, if not statically linked, may be required:
-    - libgcc_s_dw2-1.dll
+    - libgcc_s_dw2-1.dll/libgcc_s_seh-1.dll
     - libstdc++-6.dll
     - libwinpthread-1.dll
     
