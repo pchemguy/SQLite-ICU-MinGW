@@ -1,4 +1,4 @@
-## How to Compile SQLite with ICU on Windows with MinGW
+## How to compile SQLite with ICU and SQLiteODBC on Windows with MinGW 
 
 ### Overview
 
