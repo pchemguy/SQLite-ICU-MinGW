@@ -5,7 +5,7 @@ nav_order: 1
 permalink: /
 ---
 
-### How to Compile SQLite with ICU on Windows with MinGW
+### How to compile SQLite with ICU and SQLiteODBC on Windows with MinGW
 <p></p>
 
 [SQLite][SQLite] is arguably the most used database engine worldwide, characterized by especially compact size and modular design. By design, the essential functions form the engine core, with other features developed as extensions. Since extensions provide widely used functions, most of them are available as a part of source code distributions. Select extensions are also enabled in the official [precompiled binaries][SQLite Distros] available for various platforms.
