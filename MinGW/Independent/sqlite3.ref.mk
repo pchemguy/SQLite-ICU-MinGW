@@ -66,11 +66,6 @@ LD_OPTS := \
 
 CC = gcc -Wall -O2
 
-LOG_FILE ?= makelog.log
-LOG_SECT_LABEL = >>$(LOG_FILE) echo '_______________________________$@_______________________________'
-LOG_SECT_SEP   = >>$(LOG_FILE) echo ""
-LOG_FMT_CLI    = >>$(LOG_FILE) sed -e 's/^[\t]* *//g; s/ +/ /g; s/ -/ \\\n-/g' <<<
-
 # FarManager Colorer does not like unpaired quotes even as a literal, hence this construct
 #QOUTE = $(shell echo '"')
 #SOURCES = $(addprefix $(QOUTE),$(addsuffix $(QOUTE),$^))
@@ -79,6 +74,12 @@ BASE_CC = $(CC) -c $< $(FEATURES) $(CFLAGS) -o $@
 # IMPORTANT: SOURCES MUST COME BEFORE ANY (REQUIRED) LIBRARIES IN THE LINK OR COMPILE/LINK COMMAND LINE!
 #
 BASE_LD = $(CC) -shared $^ $(LD_OPTS) $(CFLAGS) $(LIBS) $(LIBOPTS) $(EXPORT_OPTS)
+
+
+LOG_FILE ?= makelog.log
+LOG_SECT_LABEL = >>$(LOG_FILE) echo '_______________________________$@_______________________________'
+LOG_SECT_SEP   = >>$(LOG_FILE) echo ""
+LOG_FMT_CLI    = >>$(LOG_FILE) sed -e 's/^[\t]* *//g; s/ +/ /g; s/ -/ \\\n-/g' <<<
 
 define log_cli
 	$(LOG_SECT_LABEL); \
