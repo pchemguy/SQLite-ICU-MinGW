@@ -11,9 +11,7 @@ The build shell script performs a fair amount of source code patching and create
 
 "[insta.c][]" is a modified version of "inst.c", which copies provided libraries instead of SQLite extensions. "[sqliteodbc_w32w64.nsi][]" is a simplified NSIS script for building an NSIS installer (compatible with both x32 and x64 variants). The two custom scripts, "[mingw-build.sh][]" and "[Makefile.mingw][]", control the build process. They incorporate code to build the ODBC driver with embedded SQLite3 library and an NSIS installer only (x32 or x64 based on the active toolchain). All other driver variants, extensions, and build options/variations are not supported.
 
-"mingw-build\.sh" downloads current SQLite source tarball, unpacks it, runs configure, enables features via the appropriate compilation flags, sets ICU related flags, copies necessary libraries, and runs "Makefile.mingw" Makefile.
-
-"Makefile.mingw" is adapted from "Makefile.mingw-cross", with most of the code not related to the SQLite3 ODBC driver being removed. It also includes a logging facility showing the actual build command-line options. The Makefile "recursively" calls SQLite's  Makefile generating a standard SQLite amalgamation and customizes it. Similarly to "Makefile.mingw-cross", it then uses this custom amalgamation (with embedded "config.h" and patched "shell.c") to build the SQLite3 ODBC driver and NSIS installer.
+"mingw-build\.sh" downloads current SQLite source tarball, unpacks it, runs configure, sets ICU related flags, copies necessary libraries, and runs "Makefile.mingw" Makefile. "Makefile.mingw" is adapted from "Makefile.mingw-cross", mostly keeping the code relevant for the SQLite3 ODBC driver. It also includes a logging facility showing the actual build command-line options. The Makefile "recursively" calls SQLite's  Makefile generating a standard SQLite amalgamation and "includes" "libshell.c". Similarly to "Makefile.mingw-cross", it then uses this custom amalgamation to build the SQLite3 ODBC driver and NSIS installer.
 
 
 <!---
