@@ -60,14 +60,37 @@ SQLITE3_FLAGS = \
 		-DHAVE_SQLITE3TABLECOLUMNMETADATA=1
 SQLITE3_A10N = sqlite3/sqlite3.c
 SQLITE3_A10N_FLAGS = \
-		-DWIN32=1 -DNDEBUG=1 -DNO_TCL -DTHREADSAFE=1 \
-		-DSQLITE_ENABLE_COLUMN_METADATA=1 \
-		-DSQLITE_DLL=1 \
-		-DSQLITE_THREADSAFE=1 \
+		-DWIN32=1 \
 		-DSQLITE_OS_WIN=1 \
-		-DSQLITE_ASCII=1 \
-		-DSQLITE_SOUNDEX=1
-
+		-DTHREADSAFE=1 \
+		-DSQLITE_THREADSAFE=1 \
+		-D_HAVE_SQLITE_CONFIG_H \
+		-DSQLITE_DQS=0 \
+		-DSQLITE_LIKE_DOESNT_MATCH_BLOBS=1 \
+		-DSQLITE_MAX_EXPR_DEPTH=0 \
+		-DSQLITE_DEFAULT_FOREIGN_KEYS=1 \
+		-DSQLITE_DEFAULT_SYNCHRONOUS=1 \
+		-DSQLITE_ENABLE_COLUMN_METADATA \
+		-DSQLITE_ENABLE_DBPAGE_VTAB \
+		-DSQLITE_ENABLE_DBSTAT_VTAB \
+		-DSQLITE_ENABLE_EXPLAIN_COMMENTS \
+		-DSQLITE_ENABLE_FTS3 \
+		-DSQLITE_ENABLE_FTS3_PARENTHESIS \
+		-DSQLITE_ENABLE_FTS3_TOKENIZER \
+		-DSQLITE_ENABLE_FTS4 \
+		-DSQLITE_ENABLE_FTS5 \
+		-DSQLITE_ENABLE_GEOPOLY \
+		-DSQLITE_ENABLE_MATH_FUNCTIONS \
+		-DSQLITE_ENABLE_JSON1 \
+		-DSQLITE_ENABLE_QPSG \
+		-DSQLITE_ENABLE_RBU \
+		-DSQLITE_ENABLE_ICU \
+		-DSQLITE_ENABLE_RTREE \
+		-DSQLITE_ENABLE_STMTVTAB \
+		-DSQLITE_ENABLE_STAT4 \
+		-DSQLITE_SOUNDEX=1 \
+		-DNDEBUG
+		
 ODBC_FLAGS = -DHAVE_LONG_LONG=1 -DHAVE_SQLROWOFFSET=1
 WIN_BIT_TYPE = 32
 ifeq ($(MSYSTEM),MINGW64)
@@ -75,12 +98,12 @@ ifeq ($(MSYSTEM),MINGW64)
 				  -DHAVE_SQLSETPOSIROW=1 -DPTRDIFF_T=ptrdiff_t
 	WIN_BIT_TYPE = 64
 endif
-ODBC_LIB = -lodbc
+ODBC_LIB = -lodbc32 -lodbccp32
 
-LOG_FILE ?= makelog.log
-LOG_SECTION_LABEL = >>$(LOG_FILE) echo '_______________________________$@_______________________________'
-LOG_SECTION_SEP   = >>$(LOG_FILE) echo ""
-LOG_SED_SPLIT_CLI = >>$(LOG_FILE) sed -e 's/^[\t]* *//g; s/ +/ /g; s/ -/ \\\n-/g' <<<
+MAKEDEF = -Wl,--subsystem,windows -Wl,--output-def,$@
+MAKEDLL = -Wl,--subsystem,windows -Wl,--kill-at -Wl,--strip-all
+MAKELIB = dlltool --kill-at -D $< -d $(<:.dll=.def) -l $@
+
 BASE_CC = $(CC) $(CFLAGS) $(ADD_CFLAGS) -I$(SQLITE3_INC) -I$(SQLITE3_INC)/build
 #
 # TODO:
@@ -88,10 +111,16 @@ BASE_CC = $(CC) $(CFLAGS) $(ADD_CFLAGS) -I$(SQLITE3_INC) -I$(SQLITE3_INC)/build
 # https://www.transmissionzero.co.uk/computing/advanced-mingw-dll-topics
 # section "Exporting Undecorated stdcall Functions"
 #
-BASE_LD = $(CC) $(CFLAGS) -shared $^ $(ADD_LDFLAGS) -o $@ \
+LIBS = -lgdi32 -lcomdlg32 -ladvapi32 -lshell32 -luser32 -lkernel32
+BASE_LD = $(CC) $(CFLAGS) -shared $^ $(ADD_LDFLAGS) \
           -Wl,--kill-at -Wl,--strip-all \
           -Wl,--out-implib,lib$(@:.dll=.a) \
-          $(LMSVCRT) -lgdi32 -lcomdlg32 -ladvapi32 -lshell32 -luser32 -lkernel32
+          $(LMSVCRT) $(LIBS)
+
+LOG_FILE ?= makelog.log
+LOG_SECTION_LABEL = >>$(LOG_FILE) echo '_______________________________$@_______________________________'
+LOG_SECTION_SEP   = >>$(LOG_FILE) echo ""
+LOG_SED_SPLIT_CLI = >>$(LOG_FILE) sed -e 's/^[\t]* *//g; s/ +/ /g; s/ -/ \\\n-/g' <<<
 
 define make_obj
 	$(LOG_SECTION_LABEL); \
@@ -126,15 +155,12 @@ $(SQLITE3_BLD)/libshell.c: $(SQLITE3_BLD)/shell.c
       		-e 's/appendText/shAppendText/g;' \
 			$< >>$@
 
-$(SQLITE3_A10N): $(SQLITE3_BLD)/sqlite3.c $(SQLITE3_BLD)/libshell.c $(SQLITE3_BLD)/config.h
-		echo "/************************** Begin config.h ********************************/" >$@; \
-		cat $(SQLITE3_BLD)/config.h >>$@; \
-		echo "/************************** End config.h **********************************/" >>$@; \
-		echo "/************************** Begin sqlite3.c *******************************/" >>$@; \
-		cat $(SQLITE3_BLD)/sqlite3.c >>$@; \
-		echo "/************************** Begin libshell.c ******************************/" >>$@; \
-		cat $(SQLITE3_BLD)/libshell.c >>$@; \
-		echo "/************************** End libshell.c ********************************/" >>$@; \
+$(SQLITE3_A10N): $(SQLITE3_BLD)/sqlite3.c $(SQLITE3_BLD)/libshell.c
+		cp $(SQLITE3_BLD)/sqlite3.c $@; \
+		echo '#ifndef LIBSHELL_C'      >>$@; \
+		echo '#define LIBSHELL_C'      >>$@; \
+		echo '#include "libshell.c"'   >>$@; \
+		echo '#endif /* LIBSHELL_C */' >>$@;
 
 
 sqlite3a10n.o: CCEX = $(BASE_CC) $(SQLITE3_A10N_FLAGS) -c $(SQLITE3_A10N) -o $@
@@ -145,7 +171,7 @@ sqlite3odbc.o: CCEX = $(BASE_CC) $(ODBC_FLAGS) $(SQLITE3_FLAGS) -c $(@:.o=.c) -o
 sqlite3odbc.o: sqlite3odbc.c sqlite3odbc.h resource3.h
 		$(make_obj)
 
-sqlite3odbc$(SEEEXT).dll: LDEX = $(BASE_LD) -lodbc32 -lodbccp32
+sqlite3odbc$(SEEEXT).dll: LDEX = $(BASE_LD) $(ODBC_LIB) -o $@
 sqlite3odbc$(SEEEXT).dll: sqlite3odbc.o sqlite3odbcres.o $(SQLITE3_A10N_O) $(SQLITE3_DLL)
 		$(make_dll)
 		$(STRIP) $@
@@ -181,7 +207,7 @@ instares.o: instres.o
 		
 adddsn.exe insta.exe: RULES = \
         $(CC) $(CFLAGS) $(ADD_CFLAGS) -mwindows $< $(@:.exe=res.o) -o $@ \
-            -lodbc32 -lodbccp32 -lkernel32 -luser32; \
+            $(ODBC_LIB) -lkernel32 -luser32; \
         $(STRIP) $@
 adddsn.exe: adddsn.c adddsnres.o
 		$(RULES)
