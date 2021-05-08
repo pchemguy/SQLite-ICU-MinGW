@@ -137,17 +137,6 @@ configure_sqlite() {
 }  
 
 
-gen_sqlite3_amalgamation() {
-  echo "__________________________________"
-  echo "Generating SQLite3 amalgamation..."
-  echo "----------------------------------"
-  cp "${BASEDIR}/Makefile.mingw" "${BUILDDIR}/"
-  make -C "${BUILDDIR}" -f Makefile.mingw all_sqlite3
-
-  return 0
-}  
-
-
 set_icu() {
   cd "${BASEDIR}"
   cp "${MINGW_PREFIX}/bin/libicudt68.dll" ./
@@ -189,7 +178,6 @@ main() {
   sqliteodbc_flags
   get_sqlite
   configure_sqlite
-  gen_sqlite3_amalgamation
   set_icu
   export ADD_CFLAGS ADD_LDFLAGS ADD_NSIS
   build_odbc

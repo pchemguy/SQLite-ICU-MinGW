@@ -5,6 +5,13 @@
 # It requires just a few extra lines, but I do not see the point in having it.
 #
 
+SELF_NAME := $(lastword $(MAKEFILE_LIST))
+PATH_NAME := $(abspath $(SELF_NAME))
+BASE_DIR := $(patsubst %/,%,$(dir $(PATH_NAME)))
+SQLITE3_DIR := $(BASE_DIR)/sqlite3
+SQLITE3_BLD := $(SQLITE3_DIR)/build
+
+
 MINGW =		
 CC =		$(MINGW)gcc
 STRIP =		$(MINGW)strip
@@ -105,27 +112,29 @@ all: sqlite3odbc$(SEEEXT).dll $(SQLITE3_EXE) \
 	adddsn.exe remdsn.exe addsysdsn.exe remsysdsn.exe \
 	SQLiteODBCInstaller.exe sqliteodbc_w$(WIN_BIT_TYPE).exe
 
-all_sqlite3: sqlite3.c shell.c libshell.c sqlite3ex.c
+all_sqlite3: $(SQLITE3_BLD)/sqlite3.c \
+			 $(SQLITE3_BLD)/shell.c \
+			 $(SQLITE3_BLD)/libshell.c \
+			 $(SQLITE3_A10N)
 
 
-sqlite3.c shell.c: Makefile
-		$(MAKE) $@
+$(SQLITE3_BLD)/sqlite3.c $(SQLITE3_BLD)/shell.c:
+		$(MAKE) -C $(SQLITE3_BLD) $(notdir $@)
 
-libshell.c: shell.c
+$(SQLITE3_BLD)/libshell.c: $(SQLITE3_BLD)/shell.c
 		sed -e 's/^int SQLITE_CDECL main/int SQLITE_CDECL sqlite3_main/;' \
       		-e 's/appendText/shAppendText/g;' \
 			$< >>$@
 
-sqlite3ex.c: sqlite3.c libshell.c config.h
+$(SQLITE3_A10N): $(SQLITE3_BLD)/sqlite3.c $(SQLITE3_BLD)/libshell.c $(SQLITE3_BLD)/config.h
 		echo "/************************** Begin config.h ********************************/" >$@; \
-		cat config.h >>$@; \
+		cat $(SQLITE3_BLD)/config.h >>$@; \
 		echo "/************************** End config.h **********************************/" >>$@; \
 		echo "/************************** Begin sqlite3.c *******************************/" >>$@; \
-		cat sqlite3.c >>$@; \
+		cat $(SQLITE3_BLD)/sqlite3.c >>$@; \
 		echo "/************************** Begin libshell.c ******************************/" >>$@; \
-		cat libshell.c >>$@; \
+		cat $(SQLITE3_BLD)/libshell.c >>$@; \
 		echo "/************************** End libshell.c ********************************/" >>$@; \
-		cp $@ ../sqlite3.c
 
 
 sqlite3a10n.o: CCEX = $(BASE_CC) $(SQLITE3_A10N_FLAGS) -c $(SQLITE3_A10N) -o $@
