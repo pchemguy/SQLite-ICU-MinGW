@@ -81,11 +81,21 @@ Section "-Main (required)" InstallationInfo
  SetOutPath "$INSTDIR"
 !ifdef WITH_SEE
  File "sqlite3odbc${WITH_SEE}.dll"
+ File "sqlite3odbc${WITH_SEE}.def"
+ File "libsqlite3odbc${WITH_SEE}.a"
 !else
  File "sqlite3odbc.dll"
+ File "sqlite3odbc.def"
+ File "libsqlite3odbc.a"
 !endif
 !ifndef WITHOUT_SQLITE3_EXE
  File "sqlite3.exe"
+!endif
+!ifdef WITH_SQLITE_DLLS
+ File "sqlite3.dll"
+!endif
+!ifdef WITH_ICU
+ File /nonfatal lib*.dll
 !endif
  File "insta.exe"
  File "instq.exe"
@@ -96,16 +106,8 @@ Section "-Main (required)" InstallationInfo
  File "addsysdsn.exe"
  File "remsysdsn.exe"
  File "SQLiteODBCInstaller.exe"
- File "license.terms"
  File "license.txt"
- File "README"
  File "readme.txt"
-!ifdef WITH_SQLITE_DLLS
- File "sqlite3.dll"
-!endif
-!ifdef WITH_ICU
- File /nonfatal lib*.dll
-!endif
 
 ; Shortcuts
  SetShellVarContext all

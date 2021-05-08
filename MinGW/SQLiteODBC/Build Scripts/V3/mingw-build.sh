@@ -44,14 +44,15 @@ sqliteodbc_flags() {
     ADD_NSIS+=" -DWITHOUT_SQLITE3_EXE"
   elif [[ -n "${SQLITE_DLLS}" ]]; then
     ADD_CFLAGS=" -DWITHOUT_SHELL=1 -DWITH_SQLITE_DLLS=1"
-    SQLITE3_DLL=" -Lsqlite3 -lsqlite3"
-    ADD_NSIS+=" -DWITHOUT_SQLITE3_EXE -DWITH_SQLITE_DLLS"
+    SQLITE3_DLL="-Lsqlite3 -lsqlite3"
+    SQLITE3_EXE="sqlite3.exe"
+    ADD_NSIS+=" -DWITH_SQLITE_DLLS"
   else
     SQLITE3_A10N_O="sqlite3a10n.o"
-    ADD_NSIS+=" -DWITHOUT_SQLITE3_EXE"
+    SQLITE3_EXE="sqlite3.exe"
   fi
 
-  export SQLITE3_A10N_O SQLITE3_DLL
+  export SQLITE3_A10N_O SQLITE3_DLL SQLITE3_EXE
   return 0
 }
 
@@ -127,7 +128,7 @@ build_odbc() {
   echo "==============================="
   echo "Building ODBC drivers and utils"
   echo "==============================="
-  make -C "${BASEDIR}" -f Makefile.mingw all
+  make -C "${BASEDIR}" -f Makefile.mingw USE_DLLTOOL=1 all
 
   return 0
 }

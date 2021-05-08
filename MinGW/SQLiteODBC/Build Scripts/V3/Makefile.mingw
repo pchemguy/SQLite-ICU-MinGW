@@ -11,16 +11,14 @@ BASE_DIR := $(patsubst %/,%,$(dir $(PATH_NAME)))
 SQLITE3_DIR := $(BASE_DIR)/sqlite3
 SQLITE3_BLD := $(SQLITE3_DIR)/build
 
+CC = gcc
+STRIP = strip
+RC = windres
+MAKENSIS = makensis
 
-MINGW =		
-CC =		$(MINGW)gcc
-STRIP =		$(MINGW)strip
-RC =		$(MINGW)windres
-MAKENSIS =	makensis
+DRV_VER = $(shell cat VERSION)
 
-DRV_VER=	$(shell cat VERSION)
-
-CFLAGS=		-O2 -Wall -static-libgcc -static-libstdc++ -DNDEBUG=1 -DDRIVER_VER_INFO=\"$(DRV_VER)\"
+CFLAGS = -O2 -Wall -static-libgcc -static-libstdc++ -DNDEBUG=1 -DDRIVER_VER_INFO=\"$(DRV_VER)\"
 
 ifeq ($(MSVCRT),70)
 	CFLAGS += -D__MSVCRT_VERSION=0x0700
@@ -43,6 +41,12 @@ ifeq ($(LMSVCRT),)
 		CFLAGS += -D_USE_32BIT_TIME_T=1
 	endif
 	LMSVCRT = -lmsvcrt
+endif
+
+ifneq ($(LIBS),)
+	LIBS += $(LMSVCRT)
+else
+	LIBS = $(LMSVCRT)
 endif
 
 SQLITE3_INC = sqlite3
@@ -98,45 +102,38 @@ ifeq ($(MSYSTEM),MINGW64)
 				  -DHAVE_SQLSETPOSIROW=1 -DPTRDIFF_T=ptrdiff_t
 	WIN_BIT_TYPE = 64
 endif
+
 ODBC_LIB = -lodbc32 -lodbccp32
+LIBS += $(ODBC_LIB)
+
+BASE_CC = $(CC) $(CFLAGS) $(ADD_CFLAGS) -I$(SQLITE3_INC) -I$(SQLITE3_INC)/build
+LIBS += -lgdi32 -lcomdlg32 -ladvapi32 -lshell32 -luser32 -lkernel32
+BASE_LD = $(CC) $(CFLAGS) -shared $^ $(ADD_LDFLAGS) $(LIBS)
 
 MAKEDEF = -Wl,--subsystem,windows -Wl,--output-def,$@
 MAKEDLL = -Wl,--subsystem,windows -Wl,--kill-at -Wl,--strip-all
-MAKELIB = dlltool --kill-at -D $< -d $(<:.dll=.def) -l $@
+ifeq ($(USE_DLLTOOL),)
+    IMPLIB  = -Wl,--out-implib,lib$(@:.dll=.a)
+    DLLTOOL =
+else
+    IMPLIB  =
+    DLLTOOL = dlltool --kill-at -D $< -d $(<:.dll=.def) -l $@
+endif
 
-BASE_CC = $(CC) $(CFLAGS) $(ADD_CFLAGS) -I$(SQLITE3_INC) -I$(SQLITE3_INC)/build
-#
-# TODO:
-# This code possibly generates unusable lib file, needs to be fixed see
-# https://www.transmissionzero.co.uk/computing/advanced-mingw-dll-topics
-# section "Exporting Undecorated stdcall Functions"
-#
-LIBS = -lgdi32 -lcomdlg32 -ladvapi32 -lshell32 -luser32 -lkernel32
-BASE_LD = $(CC) $(CFLAGS) -shared $^ $(ADD_LDFLAGS) \
-          -Wl,--kill-at -Wl,--strip-all \
-          -Wl,--out-implib,lib$(@:.dll=.a) \
-          $(LMSVCRT) $(LIBS)
 
 LOG_FILE ?= makelog.log
-LOG_SECTION_LABEL = >>$(LOG_FILE) echo '_______________________________$@_______________________________'
-LOG_SECTION_SEP   = >>$(LOG_FILE) echo ""
-LOG_SED_SPLIT_CLI = >>$(LOG_FILE) sed -e 's/^[\t]* *//g; s/ +/ /g; s/ -/ \\\n-/g' <<<
+LOG_SECT_LABEL = >>$(LOG_FILE) echo '_______________________________$@_______________________________'
+LOG_SECT_SEP   = >>$(LOG_FILE) echo ""
+LOG_FMT_CLI    = >>$(LOG_FILE) sed -e 's/^[\t]* *//g; s/ +/ /g; s/ -/ \\\n-/g' <<<
 
-define make_obj
-	$(LOG_SECTION_LABEL); \
-	$(LOG_SED_SPLIT_CLI) '$(CCEX)'; \
-	$(LOG_SECTION_SEP); \
-	$(CCEX)
+define log_cli
+	$(LOG_SECT_LABEL); \
+	$(LOG_FMT_CLI) '$(CLI)'; \
+	$(LOG_SECT_SEP);
 endef
 
-define make_dll
-	$(LOG_SECTION_LABEL); \
-	$(LOG_SED_SPLIT_CLI) '$(LDEX)'; \
-	$(LOG_SECTION_SEP); \
-	$(LDEX)
-endef
 
-all: sqlite3odbc$(SEEEXT).dll $(SQLITE3_EXE) \
+all: sqlite3odbc$(SEEEXT).dll libsqlite3odbc$(SEEEXT).a $(SQLITE3_EXE) \
 	insta.exe instq.exe uninst.exe uninstq.exe \
 	adddsn.exe remdsn.exe addsysdsn.exe remsysdsn.exe \
 	SQLiteODBCInstaller.exe sqliteodbc_w$(WIN_BIT_TYPE).exe
@@ -163,22 +160,42 @@ $(SQLITE3_A10N): $(SQLITE3_BLD)/sqlite3.c $(SQLITE3_BLD)/libshell.c
 		echo '#endif /* LIBSHELL_C */' >>$@;
 
 
-sqlite3a10n.o: CCEX = $(BASE_CC) $(SQLITE3_A10N_FLAGS) -c $(SQLITE3_A10N) -o $@
+sqlite3a10n.o: CLI = $(BASE_CC) $(SQLITE3_A10N_FLAGS) $(SQLITE3_FLAGS) -c $(SQLITE3_A10N) -o $@
 sqlite3a10n.o: $(SQLITE3_A10N)
-		$(make_obj)
+        ifeq ($(NDEBUG),)
+			@$(log_cli)
+        endif
+		$(CLI)
 
-sqlite3odbc.o: CCEX = $(BASE_CC) $(ODBC_FLAGS) $(SQLITE3_FLAGS) -c $(@:.o=.c) -o $@
+sqlite3odbc.o: CLI = $(BASE_CC) $(ODBC_FLAGS) $(SQLITE3_FLAGS) -c $(@:.o=.c) -o $@
 sqlite3odbc.o: sqlite3odbc.c sqlite3odbc.h resource3.h
-		$(make_obj)
+        ifeq ($(NDEBUG),)
+			@$(log_cli)
+        endif
+		$(CLI)
 
-sqlite3odbc$(SEEEXT).dll: LDEX = $(BASE_LD) $(ODBC_LIB) -o $@
+sqlite3odbc$(SEEEXT).dll: CLI = $(BASE_LD) $(MAKEDLL) $(IMPLIB) -o $@
 sqlite3odbc$(SEEEXT).dll: sqlite3odbc.o sqlite3odbcres.o $(SQLITE3_A10N_O) $(SQLITE3_DLL)
-		$(make_dll)
+        ifeq ($(NDEBUG),)
+			@$(log_cli)
+        endif
+		$(CLI)
 		$(STRIP) $@
 
-sqlite3.exe: sqlite3odbc$(SEEEXT).dll sqlite3/src/minshell.c sqliteres.o
-		$(CC) $(wordlist 2,$(words $^),$^) $(CFLAGS) $(SQLITE3_FLAGS) \
-		    -Isqlite3 -L. -l$(<:.dll=) -o $@ 
+sqlite3odbc$(SEEEXT).def: CLI = $(BASE_LD) $(MAKEDEF) -o $(@:.def=__.dll)
+sqlite3odbc$(SEEEXT).def: sqlite3odbc.o sqlite3odbcres.o $(SQLITE3_A10N_O)
+        ifeq ($(NDEBUG),)
+			@$(log_cli)
+        endif
+		$(CLI)
+		rm $(@:.def=__.dll)
+
+libsqlite3odbc$(SEEEXT).a: sqlite3odbc$(SEEEXT).dll sqlite3odbc$(SEEEXT).def
+		$(DLLTOOL)
+
+sqlite3.exe: sqlite3odbc$(SEEEXT).dll minshell.c sqliteres.o
+		$(CC) $(CFLAGS) $(SQLITE3_FLAGS) minshell.c sqliteres.o \
+			-Isqlite3/build -L. -l$(<:.dll=) -o $@ 
 		$(STRIP) $@
 
 resource3.h: resource.h.in
@@ -229,7 +246,7 @@ sqliteodbc_w$(WIN_BIT_TYPE).exe: sqlite3odbc$(SEEEXT).dll
 		echo "==========================="; \
  		cp README readme.txt; \
 		cp license.terms license.txt; \
-		makensis $(ADD_NSIS) sqliteodbc_w32w64.nsi
+		$(MAKENSIS) $(ADD_NSIS) sqliteodbc_w32w64.nsi
 
 
 clean:
