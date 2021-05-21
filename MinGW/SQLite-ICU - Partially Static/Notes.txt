@@ -1,0 +1,2 @@
+Fully static build of SQLite with ICU repeatedly failed. However, static linking of libgcc, libstd++, and libwinpthreads successeded.
+First, run icu4c.sh to build a partially static ICU library, then - sqlite3.ref.sh to build SQLite.
