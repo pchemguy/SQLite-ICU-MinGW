@@ -23,8 +23,8 @@ EXITCODE=0
 EC=0
 BASEDIR="$(dirname "$(realpath "$0")")"
 readonly BASEDIR
-readonly DBDIR="sqlite3"
-readonly BUILDDIR=${DBDIR}/build
+readonly DBDIR="sqlite"
+readonly BUILDDIR="${DBDIR}/build"
 
 
 get_sqlite() {
@@ -45,7 +45,6 @@ get_sqlite() {
 
   if [[ ! -f "./${DBDIR}/configure" ]]; then
     tar xzf ./sqlite.tar.gz
-    mv ./sqlite "${DBDIR}"
   fi
   return 0
 }

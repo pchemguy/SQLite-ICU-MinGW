@@ -22,7 +22,7 @@ EXITCODE=0
 EC=0
 BASEDIR="$(dirname "$(realpath "$0")")"
 readonly BASEDIR
-readonly DBDIR="sqlite3"
+readonly DBDIR="sqlite"
 readonly BUILDDIR=${DBDIR}/build
 CFLAGS_EXTRAS=""
 LIBS=""
@@ -49,7 +49,6 @@ get_sqlite() {
 
   if [[ ! -f "./${DBDIR}/configure" ]]; then
     tar xzf ./sqlite.tar.gz
-    mv ./sqlite "${DBDIR}"
   fi
   return 0
 }
@@ -71,11 +70,11 @@ configure_sqlite() {
     msys_root="$(cygpath -m /)"
     msys_root="${msys_root%/}"
     local readline_inc
-    readline_inc=$(pkg-config --cflags --static readline)
-    readline_inc=${readline_inc//${msys_root}/}
+    readline_inc="$(pkg-config --cflags --static readline)"
+    readline_inc="${readline_inc//${msys_root}/}"
     local readline_lib
-    readline_lib=$(pkg-config --libs --static readline)
-    readline_lib=${readline_lib//${msys_root}/}
+    readline_lib="$(pkg-config --libs --static readline)"
+    readline_lib="${readline_lib//${msys_root}/}"
     
     local CONFIGURE_OPTS
     CONFIGURE_OPTS=(
@@ -120,16 +119,20 @@ patch_sqlite3_makefile() {
 
 set_sqlite3_extra_options() {
   DEFAULT_LIBS="-lpthread -lm -ldl"
+  #LIBOPTS="-static"
   LIBOPTS="-static-libgcc -static-libstdc++"
-  LIBS+="${LIBOPTS}"
+  LIBS+=" ${LIBOPTS}"
   
   ICU_CFLAGS="$(icu-config --cflags --cppflags)"
-  CFLAGS_EXTRAS+="${ICU_CFLAGS}"
-  ICU_LDFLAGS="$(icu-config --ldflags --ldflags-system)"
-  LIBS+="${ICU_LDFLAGS}"
+#  ICU_CFLAGS="$("${BASEDIR}/icu/dist/bin/icu-config" --noverify --cflags --cppflags)"
+  CFLAGS_EXTRAS+=" ${ICU_CFLAGS}"
+#  ICU_LDFLAGS="$("${BASEDIR}/icu/dist/bin/icu-config" --noverify --ldflags)"
+#  ICU_LDFLAGS="-Wl,-Bstatic $(./icu/dist/bin/icu-config --noverify --ldflags)"
+  ICU_LDFLAGS="$(icu-config --ldflags)"
+  LIBS+=" ${ICU_LDFLAGS}"
   local libraries
   IFS=$' \n\t'
-    libraries=( ${DEFAULT_LIBS} )
+    libraries=(${DEFAULT_LIBS})
   IFS=$'\n\t'
   local library
   for library in "${libraries[@]}"; do
