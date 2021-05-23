@@ -1,2 +1,9 @@
 remote_theme: pmarsceill/just-the-docs
+
 title: "SQLite ICU MinGW"
+
+google_analytics: UA-197722197-1
+
+# Plugins
+plugins:
+  - jekyll-seo-tag
