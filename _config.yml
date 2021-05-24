@@ -6,6 +6,9 @@ title: "SQLite ICU MinGW"
 google_analytics: UA-197722197-1
 ga_tracking: UA-197722197-1
 
+webmaster_verifications:
+  google: "eeyANkR7sUrPKHD5z5GheWmEg9GY5Sjpn1aCSpbx0J0"
+
 # Plugins
 plugins:
   - jekyll-seo-tag
