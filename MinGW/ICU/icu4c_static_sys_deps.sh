@@ -54,13 +54,15 @@ get_icu() {
 
 
 configure_icu() {
-  CONFIGURE_FLAGS=(
+  local readonly CONFIGURE_FLAGS=(
     --disable-extras
     --disable-tests
     --disable-samples
     --enable-static
     --enable-shared
   )
+  #LIBS=(-static)
+  #LIBS="${LIBS[@]}" 
 
   mkdir -p "${BLD}"
   mkdir -p "${DST}"
@@ -83,14 +85,35 @@ configure_icu() {
 }  
 
 
+patch_icu_makefile() {
+  cd "${BLD}" || ( echo "Cannot enter ${BLD}" && exit 104 )
+
+  local DEFAULT_LIBS=(
+    -Wl,--allow-multiple-definition
+    -static-libgcc
+    -static-libstdc++
+    -Wl,-Bstatic -lpthread -Wl,--whole-archive -lwinpthread -Wl,-Bdynamic,--no-whole-archive
+    -ldl -lm
+  )
+  readonly DEFAULT_LIBS="${DEFAULT_LIBS[@]}"
+
+  echo "________________________"
+  echo "Patching ICU Makefile..."
+  echo "------------------------"
+  sed -e "s/^DEFAULT_LIBS = .*$/DEFAULT_LIBS = ${DEFAULT_LIBS}/;" \
+      -i icudefs.mk
+  return 0
+}
+
+
 main() {
   get_icu || EXITCODE=$?
-  (( EXITCODE != 0 )) && echo "Error downloading SQLite3" && exit 201
+  (( EXITCODE != 0 )) && echo "Error downloading ICU" && exit 201
   configure_icu || EXITCODE=$?
-  (( EXITCODE != 0 )) && echo "Error configuring SQLite3" && exit 202
+  (( EXITCODE != 0 )) && echo "Error configuring ICU" && exit 202
+  patch_icu_makefile || EXITCODE=$?
 
-  cd "${BLD}" || ( echo "Cannot enter ${BLD}" && exit 104 )
-  make -j6
+  VERBOSE=1 make -j6
   make install
 
   return 0
