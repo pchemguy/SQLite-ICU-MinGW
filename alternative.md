@@ -1,7 +1,7 @@
 ---
 layout: default
 title: Alternative Approach
-nav_order: 6
+nav_order: 7
 permalink: /alternative
 ---
 
