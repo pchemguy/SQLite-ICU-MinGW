@@ -3,6 +3,9 @@
 set -euo pipefail
 IFS=$'\n\t'
 
+# Build STDCALL version:
+# $ ABI=STDCALL ./sqlite3.ref.sh
+
 cleanup_EXIT() { 
   echo "EXIT clean up: $?" 
 }
@@ -23,7 +26,18 @@ EC=0
 BASEDIR="$(dirname "$(realpath "$0")")"
 readonly BASEDIR
 readonly DBDIR="sqlite"
+readonly LIBNAME="sqlite3.dll"
 readonly BUILDDIR=${DBDIR}/build
+readonly BUILDBINDIR=${BUILDDIR}/bin
+readonly SRCBINDIR=${MSYSTEM_PREFIX}/bin
+readonly DEPENDENCIES=(
+  libgcc_s_dw2-1.dll
+  libicudt68.dll
+  libicuin68.dll
+  libicuuc68.dll
+  libstdc++-6.dll
+  libwinpthread-1.dll
+)
 CFLAGS_EXTRAS=""
 LIBS=""
 OPT_FEATURE_FLAGS=""
@@ -189,6 +203,20 @@ set_sqlite3_extra_options() {
 }
 
 
+copy_dependencies() {
+  mkdir -p "${BASEDIR}/${BUILDBINDIR}"
+
+  for dependency in "${DEPENDENCIES[@]}"; do
+    cp "${SRCBINDIR}/${dependency}" "${BASEDIR}/${BUILDBINDIR}" \
+      || ( echo "Cannot copy make file" && exit 109 )
+  done
+  cp "${BASEDIR}/${BUILDDIR}/${LIBNAME}" "${BASEDIR}/${BUILDBINDIR}" \
+    || ( echo "Cannot copy make file" && exit 110 )
+  
+  return 0
+}
+
+
 main() {
   export LOG_FILE=${LOG_FILE:-${BASEDIR}/makelog.log}
   { 
@@ -208,6 +236,8 @@ main() {
   cd "${BASEDIR}/${BUILDDIR}" \
     || ( echo "Cannot enter ./${BUILDDIR}" && exit 204 )
   make -j6 all dll
+
+  copy_dependencies || EXITCODE=$?
   return 0
 }
 
