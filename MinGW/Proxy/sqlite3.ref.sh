@@ -182,9 +182,11 @@ set_sqlite3_extra_options() {
   )
     
   ABI_STDCALL=(
+	-DSQLITE_API=__declspec(dllexport)
     -DSQLITE_CDECL=__cdecl
     -DSQLITE_APICALL=__stdcall
     -DSQLITE_CALLBACK=__stdcall
+    -DSQLITE_STDCALL=__stdcall
     -DSQLITE_SYSAPI=__stdcall
     -DSQLITE_TCLAPI=__cdecl
   )
