@@ -23,6 +23,7 @@ trap cleanup_ERR ERR
 
 EXITCODE=0
 EC=0
+TARGETS=(${@:-all dll})
 BASEDIR="$(dirname "$(realpath "$0")")"
 readonly BASEDIR
 readonly DBDIR="sqlite"
@@ -208,10 +209,10 @@ copy_dependencies() {
 
   for dependency in "${DEPENDENCIES[@]}"; do
     cp "${SRCBINDIR}/${dependency}" "${BASEDIR}/${BUILDBINDIR}" \
-      || ( echo "Cannot copy make file" && exit 109 )
+      || ( echo "Cannot copy ${dependency}" && exit 109 )
   done
   cp "${BASEDIR}/${BUILDDIR}/${LIBNAME}" "${BASEDIR}/${BUILDBINDIR}" \
-    || ( echo "Cannot copy make file" && exit 110 )
+    || ( echo "Cannot copy ${LIBNAME}" && exit 110 )
   
   return 0
 }
@@ -235,9 +236,11 @@ main() {
 
   cd "${BASEDIR}/${BUILDDIR}" \
     || ( echo "Cannot enter ./${BUILDDIR}" && exit 204 )
-  make -j6 all dll
+  make -j6 ${TARGETS[@]}
 
-  copy_dependencies || EXITCODE=$?
+  if [[ -f "${BASEDIR}/${BUILDDIR}/${LIBNAME}" ]]; then
+    copy_dependencies || EXITCODE=$?
+  fi
   return 0
 }
 
