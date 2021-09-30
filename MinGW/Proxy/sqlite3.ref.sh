@@ -81,7 +81,7 @@ configure_sqlite() {
       --enable-fts3
       --enable-memsys5
       --enable-update-limit
-      --with-tcl=${MINGW_PREFIX}/lib
+      --with-tcl="${MINGW_PREFIX}/lib"
       --with-readline-lib="${readline_lib}"
       --with-readline-inc="${readline_inc}"
     )
@@ -126,6 +126,7 @@ patch_sqlite3_makefile() {
     echo "Enabling ABI conventions for SQLite API."
     sed -e  '/^SHELL_OPT += -DSQLITE_API=__declspec(dllimport)/d' \
         -i Makefile
+
     readonly USEAPIFLAG="--useapicall"
     patternh="\(^\t\$(TCLSH_CMD) \$(TOP)/tool/mksqlite3h.tcl \$(TOP)\) \(.sqlite3.h\)"
     replaceh="\1 ${USEAPIFLAG} \2"
@@ -152,11 +153,34 @@ patch_mksqlite3ctcl() {
       || ( echo "Cannot copy mksqlite3c.tcl" && exit 111 )
   fi
   
-
   if [[ "${USEAPI:-}" != "" ]]; then
-  sed -e "s|*\(sqlite3_sourceid\)|*SQLITE_APICALL \1|;" \
+    sed -e "s|*\(sqlite3_sourceid\)|*SQLITE_APICALL \1|;" \
       <mksqlite3c.tcl.bak >mksqlite3c.tcl
   fi
+
+  return 0
+}
+
+
+patch_mksqlite3htcl() {
+  cd "${BASEDIR}/${DBDIR}/tool" \
+    || ( echo "Cannot enter ${BASEDIR}/${DBDIR}/tool" && exit 112 )
+  echo "____________________________"
+  echo "Patching mksqlite3h.tcl ... "
+  echo "----------------------------"
+
+  if [[ ! -f "mksqlite3h.tcl.bak" ]]; then
+    cp "mksqlite3h.tcl" "mksqlite3h.tcl.bak" \
+      || ( echo "Cannot copy mksqlite3h.tcl" && exit 113 )
+  fi
+  
+  # SQLite3RBU API is missing from SQLite3.h
+  sed -e '/sqlite3rebaser_/a \
+         \nset declpattern6 \\\n    {^ *([a-zA-Z][a-zA-Z_0-9 ]+ \\**)(sqlite3rbu_[_a-zA-Z0-9]+)(\\(.*)$}' \
+      -e '/TOP\/ext\/fts5\/fts5.h$/a \  $TOP/ext/rbu/sqlite3rbu.h' \
+      -e 's/\(all rettype funcname rest]\)\} {$/\1 || \\\
+          [regexp $declpattern6 $line all rettype funcname rest]} {/;' \
+    <mksqlite3h.tcl.bak >mksqlite3h.tcl
 
   return 0
 }
@@ -283,6 +307,7 @@ main() {
   (( EXITCODE != 0 )) && echo "Error configuring SQLite3" && exit 202
   patch_sqlite3_makefile || EXITCODE=$?
   patch_mksqlite3ctcl || EXITCODE=$?
+  #patch_mksqlite3htcl || EXITCODE=$?
 
   echo "_____________________"
   echo "Patching complete... "
