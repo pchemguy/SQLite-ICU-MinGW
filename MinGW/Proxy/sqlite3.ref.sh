@@ -3,9 +3,6 @@
 set -euo pipefail
 IFS=$'\n\t'
 
-# Build STDCALL version:
-# $ ABI=STDCALL ./sqlite3.ref.sh
-
 cleanup_EXIT() { 
   echo "EXIT clean up: $?" 
 }
@@ -23,27 +20,14 @@ trap cleanup_ERR ERR
 
 EXITCODE=0
 EC=0
-TARGETS=(${@:-all dll})
 BASEDIR="$(dirname "$(realpath "$0")")"
 readonly BASEDIR
 readonly DBDIR="sqlite"
 readonly LIBNAME="sqlite3.dll"
 readonly BUILDDIR=${DBDIR}/build
-readonly BUILDBINDIR=${BUILDDIR}/bin
-readonly SRCBINDIR=${MSYSTEM_PREFIX}/bin
-readonly DEPENDENCIES=(
-  libgcc_s_dw2-1.dll
-  libicudt68.dll
-  libicuin68.dll
-  libicuuc68.dll
-  libstdc++-6.dll
-  libwinpthread-1.dll
-)
 CFLAGS_EXTRAS=""
 LIBS=""
 OPT_FEATURE_FLAGS=""
-SERVER_API=""
-CLIENT_API=""
 
 
 get_sqlite() {
@@ -120,14 +104,60 @@ patch_sqlite3_makefile() {
   echo "____________________________"
   echo "Patching SQLite3 Makefile..."
   echo "----------------------------"
+
+  if [[ ! -f "Makefile.bak" ]]; then
+    cp "Makefile" "Makefile.bak" || ( echo "Cannot copy Makefile" && exit 109 )
+  fi
+  
   sed -e "s|^TOP = \(.*\)$|TOP = ${BASEDIR}/${DBDIR}|;" \
       -e 's|^CFLAGS =\(.*\)$|CFLAGS :=\1 \${CFLAGS}|;' \
       -e 's|^\(TCC = \${CC} \${CFLAGS}\)\( [^$]\)|\1 \${CFLAGS_EXTRAS}\2|;' \
       -e 's|^OPT_FEATURE_FLAGS =\(.*\)$|OPT_FEATURE_FLAGS :=\1 \$(OPT_FEATURE_FLAGS)|;' \
-      -e 's|\(--strip-all.*\$(REAL_LIBOBJ)\)\( \$(LIBS)\)*|\1 \$(LIBS)|;' \
       -e "s| _//' >>sqlite3.def$|sqlite3_/sqlite3_/' >>sqlite3.def|;" \
       -e "s/' T ' | grep ' _sqlite3_'/-E ' T .?sqlite3_'/;" \
+      <Makefile.bak >Makefile
+
+  pattern="\t\t-Wl,\"\?--strip-all\"\? \(\$(REAL_LIBOBJ)\)"
+  replace="\t\t-Wl,--strip-all -Wl,--subsystem,windows,--kill-at \1 \$(LIBS)"
+  sed -e "s|^${pattern}|${replace}|" \
       -i Makefile
+
+  if [[ "${USEAPI:-}" != "" ]]; then
+    echo "Enabling ABI conventions for SQLite API."
+    sed -e  '/^SHELL_OPT += -DSQLITE_API=__declspec(dllimport)/d' \
+        -i Makefile
+    readonly USEAPIFLAG="--useapicall"
+    patternh="\(^\t\$(TCLSH_CMD) \$(TOP)/tool/mksqlite3h.tcl \$(TOP)\) \(.sqlite3.h\)"
+    replaceh="\1 ${USEAPIFLAG} \2"
+    sed -e "s|^${patternh}|${replaceh}|;" \
+        -e "s|^\(\t\$(TCLSH_CMD) \$(TOP)/tool/mksqlite3c.tcl\)|\1 ${USEAPIFLAG}|;" \
+        -e "s|\(\$(TEMP_STORE) -c\) \(sqlite3.c\)|\1 -DSQLITE_API=__declspec\\\\(dllexport\\\\) \2|;" \
+        -e  '/^SHELL_OPT = -D/a SHELL_OPT += -DSQLITE_API=__declspec\\\\(dllimport\\\\)' \
+        -i Makefile
+  fi
+
+  return 0
+}
+
+
+patch_mksqlite3ctcl() {
+  cd "${BASEDIR}/${DBDIR}/tool" \
+    || ( echo "Cannot enter ${BASEDIR}/${DBDIR}/tool" && exit 110 )
+  echo "____________________________"
+  echo "Patching mksqlite3c.tcl ... "
+  echo "----------------------------"
+
+  if [[ ! -f "mksqlite3c.tcl.bak" ]]; then
+    cp "mksqlite3c.tcl" "mksqlite3c.tcl.bak" \
+      || ( echo "Cannot copy mksqlite3c.tcl" && exit 111 )
+  fi
+  
+
+  if [[ "${USEAPI:-}" != "" ]]; then
+  sed -e "s|*\(sqlite3_sourceid\)|*SQLITE_APICALL \1|;" \
+      <mksqlite3c.tcl.bak >mksqlite3c.tcl
+  fi
+
   return 0
 }
 
@@ -139,10 +169,10 @@ set_sqlite3_extra_options() {
   LIBS+=" ${LIBOPTS}"
   
   ICU_CFLAGS="$(icu-config --cflags --cppflags)"
-#  ICU_CFLAGS="$("${BASEDIR}/icu/dist/bin/icu-config" --noverify --cflags --cppflags)"
+  #ICU_CFLAGS="$("${BASEDIR}/icu/dist/bin/icu-config" --noverify --cflags --cppflags)"
   CFLAGS_EXTRAS+=" ${ICU_CFLAGS}"
-#  ICU_LDFLAGS="$("${BASEDIR}/icu/dist/bin/icu-config" --noverify --ldflags)"
-#  ICU_LDFLAGS="-Wl,-Bstatic $(./icu/dist/bin/icu-config --noverify --ldflags)"
+  #ICU_LDFLAGS="$("${BASEDIR}/icu/dist/bin/icu-config" --noverify --ldflags)"
+  #ICU_LDFLAGS="-Wl,-Bstatic $(./icu/dist/bin/icu-config --noverify --ldflags)"
   ICU_LDFLAGS="$(icu-config --ldflags)"
   LIBS+=" ${ICU_LDFLAGS}"
   local libraries
@@ -182,22 +212,14 @@ set_sqlite3_extra_options() {
   )
     
   ABI_STDCALL=(
-	-DSQLITE_API=__declspec(dllexport)
-    -DSQLITE_CDECL=__cdecl
     -DSQLITE_APICALL=__stdcall
-    -DSQLITE_CALLBACK=__stdcall
-    -DSQLITE_STDCALL=__stdcall
-    -DSQLITE_SYSAPI=__stdcall
-    -DSQLITE_TCLAPI=__cdecl
+    -DSQLITE_CDECL=__cdecl
   )
 
-  if [[ "${ABI:-}" == "STDCALL" ]]; then
+  if [[ "${ABI}" == "STDCALL" ]]; then
     echo "Using Stdcall ABI"
     FEATURES=("${FEATURES[@]}" "${ABI_STDCALL[@]}")
   fi
-
-  SERVER_API="-DSQLITE_API=__declspec(dllexport)"
-  CLIENT_API="-DSQLITE_API=__declspec(dllimport)"
 
   OPT_FEATURE_FLAGS="${FEATURES[@]}"
   
@@ -207,6 +229,20 @@ set_sqlite3_extra_options() {
 
 
 copy_dependencies() {
+  echo "________________________"
+  echo "Copying dependencies... "
+  echo "------------------------"
+  readonly BUILDBINDIR=${BUILDDIR}/bin
+  readonly SRCBINDIR=${MSYSTEM_PREFIX}/bin
+  readonly DEPENDENCIES=(
+    libgcc_s_dw2-1.dll
+    libicudt68.dll
+    libicuin68.dll
+    libicuuc68.dll
+    libstdc++-6.dll
+    libwinpthread-1.dll
+  )
+
   mkdir -p "${BASEDIR}/${BUILDBINDIR}"
 
   for dependency in "${DEPENDENCIES[@]}"; do
@@ -221,6 +257,7 @@ copy_dependencies() {
 
 
 main() {
+  readonly TARGETS=(${@:-all dll})
   export LOG_FILE=${LOG_FILE:-${BASEDIR}/makelog.log}
   { 
     echo "$0" "$@";
@@ -228,17 +265,37 @@ main() {
     echo "";
   } >>"${LOG_FILE}"
 
+  readonly MAKEDEBUG="${MAKEDEBUG:-}"
+  if [[ "${MAKEDEBUG}" != "1" ]]; then
+    readonly MAKEFLAGS="-j6"
+  else
+    readonly MAKEFLAGS="-n"
+  fi
+
+  # Build STDCALL version:
+  # $ USEAPI=1 ABI=STDCALL MAKEDEBUG=0 ./sqlite3.ref.sh
+  readonly USEAPI="${USEAPI:-}"
+  readonly ABI="${ABI:-}"
+
   get_sqlite || EXITCODE=$?
   (( EXITCODE != 0 )) && echo "Error downloading SQLite3" && exit 201
   configure_sqlite || EXITCODE=$?
   (( EXITCODE != 0 )) && echo "Error configuring SQLite3" && exit 202
   patch_sqlite3_makefile || EXITCODE=$?
+  patch_mksqlite3ctcl || EXITCODE=$?
+
+  echo "_____________________"
+  echo "Patching complete... "
+  echo "---------------------"
 
   set_sqlite3_extra_options || EXITCODE=$?
 
   cd "${BASEDIR}/${BUILDDIR}" \
     || ( echo "Cannot enter ./${BUILDDIR}" && exit 204 )
-  make -j6 ${TARGETS[@]}
+  echo "__________________"
+  echo "Making targets... "
+  echo "------------------"
+  make ${MAKEFLAGS} ${TARGETS[@]}
 
   if [[ -f "${BASEDIR}/${BUILDDIR}/${LIBNAME}" ]]; then
     copy_dependencies || EXITCODE=$?
