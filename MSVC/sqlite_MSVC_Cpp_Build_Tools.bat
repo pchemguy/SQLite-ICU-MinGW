@@ -66,6 +66,8 @@ if exist "sqlite3.c" nmake /nologo /f Makefile.msc clean
 nmake /nologo /f Makefile.msc %TARGET%
 cd ..
 
+if exist "sqlite\sqlite3.dll" goto :COPY_BINARIES
+
 EndLocal
 exit /b 0
 :: ================================= END MAIN =================================
@@ -189,6 +191,7 @@ if %USE_ICU%==1 (
   set ICUDIR=!ICUDIR: =!
   set ICUINCDIR=!ICUDIR!\include
   set ICULIBDIR=!ICUDIR!\lib!ARCH!
+  set ICUBINDIR=!ICUDIR!\bin!ARCH!
 )
 
 set USE_ZLIB=0
@@ -309,5 +312,19 @@ set "TAB=	"
   echo %TAB%@echo ZLIBDIR=$^(ZLIBDIR^)
 ) 1>>%OUTPUT%
 echo ---------- Patched  "Makefile.msc" -----------
+
+exit /b 0
+
+
+:: ============================================================================
+:COPY_BINARIES
+echo ========== Copying binaries ===========
+set BUILDDIR=%~dp0sqlite
+set BINDIR=%~dp0bin
+if not exist "%BINDIR%" mkdir "%BINDIR%"
+del bin\*.dll 2>nul
+copy "%BUILDDIR%\sqlite3.dll" "%BINDIR%"
+if exist "%ICUBINDIR%\icuinfo.exe" copy "%ICUBINDIR%\icu*.dll" "%BINDIR%"
+echo ---------- Copied  binaries -----------
 
 exit /b 0
