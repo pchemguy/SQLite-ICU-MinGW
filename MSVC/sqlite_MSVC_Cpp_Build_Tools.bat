@@ -1,15 +1,15 @@
 @echo off
-rem ============================================================================
-rem Builds SQLite using Microsoft Visual C++ Build Tools (MSVC toolset).
-rem MSVC toolset can be installed via a
-rem   - dedicated installer:
-rem       https://go.microsoft.com/fwlink/?LinkId=691126
-rem   - Visual Studio installer (including CE):
-rem       https://visualstudio.microsoft.com/downloads
-rem TCL must also be available, as it is required by the building workflow.
-rem ============================================================================
+:: ============================================================================
+:: Builds SQLite using Microsoft Visual C++ Build Tools (MSVC toolset).
+:: MSVC toolset can be installed via a
+::   - dedicated installer:
+::       https://go.microsoft.com/fwlink/?LinkId=691126
+::   - Visual Studio installer (including CE):
+::       https://visualstudio.microsoft.com/downloads
+:: TCL must also be available, as it is required by the building workflow.
+:: ============================================================================
 
-rem ============================== BEGIN MAIN ==============================
+:: ================================ BEGIN MAIN ================================
 SetLocal
 
 set ERROR_STATUS=0
@@ -68,11 +68,11 @@ cd ..
 
 EndLocal
 exit /b 0
-rem =============================== END MAIN ===============================
+:: ================================= END MAIN =================================
 
 
-rem ============================================================================
-rem ============================================================================
+:: ============================================================================
+:: ============================================================================
 :CHECK_PREREQUISITES
 echo ===== Verifying environment =====
 if /%VisualStudioVersion%/==// (
@@ -141,7 +141,7 @@ if %ERROR_STATUS%==0 (
 exit /b %ERROR_STATUS%
 
 
-rem ============================================================================
+:: ============================================================================
 :BUILD_OPTIONS
 if "/%VSCMD_ARG_TGT_ARCH%/"=="/x86/" (
   set USE_STDCALL=1
@@ -176,30 +176,30 @@ exit /b 0
 
 
 :ICU_OPTIONS
-rem For now ICU is disabled.
-rem Compilation against precompiled MSVC 2019 binaries completes OK, but
-rem the resulting library could not be loaded (ICU dll's are placed in
-rem the same folder as the library). Attempt to compile ICU from source
-rem failed. Further investigation of these issues is necessary.
-rem 
-set USE_ICU=0
-rem if /%Platform%/==/x86/ (
-rem   set ARCH=
-rem ) else (
-rem   set ARCH=64
-rem )
-rem set ICUDIR=%ProgramFiles%\icu4c
-rem set ICUDIR=%ICUDIR: =%
-rem set ICUINCDIR=%ICUDIR%\include
-rem set ICULIBDIR=%ICUDIR%\lib%ARCH%
+:: In VBA6, it might be necessary to load individual libraries explicitly in the
+:: correct order (dependencies must be loaded before the depending libraries.
+set USE_ICU=1
+if %USE_ICU%==1 (
+  if /%Platform%/==/x86/ (
+    set ARCH=
+  ) else (
+    set ARCH=64
+  )
+  set ICUDIR=%ProgramFiles%\icu4c
+  set ICUDIR=!ICUDIR: =!
+  set ICUINCDIR=!ICUDIR!\include
+  set ICULIBDIR=!ICUDIR!\lib!ARCH!
+)
 
-REM set USE_ZLIB=1
-REM set ZLIBDIR=..\zlib
+set USE_ZLIB=0
+if %USE_ZLIB%==1 (
+  set ZLIBDIR=..\zlib
+)
 
 exit /b 0
 
 
-rem ============================================================================
+:: ============================================================================
 :DOWNLOAD_SQLITE
 set DISTROFILE=sqlite.zip
 set URL=https://www.sqlite.org/src/zip/sqlite.zip
@@ -223,7 +223,7 @@ if not exist %DISTROFILE% (
 exit /b 0
 
 
-rem ============================================================================
+:: ============================================================================
 :EXTRACT_SQLITE
 set DISTROFILE=sqlite.zip
 
@@ -245,11 +245,11 @@ if not exist "%DISTRODIR%" (
 exit /b 0
 
 
-rem ============================================================================
+:: ============================================================================
 :GENERATE_SPLITLINE_BAT
-rem Generates "splitline.bat" script.
-rem "splitline.bat" takes one quoted argument, splits it on the
-rem space character, and outputs each part on a separate line.
+:: Generates "splitline.bat" script.
+:: "splitline.bat" takes one quoted argument, splits it on the
+:: space character, and outputs each part on a separate line.
 echo ========== Generating "splitline.bat" ==========
 set OUTPUT="splitline.bat"
 (
@@ -269,7 +269,7 @@ echo ---------- Generated  "splitline.bat" ----------
 exit /b 0
 
 
-rem ============================================================================
+:: ============================================================================
 :PATCH_MAKEFILE_MSC
 echo ========== Patching "Makefile.msc" ===========
 if not exist Makefile.msc.bak (
