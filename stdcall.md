@@ -11,11 +11,11 @@ The official SQLite binaries follow the CDECL convention, but Windows distributi
 
 A third approach relies on a custom-built STDCALL version of the library, and it provides the most flexibility. An updated version of the *MinGW/Proxy/sqlite3.ref.sh* script executed from the MinGW32 shell (set as described [previously][MinGW]):
 `MinGW32$ USEAPI=1 ABI=STDCALL ./sqlite3.ref.sh dll`
-was supposed to build such a library. While the build process completes successfully with several warnings, the resulting binary is unusable, and I could not fix it. For this reason, I decided to deviate slightly from MinGW and try the MSVC toolset as well.
+was supposed to build such a library. While the build process completes successfully with several warnings, the resulting binary is unusable, and I could not fix it. For this reason, I decided to deviate slightly from MinGW and play with the MSVC toolset as well.
 
 Microsoft Visual C++ Build Tools (VCppBT) yields a working STDCALL x32 SQLite library. VCppBT can be installed via a [dedicated installer][VCppBT] or as part of [Visual Studio][] (including the CE version). Either installer provides the ability to choose various optional components. The minimum configuration should include the Build Tools component and an appropriate SDK package. Since SQLite building workflow relies on TCL, it must also be available (its *bin* subfolder containing the *tclsh.exe* executable must be in the path).
 
-The *MSVC\sqlite_MSVC_Cpp_Build_Tools.bat* script should be placed in an empty writable directory and executed from MSVCx32 shell with TCL added to the path, and it builds a working SQLite x32/STDCALL. Presently, however, the ICU extension is disabled. An ICU-enabled dll built against the official ICU68 binaries could not be loaded. The initial attempt to rebuild ICU4C v68 from the source also failed. Further tinkering is necessary to sort these issues out.
+The *MSVC\sqlite_MSVC_Cpp_Build_Tools.bat* script should be placed in an empty writable directory and executed from MSVCx32 shell with TCL added to the path, and it builds a working SQLite x32/STDCALL. However, I could not load the ICU-enabled sqlite3.dll library in VBA6 on Excel 2002 x32 initially. It turned out that, for some reason, Windows failed to resolve and load ICU dependencies automatically. After I had added the LoadLibrary calls loading individual ICU libraries explicitly in order of dependency (icudt68.dll, icuuc68.dll, icuin68.dll, icuio68.dll, icutu68.dll, sqlite3.dll), sqlite3.dll loaded successfully.
 
 
 <!-- References -->
