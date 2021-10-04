@@ -144,7 +144,7 @@ patch_sqlite3_makefile() {
         -e  '/^SHELL_OPT = -D/a SHELL_OPT += -DSQLITE_API=__declspec\\\\(dllimport\\\\)' \
         -i Makefile
 
-    readonly DAPI="-DSQLITE_API=__declspec\\\\(dllexport\\\\) -DSQLITE_APICALL=__stdcall"
+    readonly DAPI="-DSQLITE_API=__declspec\\\\(dllexport\\\\)"
     sed -e "/^sqlite3.lo:\tsqlite3.c$/i sqlite3.lo: DAPI = ${DAPI}" \
         -e "s|\(\$(TEMP_STORE) -c sqlite3.c\)$|\$(DAPI) \1|;" \
         -i Makefile
