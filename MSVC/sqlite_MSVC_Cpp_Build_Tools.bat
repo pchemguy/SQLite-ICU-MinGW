@@ -9,7 +9,15 @@
 :: TCL must also be available, as it is required by the building workflow.
 :: ============================================================================
 
+
+:: ============================= BEGIN DISPATCHER =============================
+call :MAIN %* 1>stdout.log 2>stderr.log
+exit /b 0
+:: ============================= END   DISPATCHER =============================
+
+
 :: ================================ BEGIN MAIN ================================
+:MAIN
 SetLocal
 
 set ERROR_STATUS=0
@@ -17,6 +25,7 @@ set ERROR_STATUS=0
 call :CHECK_PREREQUISITES
 if %ERROR_STATUS%==1 exit /b 1
 
+call :SET_TARGETS "%~1"
 call :BUILD_OPTIONS
 call :ICU_OPTIONS
 
@@ -30,6 +39,9 @@ if not exist "%DISTRODIR%" (
   exit /b 1
 )
 
+set BUILDDIR=%~dp0build
+if not exist "%BUILDDIR%" mkdir "%BUILDDIR%"
+
 call :GENERATE_SPLITLINE_BAT
 if %ErrorLevel% NEQ 0 (
   set ERROR_STATUS=%ErrorLevel%
@@ -38,10 +50,11 @@ if %ErrorLevel% NEQ 0 (
   exit /b !ERROR_STATUS!
 )
 
-cd /d "%DISTRODIR%" 2>nul
+rem Enter BUILDDIR
+cd /d "%BUILDDIR%" 2>nul
 if %ErrorLevel% NEQ 0 (
   set ERROR_STATUS=%ErrorLevel%
-  echo Cannot enter directory "%~dp0sqlite"
+  echo Cannot enter directory "%BUILDDIR%"
   echo Errod code: !ERROR_STATUS!
   exit /b !ERROR_STATUS!
 )
@@ -54,19 +67,12 @@ if %ErrorLevel% NEQ 0 (
   exit /b !ERROR_STATUS!
 )
 
-if not /%~1/==// (
-  set TARGET=%~1
-) else (
-  echo.
-  echo WARNING: no targets have been specified. Nmake will produce debug output only.
-  pause
-  set TARGET=echoconfig
-)
 if exist "sqlite3.c" nmake /nologo /f Makefile.msc clean
-nmake /nologo /f Makefile.msc %TARGET%
+nmake /nologo /f Makefile.msc %TARGETS%
 cd ..
+rem Leave BUILDDIR
 
-if exist "sqlite\sqlite3.dll" goto :COPY_BINARIES
+if exist "%BUILDDIR%\sqlite3.dll" goto :COPY_BINARIES
 
 EndLocal
 exit /b 0
@@ -75,6 +81,24 @@ exit /b 0
 
 :: ============================================================================
 :: ============================================================================
+:SET_TARGETS
+echo ===== Setting targets =====
+if not "/%~1/"=="//" (
+  set TARGETS=%~1
+) else (
+  echo.
+  echo WARNING: no targets have been specified. Expected
+  echo a space-separated list of targets as the first quoted
+  echo script parameter. Nmake will produce debug output only.
+  pause
+  set TARGETS=echoconfig
+)
+echo ----- Set     targets -----
+
+exit /b 0
+:: ============================================================================
+
+
 :CHECK_PREREQUISITES
 echo ===== Verifying environment =====
 if /%VisualStudioVersion%/==// (
@@ -106,7 +130,7 @@ if /%CommandLocation%/==// (
   echo cl.exe is not found. Run this script from an MSVC shell.
   set ERROR_STATUS=1
 ) else (
-  echo CL_HOME=%CommandLocation%
+  echo CL_EXE=%CommandLocation%
 )
 
 set CommandLocation=
@@ -119,7 +143,7 @@ if /%CommandLocation%/==// (
   echo nmake.exe is not found. Run this script from an MSVC shell.
   set ERROR_STATUS=1
 ) else (
-  echo NMAKE_HOME=%CommandLocation%
+  echo NMAKE_EXE=%CommandLocation%
 )
 
 set CommandLocation=
@@ -132,7 +156,7 @@ if /%CommandLocation%/==// (
   echo tclsh.exe is not found. TCL is required and must be in the path.
   set ERROR_STATUS=1
 ) else (
-  echo TCL_HOME=%CommandLocation%
+  echo TCLSH_EXE=%CommandLocation%
 )
 
 if %ERROR_STATUS%==0 (
@@ -140,6 +164,7 @@ if %ERROR_STATUS%==0 (
 ) else (
   echo ----- Environment is NOT OK -----
 )
+
 exit /b %ERROR_STATUS%
 
 
@@ -215,15 +240,15 @@ if not exist %DISTROFILE% (
     set ERROR_STATUS=%ErrorLevel%
     echo Error downloading SQLite distro.
     echo Errod code: !ERROR_STATUS!
-    exit /b !ERROR_STATUS!
+  ) else (
+    echo ----- Downloaded  current SQLite release -----
+    rem curl %URL% --output "%DISTRO%"
   )
-  echo ----- Downloaded  current SQLite release -----
-  rem curl %URL% --output "%DISTRO%"
 ) else (
   echo ===== Using previously downloaded SQLite distro =====
 )
 
-exit /b 0
+exit /b %ERROR_STATUS%
 
 
 :: ============================================================================
@@ -238,14 +263,14 @@ if not exist "%DISTRODIR%" (
     set ERROR_STATUS=%ErrorLevel%
     echo Error extracting SQLite distro.
     echo Errod code: !ERROR_STATUS!
-    exit /b !ERROR_STATUS!
+  ) else (
+    echo ----- Extracted  SQLite distro -----
   )
-  echo ----- Extracted  SQLite distro -----
 ) else (
   echo ===== Using previously extracted SQLite distro =====
 )
 
-exit /b 0
+exit /b %ERROR_STATUS%
 
 
 :: ============================================================================
@@ -269,17 +294,23 @@ set OUTPUT="splitline.bat"
   echo if defined ARGS goto NEXT_ARG
 ) 1>>%OUTPUT%
 echo ---------- Generated  "splitline.bat" ----------
+
 exit /b 0
 
 
 :: ============================================================================
 :PATCH_MAKEFILE_MSC
 echo ========== Patching "Makefile.msc" ===========
-if not exist Makefile.msc.bak (
-  copy Makefile.msc Makefile.msc.bak
-) else (
-  copy /Y Makefile.msc.bak Makefile.msc 1>nul
-)
+copy /Y "%DISTRODIR%\Makefile.msc" "Makefile.msc" 1>nul
+
+Powershell.exe Invoke-Command -scriptblock { ^
+  "" ^
+  $file = 'Makefile.msc'; ^
+  $regex = '^TOP = .$'; ^
+  $patch = 'TOP = %DISTRODIR%'; ^
+  (Get-Content $file) -replace $regex, $patch ^| Set-Content $file; ^
+  "" ^
+}
 
 set OUTPUT="Makefile.msc"
 set "TAB=	"
@@ -319,7 +350,6 @@ exit /b 0
 :: ============================================================================
 :COPY_BINARIES
 echo ========== Copying binaries ===========
-set BUILDDIR=%~dp0sqlite
 set BINDIR=%~dp0bin
 if not exist "%BINDIR%" mkdir "%BINDIR%"
 del bin\*.dll 2>nul
