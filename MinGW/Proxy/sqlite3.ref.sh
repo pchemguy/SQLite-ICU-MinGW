@@ -1,5 +1,17 @@
 #!/bin/sh
 #
+# Usage example (run from MinGW shell):
+#   $ USEAPI=1 ABI=STDCALL MAKEDEBUG=0 ./sqlite3.ref.sh "sqlite3.c sqlite3.h dll"
+#
+# USEAPI:
+#   0/1 - don't/do add SQLITE_API and SQLITE_APICALL to SQLiteAPI
+#
+# ABI:
+#   calling convention, e.g., STDCALL means adding "__stdcall"
+#
+# MAKEDEBUG:
+#   0/1 - if add "-j6"/"-n" flags to make command ("-n" - debug print only)
+#
 set -euo pipefail
 IFS=$'\n\t'
 
@@ -124,16 +136,17 @@ patch_sqlite3_makefile() {
 
   if [[ "${USEAPI:-}" != "" ]]; then
     echo "Enabling ABI conventions for SQLite API."
-    sed -e  '/^SHELL_OPT += -DSQLITE_API=__declspec(dllimport)/d' \
-        -i Makefile
-
     readonly USEAPIFLAG="--useapicall"
     patternh="\(^\t\$(TCLSH_CMD) \$(TOP)/tool/mksqlite3h.tcl \$(TOP)\) \(.sqlite3.h\)"
     replaceh="\1 ${USEAPIFLAG} \2"
     sed -e "s|^${patternh}|${replaceh}|;" \
         -e "s|^\(\t\$(TCLSH_CMD) \$(TOP)/tool/mksqlite3c.tcl\)|\1 ${USEAPIFLAG}|;" \
-        -e "s|\(\$(TEMP_STORE) -c\) \(sqlite3.c\)|\1 -DSQLITE_API=__declspec\\\\(dllexport\\\\) \2|;" \
         -e  '/^SHELL_OPT = -D/a SHELL_OPT += -DSQLITE_API=__declspec\\\\(dllimport\\\\)' \
+        -i Makefile
+
+    readonly DAPI="-DSQLITE_API=__declspec\\\\(dllexport\\\\) -DSQLITE_APICALL=__stdcall"
+    sed -e "/^sqlite3.lo:\tsqlite3.c$/i sqlite3.lo: DAPI = ${DAPI}" \
+        -e "s|\(\$(TEMP_STORE) -c sqlite3.c\)$|\$(DAPI) \1|;" \
         -i Makefile
   fi
 
