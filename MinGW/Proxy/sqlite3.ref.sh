@@ -10,7 +10,7 @@
 #   calling convention, e.g., STDCALL means adding "__stdcall"
 #
 # MAKEDEBUG:
-#   0/1 - if add "-j6"/"-n" flags to make command ("-n" - debug print only)
+#   0/1 - add "-j6"/"-n" flags to make command ("-n" - debug print only)
 #
 set -euo pipefail
 IFS=$'\n\t'
