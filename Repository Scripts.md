@@ -22,7 +22,7 @@ The project repository contains several scripts for building SQLite and SQLiteOD
 [SQLiteODBC][SQLiteODBC GH] folder contains modified source files used to build the SQLiteODBC driver. Further details are available on a dedicated [page][SQLiteODBC docs].
 
 
-The [ICU][] folder contains experimental scripts for building ICU4C-68. While I managed to build ICU, this was a limited exploration. An attempt to link SQLite and ICU statically with scripts in [SQLite-ICU - Partially Static][] was partially successful. Similarly, [SpatialLite][] has a draft that does not actually do anything. I am not providing any further information on these scripts.
+The [ICU][] folder contains experimental scripts for building ICU4C-68. While I managed to build ICU, this was a limited exploration. An attempt to link SQLite and ICU statically was partially successful (see the [SQLite-ICU - Partially Static][] folder for the code). Similarly, [SpatialLite][] has a draft that does not actually do anything. I am not providing any further information on these scripts.
 
 <!-- References -->
 
@@ -41,4 +41,3 @@ The [ICU][] folder contains experimental scripts for building ICU4C-68. While I 
 [ICU]: https://github.com/pchemguy/SQLite-ICU-MinGW/tree/master/MinGW/ICU
 [SpatialLite]: https://github.com/pchemguy/SQLite-ICU-MinGW/tree/master/MinGW/SpatialLite
 [SQLite-ICU - Partially Static]: https://github.com/pchemguy/SQLite-ICU-MinGW/tree/master/MinGW/SQLite-ICU%20-%20Partially%20Static
-
