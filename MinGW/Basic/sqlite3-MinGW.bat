@@ -1,6 +1,6 @@
 @echo off
 
-set Path=G:\ProgramsMisc\Anaconda\msys2\mingw32\bin;%Path%
+set Path=C:\dev\msys64\mingw32\bin;%Path%
 set SRCDIR=.\src
 set INCLUDES=-I. -I.\include
 set LIBRARIES=-L. -L.\lib
