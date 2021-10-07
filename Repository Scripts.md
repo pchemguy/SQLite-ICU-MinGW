@@ -5,7 +5,7 @@ nav_order: 7
 permalink: /repo-scripts
 ---
 
-The project repository contains several scripts for building SQLite and SQLiteODBC in two directories: [MinGW][MinGW Scripts] and [MSVC][MSVC Scripts]. While this project uses [MSYS2/MinGW][] toolsets as the primary [development environment][Dev Env], it also contains one script for the [MSVC][] toolset.
+The project repository contains several scripts for building SQLite and SQLiteODBC in two directories: [MinGW][MinGW Scripts] and [MSVC][MSVC Scripts]. While this project uses [MSYS2/MinGW][] toolsets as the primary development [environment][Dev Env], it also contains one script for the [MSVC][] toolset.
 
 ### MSVC script
 
