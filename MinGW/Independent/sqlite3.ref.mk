@@ -5,7 +5,7 @@
 #
 
 SQLITE3_DIR := $(abspath $(lastword $(MAKEFILE_LIST)))
-SQLITE3_DIR := $(patsubst %/,%,$(dir $(SQLITE3_DIR)))/sqlite3
+SQLITE3_DIR := $(patsubst %/,%,$(dir $(SQLITE3_DIR)))/sqlite
 SQLITE3_BLD := $(SQLITE3_DIR)/build
 SQLITE3_INC := $(SQLITE3_BLD)
 SQLITE3_SRC := $(SQLITE3_BLD)
