@@ -16,21 +16,18 @@ cd /tmp
 SQLite_URL="https://www.sqlite.org/src/tarball/sqlite.tar.gz?r=release"
 wget -c "${SQLite_URL}" --no-check-certificate -O sqlite.tar.gz
 tar xzf ./sqlite.tar.gz
-mv ./sqlite sqlite3
 ```
 <p> </p>
-The source folder (./sqlite3) contains three "make" files:
+The source folder (./sqlite) contains three "make" files:
 
 - "Makefile&#46;in" is a template used by the configure/make GNU toolchain;
-- "main&#46;mk" is a GNU make script designed to be called from a parent make file that assigns toolchain variables;
+- "main&#46;mk" is a GNU Make script designed to be called from a parent make file that assigns toolchain variables;
 - "Makefile.msc" is used by the Microsoft nmake.
 
-When I started digging into the SQLite build process on Windows, I was particularly interested in two features: enabling the ICU extension and enabling the "[__stdcall][Stdcall]" (see also [Calling convention]). The Microsoft nmake script supports both features (see the source), though I have not tried it myself. The GNU make scripts compatible with MSYS2/MinGW toolchain but primarily targeting non-Windows systems support neither feature.
+When I started digging into the SQLite build process on Windows, I was particularly interested in two features: enabling the ICU extension and enabling the "[__stdcall][Stdcall]" (see also [Calling convention][]). The Microsoft nmake script [supports][SQLite STDCALL] both features.The GNU Make script is compatible with MSYS2/MinGW toolchain, but it supports neither feature (patching is necessary to make these features available).
 
 
-<!---
-### References
---->
+<!-- References -->
 
 [SQLite Distros]: https://sqlite.org/download.html
 [README.md]: https://sqlite.org/src/doc/trunk/README.md
@@ -38,3 +35,4 @@ When I started digging into the SQLite build process on Windows, I was particula
 [How To Compile SQLite]: https://sqlite.org/howtocompile.html
 [Stdcall]: https://docs.microsoft.com/en-us/cpp/cpp/stdcall?view=msvc-160
 [Calling convention]: https://en.wikipedia.org/wiki/Calling_convention
+[SQLite STDCALL]: https://pchemguy.github.io/SQLite-ICU-MinGW/stdcall
