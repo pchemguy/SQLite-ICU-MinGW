@@ -47,7 +47,6 @@ get_sqlite() {
 
   if [[ ! -f "./${DBDIR}/configure" ]]; then
     tar xzf ./sqlite.tar.gz
-    mv ./sqlite "${DBDIR}"
   fi
   return 0
 } 

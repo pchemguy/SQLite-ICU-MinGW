@@ -1,7 +1,7 @@
 ---
 layout: default
 title: SQLite3 ODBC Driver
-nav_order: 8
+nav_order: 7
 permalink: /odbc
 ---
 
