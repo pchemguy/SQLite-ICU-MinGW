@@ -7,8 +7,10 @@
 ::   - Visual Studio installer (including CE):
 ::       https://visualstudio.microsoft.com/downloads
 :: TCL must also be available, as it is required by the building workflow.
+::
+:: Extra: adds a twin of sqlite3_libversion_number (files main.c and SQLite3.h
+:: in build\tsrc) with suffix "_i64" returning the version as int64.
 :: ============================================================================
-
 
 :: ============================= BEGIN DISPATCHER =============================
 call :MAIN %* 1>stdout.log 2>stderr.log
