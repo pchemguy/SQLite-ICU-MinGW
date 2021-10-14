@@ -380,9 +380,34 @@ if not exist main.c.bak (
   copy /Y SQLite3.h SQLite3.h.bak
 )
 
+copy /Y SQLite3.h.bak SQLite3.h
+copy /Y main.c.bak main.c
+
+:: Verifies handling of 64-bit integers
+::
+:: This patch adds the following prototype to "SQLite3.h" and function to "main.c"
+:: before amalgamation is generated. This function returns libversion as a 64-bit
+:: int and is used for testing purposes, especially in the 32-bit VBA environment.
+::
+:: -----------------------------------------------------------------------------
+::
+:: SQLite3.h (after the sqlite3_int64 definition):
+::
+:: SQLITE_API sqlite3_int64 SQLITE_APICALL sqlite3_libversion_number_i64(void);
+::
+:: -----------------------------------------------------------------------------
+::
+:: "main.c" (after sqlite3_libversion_number):
+::
+:: sqlite3_int64 sqlite3_libversion_number_i64(void){ return SQLITE_VERSION_NUMBER; }
+::
+:: -----------------------------------------------------------------------------
+
+:: ================= Begin sqlite3_libversion_number_i64 patch =================
+::
 Powershell.exe Invoke-Command -scriptblock { ^
   "" ^
-  $filein = 'SQLite3.h.bak'; ^
+  $filein = 'SQLite3.h'; ^
   $fileout = 'SQLite3.h'; ^
   $v64 = 'SQLITE_API sqlite3_int64 SQLITE_APICALL sqlite3_libversion_number_i64(void);'; ^
   $n = [Environment]::NewLine; ^
@@ -394,7 +419,7 @@ Powershell.exe Invoke-Command -scriptblock { ^
 
 Powershell.exe Invoke-Command -scriptblock { ^
   "" ^
-  $filein = 'main.c.bak'; ^
+  $filein = 'main.c'; ^
   $fileout = 'main.c'; ^
   $n = [Environment]::NewLine; ^
   $regex = $regex = '^^(int)( [^^v]*)(version_number)(\(void\){[^^}]*})$'; ^
@@ -402,6 +427,27 @@ Powershell.exe Invoke-Command -scriptblock { ^
   (Get-Content $filein) -replace $regex, $patch ^| Set-Content $fileout; ^
   "" ^
 }
+::
+:: ================= Finish sqlite3_libversion_number_i64 patch ================
+
+:: Verifies handling of strings
+::
+:: This patch appends the following two prototypes and function to "main.c" before 
+:: amalgamation is generated. These functions return UTF8-encoded strings for
+:: verification of the VBA code.
+::
+
+(
+  echo.
+  echo #define LATIN_UTF8 "ABCDEFGHIJKLMNOQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
+  echo const char *sqlite3_latin_utf8^(void^);
+  echo const char *sqlite3_latin_utf8^(void^){ return LATIN_UTF8; }
+  echo.
+  echo #define CYRILLIC_UTF8 "АБВГДЕЁЖЗИИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯабвгеёжзийклмнопрстуфхцчшщъэюя"
+  echo const char *sqlite3_cyrillic_utf8^(void^);
+  echo const char *sqlite3_cyrillic_utf8^(void^){ return CYRILLIC_UTF8; }
+) 1>>main.c
+
 echo ---------- Patched  "tsrc" -----------
 
 exit /b 0
