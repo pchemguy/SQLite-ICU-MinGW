@@ -295,7 +295,8 @@ copy_dependencies() {
 
 
 main() {
-  readonly TARGETS=(${@:-all dll})
+  readonly DEF_ARG=(all dll)
+  readonly TARGETS=("${@:-${DEF_ARG[@]}}")
   export LOG_FILE=${LOG_FILE:-${BASEDIR}/makelog.log}
   { 
     echo "$0" "$@";
