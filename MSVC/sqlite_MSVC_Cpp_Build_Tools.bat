@@ -11,7 +11,7 @@
 
 
 :: ============================= BEGIN DISPATCHER =============================
-call :MAIN %* 1>stdout.log 2>stderr.log
+call :MAIN %*
 exit /b 0
 :: ============================= END   DISPATCHER =============================
 
@@ -22,10 +22,15 @@ SetLocal
 
 set ERROR_STATUS=0
 
-call :SET_TARGETS "%*"
-call :BUILD_OPTIONS
-call :ICU_OPTIONS
-call :TCL_OPTIONS
+set STDOUTLOG=%~dp0stdout.log
+set STDERRLOG=%~dp0stderr.log
+
+(
+  call :SET_TARGETS %*
+  call :BUILD_OPTIONS
+  call :ICU_OPTIONS
+  call :TCL_OPTIONS 
+) 1>"%STDOUTLOG%" 2>"%STDERRLOG%"
 
 call :CHECK_PREREQUISITES
 if %ERROR_STATUS%==1 exit /b 1
@@ -43,7 +48,7 @@ if not exist "%DISTRODIR%" (
 set BUILDDIR=%~dp0build
 if not exist "%BUILDDIR%" mkdir "%BUILDDIR%"
 
-call :GENERATE_SPLITLINE_BAT
+(call :GENERATE_SPLITLINE_BAT) 1>>"%STDOUTLOG%" 2>>"%STDERRLOG%"
 if %ErrorLevel% NEQ 0 (
   set ERROR_STATUS=%ErrorLevel%
   echo Failed to generate "splitline.bat"
@@ -64,7 +69,7 @@ if exist "Makefile.msc" (
   nmake /nologo /f Makefile.msc clean
   del Makefile.msc 2>nul
 )
-call :PATCH_MAKEFILE_MSC
+(call :PATCH_MAKEFILE_MSC) 1>>"%STDOUTLOG%" 2>>"%STDERRLOG%"
 if %ErrorLevel% NEQ 0 (
   set ERROR_STATUS=%ErrorLevel%
   echo Make file patch error.
@@ -72,11 +77,11 @@ if %ErrorLevel% NEQ 0 (
   exit /b !ERROR_STATUS!
 )
 
-nmake /nologo /f Makefile.msc %TARGETS%
+nmake /nologo /f Makefile.msc %TARGETS% 1>>"%STDOUTLOG%" 2>>"%STDERRLOG%"
 cd ..
 rem Leave BUILDDIR
 
-if exist "%BUILDDIR%\sqlite3.dll" goto :COPY_BINARIES
+if exist "%BUILDDIR%\sqlite3.dll" (call :COPY_BINARIES) 1>>"%STDOUTLOG%" 2>>"%STDERRLOG%"
 
 EndLocal
 exit /b 0
@@ -86,10 +91,11 @@ exit /b 0
 :: ============================================================================
 :SET_TARGETS
 echo ===== Setting targets =====
-set TARGETS=%*
+set TARGETS=####%*
 set TARGETS=%TARGETS:"=%
-
-if "/%TARGETS%/"=="//" (
+set TARGETS=%TARGETS:####=%
+echo on
+@if "/##%TARGETS%##/"=="/####/" (
   echo.
   echo WARNING: no targets have been specified. Expected
   echo a space-separated list of targets as the first quoted
@@ -97,6 +103,7 @@ if "/%TARGETS%/"=="//" (
   pause
   set TARGETS=echoconfig
 )
+@echo off
 echo ----- Set     targets -----
 
 exit /b 0
@@ -246,20 +253,20 @@ exit /b %ERROR_STATUS%
 
 :: ============================================================================
 :DOWNLOAD_SQLITE
-set DISTROFILE=sqlite.zip
+set DISTRO=sqlite.zip
 set URL=https://www.sqlite.org/src/zip/sqlite.zip
 
-if not exist %DISTROFILE% (
+if not exist %DISTRO% (
   echo ===== Downloading current SQLite release =====
-  set PSCMD=Invoke-WebRequest -Uri '%URL%' -OutFile '%DISTROFILE%'
-  PowerShell -Command "& {!PSCMD!}"
+  curl %URL% --output "%DISTRO%"
+  :: set PSCMD=Invoke-WebRequest -Uri '%URL%' -OutFile '%DISTRO%'
+  :: PowerShell -Command "& {!PSCMD!}"
   if %ErrorLevel% NEQ 0 (
     set ERROR_STATUS=%ErrorLevel%
     echo Error downloading SQLite distro.
     echo Errod code: !ERROR_STATUS!
   ) else (
     echo ----- Downloaded  current SQLite release -----
-    rem curl %URL% --output "%DISTRO%"
   )
 ) else (
   echo ===== Using previously downloaded SQLite distro =====
@@ -274,8 +281,9 @@ set DISTROFILE=sqlite.zip
 
 if not exist "%DISTRODIR%" (
   echo ===== Extracting SQLite distro =====
-  set PSCMD=Expand-Archive -Path '%DISTROFILE%' -DestinationPath '%~dp0'
-  PowerShell -Command "& {!PSCMD!}"
+  tar -xf %DISTROFILE%
+  :: set PSCMD=Expand-Archive -Path '%DISTROFILE%' -DestinationPath '%~dp0'
+  :: PowerShell -Command "& {!PSCMD!}"
   if %ErrorLevel% NEQ 0 (
     set ERROR_STATUS=%ErrorLevel%
     echo Error extracting SQLite distro.
@@ -319,12 +327,29 @@ exit /b 0
 :PATCH_MAKEFILE_MSC
 echo ========== Patching "Makefile.msc" ===========
 del "Makefile.msc" 1>nul 2>nul
+copy /Y "%DISTRODIR%\Makefile.msc" "Makefile.msc" 1>nul
+del "Makefile.tcl" 1>nul 2>nul
 
-set MTCH=TOP = .
-set REPL=TOP = %DISTRODIR%
+set TARGETDIR=%BUILDDIR%
+set TARGETDIR=%TARGETDIR:\=/%
+set OUTPUT="Makefile.tcl"
+(
+  echo set fd [open "%TARGETDIR%/Makefile.msc" rb]                     
+  echo set orig [read -nonewline $fd]                      
+  echo close $fd                                           
+  echo.                                                     
+  echo set match {TOP = .}                                 
+  echo set replacement {TOP = %DISTRODIR%}                               
+  echo regsub $match $orig $replacement patched            
+  echo.                                                     
+  echo set fd [open "%TARGETDIR%/Makefile.msc.tmp" wb]                 
+  echo puts $fd $patched                                   
+  echo close $fd                                           
+) 1>>%OUTPUT%
+tclsh Makefile.tcl
+del Makefile.tcl 2>nul
+move /Y "Makefile.msc.tmp" "Makefile.msc"
 
-set PSCMD=(Get-Content -raw %DISTRODIR%\Makefile.msc) -replace '%MTCH%', '%REPL%'
-PowerShell -Command "& {!PSCMD!}" >>Makefile.msc
 
 set OUTPUT="Makefile.msc"
 set "TAB=	"

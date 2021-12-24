@@ -7,17 +7,10 @@
 ::   - Visual Studio installer (including CE):
 ::       https://visualstudio.microsoft.com/downloads
 :: TCL must also be available, as it is required by the building workflow.
-::
-:: Extra: adds a twin of sqlite3_libversion_number (files main.c and SQLite3.h
-:: in build\tsrc) with suffix "_i64" returning the version as int64.
-::
-:: Expected TCL bin location: %ProgramFiles%\TCL\bin
-:: Expected ICU4C-x32 bin location: %ProgramFiles%\icu4c\bin
-:: Expected ICU4C-x64 bin location: %ProgramFiles%\icu4c\bin64
 :: ============================================================================
 
+
 :: ============================= BEGIN DISPATCHER =============================
-:: call :MAIN %* 1>stdout.log 2>stderr.log
 call :MAIN %*
 exit /b 0
 :: ============================= END   DISPATCHER =============================
@@ -29,10 +22,15 @@ SetLocal
 
 set ERROR_STATUS=0
 
-call :SET_TARGETS "%~1"
-call :BUILD_OPTIONS
-call :ICU_OPTIONS
-call :TCL_OPTIONS
+set STDOUTLOG=%~dp0stdout.log
+set STDERRLOG=%~dp0stderr.log
+
+(
+  call :SET_TARGETS %*
+  call :BUILD_OPTIONS
+  call :ICU_OPTIONS
+  call :TCL_OPTIONS 
+) 1>"%STDOUTLOG%" 2>"%STDERRLOG%"
 
 call :CHECK_PREREQUISITES
 if %ERROR_STATUS%==1 exit /b 1
@@ -50,7 +48,7 @@ if not exist "%DISTRODIR%" (
 set BUILDDIR=%~dp0build
 if not exist "%BUILDDIR%" mkdir "%BUILDDIR%"
 
-call :GENERATE_SPLITLINE_BAT
+(call :GENERATE_SPLITLINE_BAT) 1>>"%STDOUTLOG%" 2>>"%STDERRLOG%"
 if %ErrorLevel% NEQ 0 (
   set ERROR_STATUS=%ErrorLevel%
   echo Failed to generate "splitline.bat"
@@ -66,16 +64,21 @@ if %ErrorLevel% NEQ 0 (
   echo Errod code: !ERROR_STATUS!
   exit /b !ERROR_STATUS!
 )
-if exist "sqlite3.c" nmake /nologo /f Makefile.msc clean
 
-call :PATCH_MAKEFILE_MSC
+if exist "Makefile.msc" (
+  nmake /nologo /f Makefile.msc clean 1>>"%STDOUTLOG%" 2>>"%STDERRLOG%"
+  del Makefile.msc 2>nul
+)
+
+(call :PATCH_MAKEFILE_MSC) 1>>"%STDOUTLOG%" 2>>"%STDERRLOG%"
 if %ErrorLevel% NEQ 0 (
   set ERROR_STATUS=%ErrorLevel%
   echo Make file patch error.
   echo Errod code: !ERROR_STATUS!
   exit /b !ERROR_STATUS!
 )
-nmake /nologo /f Makefile.msc .target_source
+
+nmake /nologo /f Makefile.msc .target_source 1>>"%STDOUTLOG%" 2>>"%STDERRLOG%"
 
 rem Enter TSRC
 cd /d "%BUILDDIR%\tsrc" 2>nul
@@ -85,7 +88,7 @@ if %ErrorLevel% NEQ 0 (
   echo Errod code: !ERROR_STATUS!
   exit /b !ERROR_STATUS!
 )
-call :PATCH_TSRC
+(call :PATCH_TSRC) 1>>"%STDOUTLOG%" 2>>"%STDERRLOG%"
 
 rem Enter BUILDDIR
 cd /d "%BUILDDIR%" 2>nul
@@ -96,75 +99,39 @@ if %ErrorLevel% NEQ 0 (
   exit /b !ERROR_STATUS!
 )
 
-nmake /nologo /f Makefile.msc %TARGETS%
+nmake /nologo /f Makefile.msc %TARGETS% 1>>"%STDOUTLOG%" 2>>"%STDERRLOG%"
 cd ..
 rem Leave BUILDDIR
 
-if exist "%BUILDDIR%\sqlite3.dll" goto :COPY_BINARIES
+if exist "%BUILDDIR%\sqlite3.dll" (call :COPY_BINARIES) 1>>"%STDOUTLOG%" 2>>"%STDERRLOG%"
 
 EndLocal
 exit /b 0
-
-:: ============================================================================
-:END_OF_MAIN_XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 :: ================================= END MAIN =================================
 
 
 :: ============================================================================
 :SET_TARGETS
 echo ===== Setting targets =====
-if not "/%~1/"=="//" (
-  set TARGETS=%~1
-) else (
-  echo on
+set TARGETS=####%*
+set TARGETS=%TARGETS:"=%
+set TARGETS=%TARGETS:####=%
+echo on
+@if "/##%TARGETS%##/"=="/####/" (
   echo.
   echo WARNING: no targets have been specified. Expected
   echo a space-separated list of targets as the first quoted
   echo script parameter. Nmake will produce debug output only.
   pause
   set TARGETS=echoconfig
-  @echo off
 )
+@echo off
 echo ----- Set     targets -----
 
 exit /b 0
-:: ============================================================================
 
 
 :: ============================================================================
-:BUILD_OPTIONS
-if "/%VSCMD_ARG_TGT_ARCH%/"=="/x86/" (
-  set USE_STDCALL=1
-) else (
-  set USE_STDCALL=0
-)
-set SESSION=1
-set RBU=1
-set NO_TCL=1
-
-set EXT_FEATURE_FLAGS=^
--DSQLITE_ENABLE_FTS3_PARENTHESIS ^
--DSQLITE_ENABLE_FTS3_TOKENIZER ^
--DSQLITE_ENABLE_FTS4=1 ^
--DSQLITE_ENABLE_FTS5=1 ^
--DSQLITE_SYSTEM_MALLOC=1 ^
--DSQLITE_OMIT_LOCALTIME=1 ^
--DSQLITE_DQS=0 ^
--DSQLITE_LIKE_DOESNT_MATCH_BLOBS ^
--DSQLITE_MAX_EXPR_DEPTH=100 ^
--DSQLITE_OMIT_DEPRECATED ^
--DSQLITE_DEFAULT_FOREIGN_KEYS=1 ^
--DSQLITE_DEFAULT_SYNCHRONOUS=1 ^
--DSQLITE_ENABLE_EXPLAIN_COMMENTS ^
--DSQLITE_ENABLE_OFFSET_SQL_FUNC=1 ^
--DSQLITE_ENABLE_QPSG ^
--DSQLITE_ENABLE_STMTVTAB ^
--DSQLITE_ENABLE_STAT4 ^
--DSQLITE_SOUNDEX
-
-exit /b 0
-
-
 :ICU_OPTIONS
 :: In VBA6, it might be necessary to load individual libraries explicitly in the
 :: correct order (dependencies must be loaded before the depending libraries.
@@ -194,12 +161,49 @@ if %USE_ZLIB%==1 (
 exit /b 0
 
 
+:: ============================================================================
 :TCL_OPTIONS
 set Path=%ProgramFiles%\TCL\bin;%Path%
 
 exit /b 0
 
 
+:: ============================================================================
+:BUILD_OPTIONS
+if "/%VSCMD_ARG_TGT_ARCH%/"=="/x86/" (
+  set USE_STDCALL=1
+) else (
+  set USE_STDCALL=0
+)
+set SESSION=1
+set RBU=1
+set NO_TCL=1
+
+set EXT_FEATURE_FLAGS=^
+-DSQLITE_ENABLE_NORMALIZE ^
+-DSQLITE_ENABLE_FTS3_PARENTHESIS ^
+-DSQLITE_ENABLE_FTS3_TOKENIZER ^
+-DSQLITE_ENABLE_FTS4=1 ^
+-DSQLITE_ENABLE_FTS5=1 ^
+-DSQLITE_SYSTEM_MALLOC=1 ^
+-DSQLITE_OMIT_LOCALTIME=1 ^
+-DSQLITE_DQS=0 ^
+-DSQLITE_LIKE_DOESNT_MATCH_BLOBS ^
+-DSQLITE_MAX_EXPR_DEPTH=100 ^
+-DSQLITE_OMIT_DEPRECATED ^
+-DSQLITE_DEFAULT_FOREIGN_KEYS=1 ^
+-DSQLITE_DEFAULT_SYNCHRONOUS=1 ^
+-DSQLITE_ENABLE_EXPLAIN_COMMENTS ^
+-DSQLITE_ENABLE_OFFSET_SQL_FUNC=1 ^
+-DSQLITE_ENABLE_QPSG ^
+-DSQLITE_ENABLE_STMTVTAB ^
+-DSQLITE_ENABLE_STAT4 ^
+-DSQLITE_SOUNDEX
+
+exit /b 0
+
+
+:: ============================================================================
 :CHECK_PREREQUISITES
 echo ===== Verifying environment =====
 if "/%VisualStudioVersion%/"=="//" (
@@ -271,13 +275,14 @@ exit /b %ERROR_STATUS%
 
 :: ============================================================================
 :DOWNLOAD_SQLITE
-set DISTROFILE=sqlite.zip
+set DISTRO=sqlite.zip
 set URL=https://www.sqlite.org/src/zip/sqlite.zip
 
-if not exist %DISTROFILE% (
+if not exist %DISTRO% (
   echo ===== Downloading current SQLite release =====
-  set PSCMD=Invoke-WebRequest -Uri '%URL%' -OutFile '%DISTROFILE%'
-  PowerShell -Command "& {!PSCMD!}"
+  curl %URL% --output "%DISTRO%"
+  :: set PSCMD=Invoke-WebRequest -Uri '%URL%' -OutFile '%DISTRO%'
+  :: PowerShell -Command "& {!PSCMD!}"
   if %ErrorLevel% NEQ 0 (
     set ERROR_STATUS=%ErrorLevel%
     echo Error downloading SQLite distro.
@@ -299,8 +304,7 @@ set DISTROFILE=sqlite.zip
 
 if not exist "%DISTRODIR%" (
   echo ===== Extracting SQLite distro =====
-  set PSCMD=Expand-Archive -Path '%DISTROFILE%' -DestinationPath '%~dp0'
-  PowerShell -Command "& {!PSCMD!}"
+  tar -xf %DISTROFILE%
   if %ErrorLevel% NEQ 0 (
     set ERROR_STATUS=%ErrorLevel%
     echo Error extracting SQLite distro.
@@ -343,12 +347,30 @@ exit /b 0
 :: ============================================================================
 :PATCH_MAKEFILE_MSC
 echo ========== Patching "Makefile.msc" ===========
+del "Makefile.msc" 1>nul 2>nul
 copy /Y "%DISTRODIR%\Makefile.msc" "Makefile.msc" 1>nul
+del "Makefile.tcl" 1>nul 2>nul
 
-set MTCH=TOP = .
-set REPL=TOP = %DISTRODIR%
+set TARGETDIR=%BUILDDIR%
+set TARGETDIR=%TARGETDIR:\=/%
+set OUTPUT="Makefile.tcl"
+(
+  echo set fd [open "%TARGETDIR%/Makefile.msc" rb]
+  echo set orig [read -nonewline $fd]
+  echo close $fd
+  echo.
+  echo set match "TOP = ."
+  echo set replacement "TOP = %DISTRODIR:\=\\%"
+  echo regsub $match $orig $replacement patched
+  echo.
+  echo set fd [open "%TARGETDIR%/Makefile.msc.tmp" wb]
+  echo puts $fd $patched
+  echo close $fd
+) 1>>%OUTPUT%
+tclsh "%OUTPUT%"
+del "%OUTPUT%" 2>nul
+move /Y "Makefile.msc.tmp" "Makefile.msc"
 
-Powershell.exe -Command "(Get-Content -raw Makefile.msc) -replace '%MTCH%', '%REPL%' | Out-File -encoding ASCII Makefile.msc"
 
 set OUTPUT="Makefile.msc"
 set "TAB=	"
@@ -418,28 +440,50 @@ copy /Y main.c.bak main.c
 
 :: ================= Begin sqlite3_libversion_number_i64 patch =================
 ::
-Powershell.exe Invoke-Command -scriptblock { ^
-  "" ^
-  $filein = 'SQLite3.h'; ^
-  $fileout = 'SQLite3.h'; ^
-  $v64 = 'SQLITE_API sqlite3_int64 SQLITE_APICALL sqlite3_libversion_number_i64(void);'; ^
-  $n = [Environment]::NewLine; ^
-  $regex = '^^(typedef sqlite_uint64 sqlite3_uint64;)$'; ^
-  $patch = ('$1' + $n + $n + $v64); ^
-  (Get-Content $filein) -replace $regex, $patch ^| Set-Content $fileout; ^
-  "" ^
-}
+echo ========== Patching "SQLite3.h" ===========
+set TARGETDIR=%BUILDDIR%/tsrc
+set TARGETDIR=%TARGETDIR:\=/%
+set OUTPUT=sqlite3.h.tcl
+del %OUTPUT% 2>nul
+(      
+  echo set fd [open "%TARGETDIR%/sqlite3.h" rb]
+  echo set orig [read -nonewline $fd]
+  echo close $fd
+  echo.
+  echo set match "typedef sqlite_uint64 sqlite3_uint64;"
+  echo set replacement "${match}\n\nSQLITE_API sqlite3_int64 SQLITE_APICALL sqlite3_libversion_number_i64(void);"
+  echo regsub $match $orig $replacement patched
+  echo.
+  echo set fd [open "%TARGETDIR%/sqlite3_.h" wb]
+  echo puts $fd $patched
+  echo close $fd
+) 1>>%OUTPUT%
+tclsh "%OUTPUT%"
+del "%OUTPUT%" 2>nul
+move /Y "sqlite3_.h" "sqlite3.h"
 
-Powershell.exe Invoke-Command -scriptblock { ^
-  "" ^
-  $filein = 'main.c'; ^
-  $fileout = 'main.c'; ^
-  $n = [Environment]::NewLine; ^
-  $regex = $regex = '^^(int)( [^^v]*)(version_number)(\(void\){[^^}]*})$'; ^
-  $patch = ('$1$2$3$4' + $n + 'sqlite3_${1}64$2$3_i64$4'); ^
-  (Get-Content $filein) -replace $regex, $patch ^| Set-Content $fileout; ^
-  "" ^
-}
+
+echo ========== Patching "main.c" ===========
+set OUTPUT=main.c.tcl
+del %OUTPUT% 2>nul
+(      
+  echo set fd [open "%TARGETDIR%/main.c" rb]
+  echo set orig [read -nonewline $fd]
+  echo close $fd
+  echo.
+  echo set match "int sqlite3_libversion_number\\(void\\)\\{ return SQLITE_VERSION_NUMBER; \\}"
+  echo set matchr "int sqlite3_libversion_number(void){ return SQLITE_VERSION_NUMBER; }"
+  echo set replacement "${matchr}\nsqlite3_int64 sqlite3_libversion_number_i64(void){ return SQLITE_VERSION_NUMBER; }"
+  echo regsub $match $orig $replacement patched
+  echo.
+  echo set fd [open "%TARGETDIR%/main_.c" wb]
+  echo puts $fd $patched
+  echo close $fd
+) 1>>%OUTPUT%
+tclsh "%OUTPUT%"
+del "%OUTPUT%" 2>nul
+move /Y "main_.c" "main.c"
+
 ::
 :: ================= Finish sqlite3_libversion_number_i64 patch ================
 
@@ -450,6 +494,7 @@ Powershell.exe Invoke-Command -scriptblock { ^
 :: verification of the VBA code.
 ::
 
+echo ========== Patching "main.c" ===========
 (
   echo.
   echo #define LATIN_UTF8 "ABCDEFGHIJKLMNOQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
@@ -473,9 +518,8 @@ set BINDIR=%~dp0bin
 if not exist "%BINDIR%" mkdir "%BINDIR%"
 del bin\*.dll 2>nul
 copy "%BUILDDIR%\sqlite3.dll" "%BINDIR%"
+if exist "%BUILDDIR%\sqlite3.exe" copy "%BUILDDIR%\sqlite3.exe" "%BINDIR%"
 if exist "%ICUBINDIR%\icuinfo.exe" copy "%ICUBINDIR%\icu*.dll" "%BINDIR%"
 echo ---------- Copied  binaries -----------
 
 exit /b 0
-
-::   $patch = ("`$1`$2" + [System.Environment]::NewLine + "`$3`$4"); ^
