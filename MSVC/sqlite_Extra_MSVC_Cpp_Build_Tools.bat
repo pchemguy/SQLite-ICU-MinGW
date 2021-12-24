@@ -10,10 +10,15 @@
 ::
 :: Extra: adds a twin of sqlite3_libversion_number (files main.c and SQLite3.h
 :: in build\tsrc) with suffix "_i64" returning the version as int64.
+::
+:: Expected TCL bin location: %ProgramFiles%\TCL\bin
+:: Expected ICU4C-x32 bin location: %ProgramFiles%\icu4c\bin
+:: Expected ICU4C-x64 bin location: %ProgramFiles%\icu4c\bin64
 :: ============================================================================
 
 :: ============================= BEGIN DISPATCHER =============================
-call :MAIN %* 1>stdout.log 2>stderr.log
+:: call :MAIN %* 1>stdout.log 2>stderr.log
+call :MAIN %*
 exit /b 0
 :: ============================= END   DISPATCHER =============================
 
@@ -24,12 +29,13 @@ SetLocal
 
 set ERROR_STATUS=0
 
-call :CHECK_PREREQUISITES
-if %ERROR_STATUS%==1 exit /b 1
-
 call :SET_TARGETS "%~1"
 call :BUILD_OPTIONS
 call :ICU_OPTIONS
+call :TCL_OPTIONS
+
+call :CHECK_PREREQUISITES
+if %ERROR_STATUS%==1 exit /b 1
 
 set DISTRODIR=%~dp0sqlite
 call :DOWNLOAD_SQLITE
@@ -105,92 +111,24 @@ exit /b 0
 
 
 :: ============================================================================
-:: ============================================================================
 :SET_TARGETS
 echo ===== Setting targets =====
 if not "/%~1/"=="//" (
   set TARGETS=%~1
 ) else (
+  echo on
   echo.
   echo WARNING: no targets have been specified. Expected
   echo a space-separated list of targets as the first quoted
   echo script parameter. Nmake will produce debug output only.
   pause
   set TARGETS=echoconfig
+  @echo off
 )
 echo ----- Set     targets -----
 
 exit /b 0
 :: ============================================================================
-
-
-:CHECK_PREREQUISITES
-echo ===== Verifying environment =====
-if /%VisualStudioVersion%/==// (
-  echo %%VisualStudioVersion%% is not set. Run this script from an MSVC shell.
-  set ERROR_STATUS=1
-) else (
-  echo VisualStudioVersion=%VisualStudioVersion%
-)
-if /%VSINSTALLDIR%/==// (
-  echo %%VSINSTALLDIR%% is not set. Run this script from an MSVC shell.
-  set ERROR_STATUS=1
-) else (
-  echo VSINSTALLDIR=%VSINSTALLDIR%
-)
-if /%VCINSTALLDIR%/==// (
-  echo %%VSINSTALLDIR%% is not set. Run this script from an MSVC shell.
-  set ERROR_STATUS=1
-) else (
-  echo VCINSTALLDIR=%VCINSTALLDIR%
-)
-
-set CommandLocation=
-for /f "Usebackq delims=" %%i in (`where cl.exe 2^>nul`) do (
-  if /!CommandLocation!/==// (
-    set CommandLocation=%%i
-  )
-)
-if /%CommandLocation%/==// (
-  echo cl.exe is not found. Run this script from an MSVC shell.
-  set ERROR_STATUS=1
-) else (
-  echo CL_EXE=%CommandLocation%
-)
-
-set CommandLocation=
-for /f "Usebackq delims=" %%i in (`where nmake.exe 2^>nul`) do (
-  if /!CommandLocation!/==// (
-    set CommandLocation=%%i
-  )
-)
-if /%CommandLocation%/==// (
-  echo nmake.exe is not found. Run this script from an MSVC shell.
-  set ERROR_STATUS=1
-) else (
-  echo NMAKE_EXE=%CommandLocation%
-)
-
-set CommandLocation=
-for /f "Usebackq delims=" %%i in (`where tclsh.exe 2^>nul`) do (
-  if /!CommandLocation!/==// (
-    set CommandLocation=%%i
-  )
-)
-if /%CommandLocation%/==// (
-  echo tclsh.exe is not found. TCL is required and must be in the path.
-  set ERROR_STATUS=1
-) else (
-  echo TCLSH_EXE=%CommandLocation%
-)
-
-if %ERROR_STATUS%==0 (
-  echo ----- Verified  environment -----
-) else (
-  echo ----- Environment is NOT OK -----
-)
-
-exit /b %ERROR_STATUS%
 
 
 :: ============================================================================
@@ -205,7 +143,6 @@ set RBU=1
 set NO_TCL=1
 
 set EXT_FEATURE_FLAGS=^
--DSQLITE_ENABLE_NORMALIZE ^
 -DSQLITE_ENABLE_FTS3_PARENTHESIS ^
 -DSQLITE_ENABLE_FTS3_TOKENIZER ^
 -DSQLITE_ENABLE_FTS4=1 ^
@@ -245,12 +182,91 @@ if %USE_ICU%==1 (
   set ICUBINDIR=!ICUDIR!\bin!ARCH!
 )
 
+set INCLUDE=%ICUINCDIR%;%INCLUDE%
+set Path=%ICUBINDIR%;%Path%
+set LIB=%ICULIBDIR%;%LIB%
+
 set USE_ZLIB=0
 if %USE_ZLIB%==1 (
   set ZLIBDIR=..\zlib
 )
 
 exit /b 0
+
+
+:TCL_OPTIONS
+set Path=%ProgramFiles%\TCL\bin;%Path%
+
+exit /b 0
+
+
+:CHECK_PREREQUISITES
+echo ===== Verifying environment =====
+if "/%VisualStudioVersion%/"=="//" (
+  echo %%VisualStudioVersion%% is not set. Run this script from an MSVC shell.
+  set ERROR_STATUS=1
+) else (
+  echo VisualStudioVersion=%VisualStudioVersion%
+)
+if "/%VSINSTALLDIR%/"=="//" (
+  echo %%VSINSTALLDIR%% is not set. Run this script from an MSVC shell.
+  set ERROR_STATUS=1
+) else (
+  echo VSINSTALLDIR=%VSINSTALLDIR%
+)
+if "/%VCINSTALLDIR%/"=="//" (
+  echo %%VSINSTALLDIR%% is not set. Run this script from an MSVC shell.
+  set ERROR_STATUS=1
+) else (
+  echo VCINSTALLDIR=%VCINSTALLDIR%
+)
+
+set CommandLocation=
+for /f "Usebackq delims=" %%i in (`where cl.exe 2^>nul`) do (
+  if "/!CommandLocation!/"=="//" (
+    set CommandLocation=%%i
+  )
+)
+if "/%CommandLocation%/"=="//" (
+  echo cl.exe is not found. Run this script from an MSVC shell.
+  set ERROR_STATUS=1
+) else (
+  echo CL_EXE=%CommandLocation%
+)
+
+set CommandLocation=
+for /f "Usebackq delims=" %%i in (`where nmake.exe 2^>nul`) do (
+  if "/!CommandLocation!/"=="//" (
+    set CommandLocation=%%i
+  )
+)
+if "/%CommandLocation%/"=="//" (
+  echo nmake.exe is not found. Run this script from an MSVC shell.
+  set ERROR_STATUS=1
+) else (
+  echo NMAKE_EXE=%CommandLocation%
+)
+
+set CommandLocation=
+for /f "Usebackq delims=" %%i in (`where tclsh.exe 2^>nul`) do (
+  if "/!CommandLocation!/"=="//" (
+    set CommandLocation=%%i
+  )
+)
+if "/%CommandLocation%/"=="//" (
+  echo tclsh.exe is not found. TCL is required and must be in the path.
+  set ERROR_STATUS=1
+) else (
+  echo TCLSH_EXE=%CommandLocation%
+)
+
+if %ERROR_STATUS%==0 (
+  echo ----- Verified  environment -----
+) else (
+  echo ----- Environment is NOT OK -----
+)
+
+exit /b %ERROR_STATUS%
 
 
 :: ============================================================================
@@ -329,14 +345,10 @@ exit /b 0
 echo ========== Patching "Makefile.msc" ===========
 copy /Y "%DISTRODIR%\Makefile.msc" "Makefile.msc" 1>nul
 
-Powershell.exe Invoke-Command -scriptblock { ^
-  "" ^
-  $file = 'Makefile.msc'; ^
-  $regex = '^TOP = .$'; ^
-  $patch = 'TOP = %DISTRODIR%'; ^
-  (Get-Content $file) -replace $regex, $patch ^| Set-Content $file; ^
-  "" ^
-}
+set MTCH=TOP = .
+set REPL=TOP = %DISTRODIR%
+
+Powershell.exe -Command "(Get-Content -raw Makefile.msc) -replace '%MTCH%', '%REPL%' | Out-File -encoding ASCII Makefile.msc"
 
 set OUTPUT="Makefile.msc"
 set "TAB=	"
