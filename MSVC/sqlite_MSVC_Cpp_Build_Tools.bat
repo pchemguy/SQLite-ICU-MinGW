@@ -22,12 +22,13 @@ SetLocal
 
 set ERROR_STATUS=0
 
-call :CHECK_PREREQUISITES
-if %ERROR_STATUS%==1 exit /b 1
-
-call :SET_TARGETS "%~1"
+call :SET_TARGETS "%*"
 call :BUILD_OPTIONS
 call :ICU_OPTIONS
+call :TCL_OPTIONS
+
+call :CHECK_PREREQUISITES
+if %ERROR_STATUS%==1 exit /b 1
 
 set DISTRODIR=%~dp0sqlite
 call :DOWNLOAD_SQLITE
@@ -59,6 +60,10 @@ if %ErrorLevel% NEQ 0 (
   exit /b !ERROR_STATUS!
 )
 
+if exist "Makefile.msc" (
+  nmake /nologo /f Makefile.msc clean
+  del Makefile.msc 2>nul
+)
 call :PATCH_MAKEFILE_MSC
 if %ErrorLevel% NEQ 0 (
   set ERROR_STATUS=%ErrorLevel%
@@ -67,7 +72,6 @@ if %ErrorLevel% NEQ 0 (
   exit /b !ERROR_STATUS!
 )
 
-if exist "sqlite3.c" nmake /nologo /f Makefile.msc clean
 nmake /nologo /f Makefile.msc %TARGETS%
 cd ..
 rem Leave BUILDDIR
@@ -80,12 +84,12 @@ exit /b 0
 
 
 :: ============================================================================
-:: ============================================================================
 :SET_TARGETS
 echo ===== Setting targets =====
-if not "/%~1/"=="//" (
-  set TARGETS=%~1
-) else (
+set TARGETS=%*
+set TARGETS=%TARGETS:"=%
+
+if "/%TARGETS%/"=="//" (
   echo.
   echo WARNING: no targets have been specified. Expected
   echo a space-separated list of targets as the first quoted
@@ -96,76 +100,43 @@ if not "/%~1/"=="//" (
 echo ----- Set     targets -----
 
 exit /b 0
+
+
 :: ============================================================================
-
-
-:CHECK_PREREQUISITES
-echo ===== Verifying environment =====
-if /%VisualStudioVersion%/==// (
-  echo %%VisualStudioVersion%% is not set. Run this script from an MSVC shell.
-  set ERROR_STATUS=1
-) else (
-  echo VisualStudioVersion=%VisualStudioVersion%
-)
-if /%VSINSTALLDIR%/==// (
-  echo %%VSINSTALLDIR%% is not set. Run this script from an MSVC shell.
-  set ERROR_STATUS=1
-) else (
-  echo VSINSTALLDIR=%VSINSTALLDIR%
-)
-if /%VCINSTALLDIR%/==// (
-  echo %%VSINSTALLDIR%% is not set. Run this script from an MSVC shell.
-  set ERROR_STATUS=1
-) else (
-  echo VCINSTALLDIR=%VCINSTALLDIR%
-)
-
-set CommandLocation=
-for /f "Usebackq delims=" %%i in (`where cl.exe 2^>nul`) do (
-  if /!CommandLocation!/==// (
-    set CommandLocation=%%i
+:ICU_OPTIONS
+:: In VBA6, it might be necessary to load individual libraries explicitly in the
+:: correct order (dependencies must be loaded before the depending libraries.
+set USE_ICU=1
+if %USE_ICU%==1 (
+  if /%Platform%/==/x86/ (
+    set ARCH=
+  ) else (
+    set ARCH=64
   )
-)
-if /%CommandLocation%/==// (
-  echo cl.exe is not found. Run this script from an MSVC shell.
-  set ERROR_STATUS=1
-) else (
-  echo CL_EXE=%CommandLocation%
-)
-
-set CommandLocation=
-for /f "Usebackq delims=" %%i in (`where nmake.exe 2^>nul`) do (
-  if /!CommandLocation!/==// (
-    set CommandLocation=%%i
-  )
-)
-if /%CommandLocation%/==// (
-  echo nmake.exe is not found. Run this script from an MSVC shell.
-  set ERROR_STATUS=1
-) else (
-  echo NMAKE_EXE=%CommandLocation%
+  set ICUDIR=%ProgramFiles%\icu4c
+  set ICUDIR=!ICUDIR: =!
+  set ICUINCDIR=!ICUDIR!\include
+  set ICULIBDIR=!ICUDIR!\lib!ARCH!
+  set ICUBINDIR=!ICUDIR!\bin!ARCH!
 )
 
-set CommandLocation=
-for /f "Usebackq delims=" %%i in (`where tclsh.exe 2^>nul`) do (
-  if /!CommandLocation!/==// (
-    set CommandLocation=%%i
-  )
-)
-if /%CommandLocation%/==// (
-  echo tclsh.exe is not found. TCL is required and must be in the path.
-  set ERROR_STATUS=1
-) else (
-  echo TCLSH_EXE=%CommandLocation%
+set INCLUDE=%ICUINCDIR%;%INCLUDE%
+set Path=%ICUBINDIR%;%Path%
+set LIB=%ICULIBDIR%;%LIB%
+
+set USE_ZLIB=0
+if %USE_ZLIB%==1 (
+  set ZLIBDIR=..\zlib
 )
 
-if %ERROR_STATUS%==0 (
-  echo ----- Verified  environment -----
-) else (
-  echo ----- Environment is NOT OK -----
-)
+exit /b 0
 
-exit /b %ERROR_STATUS%
+
+:: ============================================================================
+:TCL_OPTIONS
+set Path=%ProgramFiles%\TCL\bin;%Path%
+
+exit /b 0
 
 
 :: ============================================================================
@@ -203,29 +174,74 @@ set EXT_FEATURE_FLAGS=^
 exit /b 0
 
 
-:ICU_OPTIONS
-:: In VBA6, it might be necessary to load individual libraries explicitly in the
-:: correct order (dependencies must be loaded before the depending libraries.
-set USE_ICU=1
-if %USE_ICU%==1 (
-  if /%Platform%/==/x86/ (
-    set ARCH=
-  ) else (
-    set ARCH=64
+:: ============================================================================
+:CHECK_PREREQUISITES
+echo ===== Verifying environment =====
+if "/%VisualStudioVersion%/"=="//" (
+  echo %%VisualStudioVersion%% is not set. Run this script from an MSVC shell.
+  set ERROR_STATUS=1
+) else (
+  echo VisualStudioVersion=%VisualStudioVersion%
+)
+if "/%VSINSTALLDIR%/"=="//" (
+  echo %%VSINSTALLDIR%% is not set. Run this script from an MSVC shell.
+  set ERROR_STATUS=1
+) else (
+  echo VSINSTALLDIR=%VSINSTALLDIR%
+)
+if "/%VCINSTALLDIR%/"=="//" (
+  echo %%VSINSTALLDIR%% is not set. Run this script from an MSVC shell.
+  set ERROR_STATUS=1
+) else (
+  echo VCINSTALLDIR=%VCINSTALLDIR%
+)
+
+set CommandLocation=
+for /f "Usebackq delims=" %%i in (`where cl.exe 2^>nul`) do (
+  if "/!CommandLocation!/"=="//" (
+    set CommandLocation=%%i
   )
-  set ICUDIR=%ProgramFiles%\icu4c
-  set ICUDIR=!ICUDIR: =!
-  set ICUINCDIR=!ICUDIR!\include
-  set ICULIBDIR=!ICUDIR!\lib!ARCH!
-  set ICUBINDIR=!ICUDIR!\bin!ARCH!
+)
+if "/%CommandLocation%/"=="//" (
+  echo cl.exe is not found. Run this script from an MSVC shell.
+  set ERROR_STATUS=1
+) else (
+  echo CL_EXE=%CommandLocation%
 )
 
-set USE_ZLIB=0
-if %USE_ZLIB%==1 (
-  set ZLIBDIR=..\zlib
+set CommandLocation=
+for /f "Usebackq delims=" %%i in (`where nmake.exe 2^>nul`) do (
+  if "/!CommandLocation!/"=="//" (
+    set CommandLocation=%%i
+  )
+)
+if "/%CommandLocation%/"=="//" (
+  echo nmake.exe is not found. Run this script from an MSVC shell.
+  set ERROR_STATUS=1
+) else (
+  echo NMAKE_EXE=%CommandLocation%
 )
 
-exit /b 0
+set CommandLocation=
+for /f "Usebackq delims=" %%i in (`where tclsh.exe 2^>nul`) do (
+  if "/!CommandLocation!/"=="//" (
+    set CommandLocation=%%i
+  )
+)
+if "/%CommandLocation%/"=="//" (
+  echo tclsh.exe is not found. TCL is required and must be in the path.
+  set ERROR_STATUS=1
+) else (
+  echo TCLSH_EXE=%CommandLocation%
+)
+
+if %ERROR_STATUS%==0 (
+  echo ----- Verified  environment -----
+) else (
+  echo ----- Environment is NOT OK -----
+)
+
+exit /b %ERROR_STATUS%
 
 
 :: ============================================================================
@@ -302,16 +318,13 @@ exit /b 0
 :: ============================================================================
 :PATCH_MAKEFILE_MSC
 echo ========== Patching "Makefile.msc" ===========
-copy /Y "%DISTRODIR%\Makefile.msc" "Makefile.msc" 1>nul
+del "Makefile.msc" 1>nul 2>nul
 
-Powershell.exe Invoke-Command -scriptblock { ^
-  "" ^
-  $file = 'Makefile.msc'; ^
-  $regex = '^TOP = .$'; ^
-  $patch = 'TOP = %DISTRODIR%'; ^
-  (Get-Content $file) -replace $regex, $patch ^| Set-Content $file; ^
-  "" ^
-}
+set MTCH=TOP = .
+set REPL=TOP = %DISTRODIR%
+
+set PSCMD=(Get-Content -raw %DISTRODIR%\Makefile.msc) -replace '%MTCH%', '%REPL%'
+PowerShell -Command "& {!PSCMD!}" >>Makefile.msc
 
 set OUTPUT="Makefile.msc"
 set "TAB=	"
@@ -355,6 +368,7 @@ set BINDIR=%~dp0bin
 if not exist "%BINDIR%" mkdir "%BINDIR%"
 del bin\*.dll 2>nul
 copy "%BUILDDIR%\sqlite3.dll" "%BINDIR%"
+if exist "%BUILDDIR%\sqlite3.exe" copy "%BUILDDIR%\sqlite3.exe" "%BINDIR%"
 if exist "%ICUBINDIR%\icuinfo.exe" copy "%ICUBINDIR%\icu*.dll" "%BINDIR%"
 echo ---------- Copied  binaries -----------
 
