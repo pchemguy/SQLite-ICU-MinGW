@@ -1,13 +1,7 @@
 #!/bin/sh
 #
 # Usage example (run from MinGW shell):
-#   $ USEAPI=1 ABI=STDCALL MAKEDEBUG=0 ./sqlite3.ref.sh "sqlite3.c sqlite3.h dll"
-#
-# USEAPI:
-#   0/1 - don't/do add SQLITE_API and SQLITE_APICALL to SQLiteAPI
-#
-# ABI:
-#   calling convention, e.g., STDCALL means adding "__stdcall"
+#   $ MAKEDEBUG=0 ./sqlite3.ref.sh "sqlite3.c sqlite3.h dll"
 #
 # MAKEDEBUG:
 #   0/1 - add "-j6"/"-n" flags to make command ("-n" - debug print only)
@@ -125,6 +119,7 @@ patch_sqlite3_makefile() {
       -e 's|^CFLAGS =\(.*\)$|CFLAGS :=\1 \${CFLAGS}|;' \
       -e 's|^\(TCC = \${CC} \${CFLAGS}\)\( [^$]\)|\1 \${CFLAGS_EXTRAS}\2|;' \
       -e 's|^OPT_FEATURE_FLAGS =\(.*\)$|OPT_FEATURE_FLAGS :=\1 \$(OPT_FEATURE_FLAGS)|;' \
+      -e 's|^\(dll:.*\)$|\1\nexe: sqlite3\$(TEXE)|;' \
       -e "s/' T ' | grep ' _sqlite3_'/-E ' (T|R|B) sqlite3'/;" \
       -e "s| _//' >>sqlite3.def$| sqlite3/    sqlite3/' >>sqlite3.def|;" \
       <Makefile.bak >Makefile
@@ -133,22 +128,6 @@ patch_sqlite3_makefile() {
   replace="\t\t-Wl,--strip-all -Wl,--subsystem,windows,--kill-at \1 \$(LIBS)"
   sed -e "s|^${pattern}|${replace}|" \
       -i Makefile
-
-  if [[ "${USEAPI:-}" != "" ]]; then
-    echo "Enabling ABI conventions for SQLite API."
-    readonly USEAPIFLAG="--useapicall"
-    patternh="\(^\t\$(TCLSH_CMD) \$(TOP)/tool/mksqlite3h.tcl \$(TOP)\) \(.sqlite3.h\)"
-    replaceh="\1 ${USEAPIFLAG} \2"
-    sed -e "s|^${patternh}|${replaceh}|;" \
-        -e "s|^\(\t\$(TCLSH_CMD) \$(TOP)/tool/mksqlite3c.tcl\)|\1 ${USEAPIFLAG}|;" \
-        -e  '/^SHELL_OPT = -D/a SHELL_OPT += -DSQLITE_API=__declspec\\\\(dllimport\\\\)' \
-        -i Makefile
-
-    readonly DAPI="-DSQLITE_API=__declspec\\\\(dllexport\\\\)"
-    sed -e "/^sqlite3.lo:\tsqlite3.c$/i sqlite3.lo: DAPI = ${DAPI}" \
-        -e "s|\(\$(TEMP_STORE) -c sqlite3.c\)$|\$(DAPI) \1|;" \
-        -i Makefile
-  fi
 
   return 0
 }
@@ -166,10 +145,8 @@ patch_mksqlite3ctcl() {
       || ( echo "Cannot copy mksqlite3c.tcl" && exit 111 )
   fi
   
-  if [[ "${USEAPI:-}" != "" ]]; then
-    sed -e "s|*\(sqlite3_sourceid\)|*SQLITE_APICALL \1|;" \
+  sed -e "s|*\(sqlite3_sourceid\)|*SQLITE_APICALL \1|;" \
       <mksqlite3c.tcl.bak >mksqlite3c.tcl
-  fi
 
   return 0
 }
@@ -239,29 +216,16 @@ set_sqlite3_extra_options() {
     -DSQLITE_ENABLE_FTS3
     -DSQLITE_ENABLE_FTS3_PARENTHESIS
     -DSQLITE_ENABLE_FTS3_TOKENIZER
-    -DSQLITE_ENABLE_MATH_FUNCTIONS
     -DSQLITE_ENABLE_QPSG
     -DSQLITE_ENABLE_RBU
     -DSQLITE_ENABLE_ICU
     -DSQLITE_ENABLE_STMTVTAB
     -DSQLITE_ENABLE_STAT4
-    -DSQLITE_ENABLE_SESSION
-    -DSQLITE_ENABLE_PREUPDATE_HOOK
     -DSQLITE_USE_URI=1
     -DSQLITE_SOUNDEX
     -DNDEBUG
   )
     
-  ABI_STDCALL=(
-    -DSQLITE_APICALL=__stdcall
-    -DSQLITE_CDECL=__cdecl
-  )
-
-  if [[ "${ABI}" == "STDCALL" ]]; then
-    echo "Using Stdcall ABI"
-    FEATURES=("${FEATURES[@]}" "${ABI_STDCALL[@]}")
-  fi
-
   OPT_FEATURE_FLAGS="${FEATURES[@]}"
   
   export CFLAGS_EXTRAS OPT_FEATURE_FLAGS LIBS
@@ -315,11 +279,6 @@ main() {
   else
     readonly MAKEFLAGS="-n"
   fi
-
-  # Build STDCALL version:
-  # $ USEAPI=1 ABI=STDCALL MAKEDEBUG=0 ./sqlite3.ref.sh
-  readonly USEAPI="${USEAPI:-}"
-  readonly ABI="${ABI:-}"
 
   get_sqlite || EXITCODE=$?
   (( EXITCODE != 0 )) && echo "Error downloading SQLite3" && exit 201
