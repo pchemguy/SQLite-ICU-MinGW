@@ -24,6 +24,7 @@ EC=0
 BASEDIR="$(dirname "$(realpath "$0")")"
 readonly BASEDIR
 readonly DBDIR="sqlite"
+readonly LIBNAME="sqlite3.dll"
 readonly BUILDDIR="${DBDIR}/build"
 
 
@@ -54,22 +55,74 @@ configure_sqlite() {
   mkdir -p "./${BUILDDIR}"
   cd "${BASEDIR}/${BUILDDIR}" \
     || ( echo "Cannot enter ./${BUILDDIR}" && exit 104 )
-  [[ ! -r ../configure ]] && echo "Error accessing SQLite configure" && exit 105
 
   if [[ ! -f ./Makefile ]]; then
+    [[ ! -r ../configure ]] && echo "Error accessing SQLite configure" \
+      && exit 105
     echo "______________________"
-  	echo "Configuring SQLite3..."
+    echo "Configuring SQLite3..."
     echo "----------------------"
-    ../configure --enable-fts3 --enable-memsys5 --enable-update-limit \
-      --enable-all --with-tcl="${MINGW_PREFIX}/lib/tcl8" || EXITCODE=$?
+
+    local msys_root
+    msys_root="$(cygpath -m /)"
+    msys_root="${msys_root%/}"
+    local readline_inc
+    readline_inc="$(pkg-config --cflags --static readline)"
+    readline_inc="${readline_inc//${msys_root}/}"
+    local readline_lib
+    readline_lib="$(pkg-config --libs --static readline)"
+    readline_lib="${readline_lib//${msys_root}/}"
+    
+    local CONFIGURE_OPTS
+    CONFIGURE_OPTS=(
+      --enable-all
+      --enable-fts3
+      --enable-memsys5
+      --enable-update-limit
+      --with-tcl="${MINGW_PREFIX}/lib"
+      --with-readline-lib="${readline_lib}"
+      --with-readline-inc="${readline_inc}"
+    )
+
+    ../configure ${CONFIGURE_OPTS[@]} || EXITCODE=$?
     (( EXITCODE != 0 )) && echo "Error configuring SQLite" && exit 106
   else
     echo "____________________________________________"
-  	echo "Makefile found. Skipping configuring SQLite3"
+    echo "Makefile found. Skipping configuring SQLite3"
     echo "--------------------------------------------"
   fi
   return 0
 }  
+
+
+copy_dependencies() {
+  echo "________________________"
+  echo "Copying dependencies... "
+  echo "------------------------"
+  readonly BUILDBINDIR=${BUILDDIR}/bin
+  readonly SRCBINDIR=${MSYSTEM_PREFIX}/bin
+  readonly ICUVERSION="$(expr match "$(uconv -V)" '.*ICU \([0-9]*\).*')"
+  readonly DEPENDENCIES=(
+    libgcc_s_*.dll
+    libicudt${ICUVERSION}.dll
+    libicuin${ICUVERSION}.dll
+    libicuuc${ICUVERSION}.dll
+    libstdc++-6.dll
+    libwinpthread-1.dll
+  )
+
+  mkdir -p "${BASEDIR}/${BUILDBINDIR}"
+
+  for dependency in "${DEPENDENCIES[@]}"; do
+    dependency="$(ls ${SRCBINDIR}/${dependency})"
+    cp "${dependency}" "${BASEDIR}/${BUILDBINDIR}" \
+      || ( echo "Cannot copy ${dependency}" && exit 109 )
+  done
+  cp "${BASEDIR}/${BUILDDIR}/${LIBNAME}" "${BASEDIR}/${BUILDBINDIR}" \
+    || ( echo "Cannot copy ${LIBNAME}" && exit 110 )
+  
+  return 0
+}
 
 
 main() {
@@ -86,7 +139,11 @@ main() {
   cp "${BASEDIR}/sqlite3.ref.mk" "${BASEDIR}/${BUILDDIR}" \
     || ( echo "Cannot copy make file" && exit 204 )
   make -C "${BASEDIR}/${BUILDDIR}" -f "sqlite3.ref.mk" ${1:-all}
-  return 0
+
+  if [[ -f "${BASEDIR}/${BUILDDIR}/${LIBNAME}" ]]; then
+    copy_dependencies || EXITCODE=$?
+  fi
+return 0
 }
 
 
