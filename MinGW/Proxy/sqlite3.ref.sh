@@ -275,11 +275,12 @@ copy_dependencies() {
   echo "------------------------"
   readonly BUILDBINDIR=${BUILDDIR}/bin
   readonly SRCBINDIR=${MSYSTEM_PREFIX}/bin
+  readonly ICUVERSION="$(expr match "$(uconv -V)" '.*ICU \([0-9]*\).*')"
   readonly DEPENDENCIES=(
-    libgcc_s_dw2-1.dll
-    libicudt68.dll
-    libicuin68.dll
-    libicuuc68.dll
+    libgcc_s_*.dll
+    libicudt${ICUVERSION}.dll
+    libicuin${ICUVERSION}.dll
+    libicuuc${ICUVERSION}.dll
     libstdc++-6.dll
     libwinpthread-1.dll
   )
@@ -287,7 +288,8 @@ copy_dependencies() {
   mkdir -p "${BASEDIR}/${BUILDBINDIR}"
 
   for dependency in "${DEPENDENCIES[@]}"; do
-    cp "${SRCBINDIR}/${dependency}" "${BASEDIR}/${BUILDBINDIR}" \
+    dependency="$(ls ${SRCBINDIR}/${dependency})"
+    cp "${dependency}" "${BASEDIR}/${BUILDBINDIR}" \
       || ( echo "Cannot copy ${dependency}" && exit 109 )
   done
   cp "${BASEDIR}/${BUILDDIR}/${LIBNAME}" "${BASEDIR}/${BUILDBINDIR}" \
