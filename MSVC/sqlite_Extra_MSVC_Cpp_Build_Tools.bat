@@ -284,8 +284,6 @@ set URL=https://www.sqlite.org/src/zip/sqlite.zip
 if not exist %DISTRO% (
   echo ===== Downloading current SQLite release =====
   curl %URL% --output "%DISTRO%"
-  :: set PSCMD=Invoke-WebRequest -Uri '%URL%' -OutFile '%DISTRO%'
-  :: PowerShell -Command "& {!PSCMD!}"
   if %ErrorLevel% NEQ 0 (
     set ERROR_STATUS=%ErrorLevel%
     echo Error downloading SQLite distro.

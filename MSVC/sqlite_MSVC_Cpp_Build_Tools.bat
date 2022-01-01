@@ -285,8 +285,6 @@ set DISTROFILE=sqlite.zip
 if not exist "%DISTRODIR%" (
   echo ===== Extracting SQLite distro =====
   tar -xf %DISTROFILE%
-  :: set PSCMD=Expand-Archive -Path '%DISTROFILE%' -DestinationPath '%~dp0'
-  :: PowerShell -Command "& {!PSCMD!}"
   if %ErrorLevel% NEQ 0 (
     set ERROR_STATUS=%ErrorLevel%
     echo Error extracting SQLite distro.
