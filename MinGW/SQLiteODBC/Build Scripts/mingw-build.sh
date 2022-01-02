@@ -165,6 +165,23 @@ build_odbc() {
 }
 
 
+move_binaries() {
+  echo "___________________"
+  echo "Moving binaries... "
+  echo "-------------------"
+  readonly BUILDBINDIR="${BASEDIR}/../bin"
+  mkdir -p "${BUILDBINDIR}"
+
+  cd "${BASEDIR}"
+  rm -rf *.o
+  mv *.exe "${BUILDBINDIR}"
+  mv *.dll "${BUILDBINDIR}"
+  mv *.a   "${BUILDBINDIR}"
+  
+  return 0
+}
+
+
 main() {
   LOG_FILE=${LOG_FILE:-makelog.log}
   { 
@@ -185,6 +202,7 @@ main() {
   export ADD_CFLAGS ADD_LDFLAGS ADD_NSIS
   update_sources
   build_odbc
+  move_binaries
 
   return 0
 }
