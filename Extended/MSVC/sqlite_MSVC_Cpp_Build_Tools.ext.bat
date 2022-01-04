@@ -31,10 +31,10 @@ del "%STDERRLOG%" 2>nul
 
 (
   call :SET_TARGETS %*
-  call :BUILD_OPTIONS
   call :ICU_OPTIONS
   call :TCL_OPTIONS
   call :ZLIB_OPTIONS
+  call :BUILD_OPTIONS
 ) 1>"%STDOUTLOG%" 2>"%STDERRLOG%"
 
 call :CHECK_PREREQUISITES
@@ -49,10 +49,13 @@ if not exist "%DISTRODIR%" (
   echo Distro directory does not exists. Exiting
   exit /b 1
 )
-call :DOWNLOAD_ZLIB
-if %ERROR_STATUS% NEQ 0 exit /b 1
-call :EXTRACT_ZLIB
-if %ERROR_STATUS% NEQ 0 exit /b 1
+
+if %USE_ZLIB% EQU 1 (
+  call :DOWNLOAD_ZLIB
+  if %ERROR_STATUS% NEQ 0 exit /b 1
+  call :EXTRACT_ZLIB
+  if %ERROR_STATUS% NEQ 0 exit /b 1
+)
 
 set BUILDDIR=%BASEDIR%\build
 if not exist "%BUILDDIR%" mkdir "%BUILDDIR%"
@@ -80,7 +83,7 @@ if %WITH_EXTRA_EXT% EQU 1 (
   call :TEST_PATCH_MAIN_C_SQLITE3_H
   call :EXT_PATCH_MAIN_C
   call :EXT_PATCH_CSV_C
-  call :EXT_PATCH_ZIPFILE_C
+  if %USE_ZLIB% EQU 1 (call :EXT_PATCH_ZIPFILE_C)
 ) 1>>"%STDOUTLOG%" 2>>"%STDERRLOG%"
 
 popd
@@ -144,6 +147,9 @@ exit /b 0
 
 :: ============================================================================
 :ZLIB_OPTIONS
+set USE_ZLIB=1
+:: Could not get static linking to work
+set ZLIBLIB=zdll.lib
 set ZLIBDIR=%DISTRODIR%\compat\zlib
 
 exit /b 0
@@ -151,6 +157,7 @@ exit /b 0
 
 :: ============================================================================
 :TCL_OPTIONS
+set NO_TCL=1
 set Path=%ProgramFiles%\TCL\bin;%Path%
 
 exit /b 0
@@ -165,11 +172,8 @@ if "/%VSCMD_ARG_TGT_ARCH%/"=="/x86/" (
 )
 set SESSION=1
 set RBU=1
-set NO_TCL=1
 set API_ARMOR=1
 set SYMBOLS=0
-set USE_ZLIB=1
-set DYNAMIC_SHELL=1
 
 set EXT_FEATURE_FLAGS=^
 -DSQLITE_ENABLE_NORMALIZE ^
@@ -199,10 +203,14 @@ if "%WITH_EXTRA_EXT%"=="" set WITH_EXTRA_EXT=1
 if %WITH_EXTRA_EXT% EQU 1 (
   echo ========== EXTRA EXTENSIONS ARE ENABLED ==========
   echo ============ TEST FUNCTIONS ARE ENABLED ==========
+  if %USE_ZLIB% EQU 1 (
+    set EXT_FEATURE_FLAGS=^
+      -DSQLITE_ENABLE_ZIPFILE ^
+      !EXT_FEATURE_FLAGS!
+  )
   set EXT_FEATURE_FLAGS=^
     -DSQLITE_ENABLE_CSV ^
-    -DSQLITE_ENABLE_ZIPFILE ^
-    %EXT_FEATURE_FLAGS%
+    !EXT_FEATURE_FLAGS!
 ) else (
   echo ========== EXTRA EXTENSIONS ARE DISABLED =========
   echo ============ TEST FUNCTIONS ARE DISABLED =========
@@ -496,7 +504,8 @@ if not exist "%BINDIR%" mkdir "%BINDIR%"
 del /Q bin\* 2>nul
 copy "%BUILDDIR%\sqlite3.dll" "%BINDIR%"
 if exist "%BUILDDIR%\sqlite3.exe" copy "%BUILDDIR%\sqlite3.exe" "%BINDIR%"
-if exist "%ICUBINDIR%\icuinfo.exe" copy "%ICUBINDIR%\icu*.dll" "%BINDIR%"
+if %USE_ICU%  EQU 1 copy /Y "%ICUBINDIR%\icu*.dll" "%BINDIR%"
+if %USE_ZLIB% EQU 1 copy /Y "%ZLIBDIR%\zlib1.dll"  "%BINDIR%"
 echo ---------- Copied  binaries -----------
 
 exit /b 0
