@@ -26,11 +26,11 @@ trap cleanup_ERR ERR
 
 EXITCODE=0
 EC=0
-BASEDIR="$(dirname "$(realpath "$0")")"
-readonly BASEDIR
+readonly BASEDIR="$(dirname "$(realpath "$0")")"
 readonly DBDIR="sqlite"
+readonly SRC="${BASEDIR}/${DBDIR}"
 readonly LIBNAME="sqlite3.dll"
-readonly BUILDDIR=${DBDIR}/build
+readonly BUILDDIR="build"
 CFLAGS_EXTRAS=""
 LIBS=""
 OPT_FEATURE_FLAGS=""
@@ -65,7 +65,7 @@ configure_sqlite() {
     || ( echo "Cannot enter ./${BUILDDIR}" && exit 104 )
 
   if [[ ! -f ./Makefile ]]; then
-    [[ ! -r ../configure ]] && echo "Error accessing SQLite configure" \
+    [[ ! -r "${SRC}/configure" ]] && echo "Error accessing SQLite configure" \
       && exit 105
     echo "______________________"
     echo "Configuring SQLite3..."
@@ -92,8 +92,8 @@ configure_sqlite() {
       --with-readline-inc="${readline_inc}"
     )
 
-    lt_cv_deplibs_check_method="pass_all" ../configure ${CONFIGURE_OPTS[@]} \
-      || EXITCODE=$?
+    lt_cv_deplibs_check_method="pass_all" \
+      "${SRC}/configure" ${CONFIGURE_OPTS[@]} || EXITCODE=$?
     (( EXITCODE != 0 )) && echo "Error configuring SQLite" && exit 106
   else
     echo "____________________________________________"
@@ -237,8 +237,8 @@ copy_dependencies() {
   echo "________________________"
   echo "Copying dependencies... "
   echo "------------------------"
-  readonly BUILDBINDIR=${BUILDDIR}/bin
-  readonly SRCBINDIR=${MSYSTEM_PREFIX}/bin
+  readonly BUILDBINDIR="bin"
+  readonly SRCBINDIR="${MSYSTEM_PREFIX}/bin"
   readonly ICUVERSION="$(expr match "$(uconv -V)" '.*ICU \([0-9]*\).*')"
   readonly DEPENDENCIES=(
     libgcc_s_*.dll
@@ -247,6 +247,7 @@ copy_dependencies() {
     libicuuc${ICUVERSION}.dll
     libstdc++-6.dll
     libwinpthread-1.dll
+    zlib1.dll
   )
 
   mkdir -p "${BASEDIR}/${BUILDBINDIR}"
