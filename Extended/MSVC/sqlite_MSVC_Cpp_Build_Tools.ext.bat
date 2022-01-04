@@ -38,21 +38,21 @@ del "%STDERRLOG%" 2>nul
 ) 1>"%STDOUTLOG%" 2>"%STDERRLOG%"
 
 call :CHECK_PREREQUISITES
-if %ERROR_STATUS%==1 exit /b 1
+if %ERROR_STATUS% NEQ 0 exit /b 1
 
 set DISTRODIR=%BASEDIR%\sqlite
 call :DOWNLOAD_SQLITE
-if %ERROR_STATUS%==1 exit /b 1
+if %ERROR_STATUS% NEQ 0 exit /b 1
 call :EXTRACT_SQLITE
-if %ERROR_STATUS%==1 exit /b 1
+if %ERROR_STATUS% NEQ 0 exit /b 1
 if not exist "%DISTRODIR%" (
   echo Distro directory does not exists. Exiting
   exit /b 1
 )
 call :DOWNLOAD_ZLIB
-if %ERROR_STATUS%==1 exit /b 1
+if %ERROR_STATUS% NEQ 0 exit /b 1
 call :EXTRACT_ZLIB
-if %ERROR_STATUS%==1 exit /b 1
+if %ERROR_STATUS% NEQ 0 exit /b 1
 
 set BUILDDIR=%BASEDIR%\build
 if not exist "%BUILDDIR%" mkdir "%BUILDDIR%"
@@ -66,7 +66,7 @@ if not exist "%BUILDDIR%" mkdir "%BUILDDIR%"
   call :MAKEFILE_MSC_TOP_AND_DEBUG
 )  1>>"%STDOUTLOG%" 2>>"%STDERRLOG%"
 
-if "%WITH_EXTRA_EXT%"=="1" (
+if %WITH_EXTRA_EXT% EQU 1 (
   call :EXT_ADD_SOURCES_TO_MAKEFILE_MSC
   call :EXT_ADD_SOURCES_TO_MKSQLITE3C_TCL
   popd
@@ -120,7 +120,7 @@ exit /b 0
 :: In VBA6, it might be necessary to load individual libraries explicitly in the
 :: correct order (dependencies must be loaded before the depending libraries.
 set USE_ICU=1
-if %USE_ICU%==1 (
+if %USE_ICU% EQU 1 (
   if /%Platform%/==/x86/ (
     set ARCH=
   ) else (
@@ -191,11 +191,12 @@ set EXT_FEATURE_FLAGS=^
 -DSQLITE_SOUNDEX
 
 if "%WITH_EXTRA_EXT%"=="" set WITH_EXTRA_EXT=1
-if "%WITH_EXTRA_EXT%"=="1" (
+if %WITH_EXTRA_EXT% EQU 1 (
   echo ========== EXTRA EXTENSIONS ARE ENABLED ==========
   echo ============ TEST FUNCTIONS ARE ENABLED ==========
   set EXT_FEATURE_FLAGS=^
     -DSQLITE_ENABLE_CSV ^
+    -DSQLITE_ENABLE_ZIPFILE ^
     %EXT_FEATURE_FLAGS%
 ) else (
   echo ========== EXTRA EXTENSIONS ARE DISABLED =========
@@ -274,7 +275,7 @@ if "/%CommandLocation%/"=="//" (
   echo TCLSH_EXE=%CommandLocation%
 )
 
-if %ERROR_STATUS%==0 (
+if %ERROR_STATUS% EQU 0 (
   echo ----- Verified  environment -----
 ) else (
   echo ----- Environment is NOT OK -----
@@ -291,12 +292,12 @@ set URL=https://www.sqlite.org/src/zip/sqlite.zip
 if not exist %DISTRO% (
   echo ===== Downloading current SQLite release =====
   curl %URL% --output "%DISTRO%"
-  if %ErrorLevel% NEQ 0 (
+  if %ErrorLevel% EQU 0 (
+    echo ----- Downloaded  current SQLite release -----
+  ) else (
     set ERROR_STATUS=%ErrorLevel%
     echo Error downloading SQLite distro.
     echo Errod code: !ERROR_STATUS!
-  ) else (
-    echo ----- Downloaded  current SQLite release -----
   )
 ) else (
   echo ===== Using previously downloaded SQLite distro =====
@@ -312,12 +313,12 @@ set DISTROFILE=sqlite.zip
 if not exist "%DISTRODIR%" (
   echo ===== Extracting SQLite distro =====
   tar -xf %DISTROFILE%
-  if %ErrorLevel% NEQ 0 (
+  if %ErrorLevel% EQU 0 (
+    echo ----- Extracted  SQLite distro -----
+  ) else (
     set ERROR_STATUS=%ErrorLevel%
     echo Error extracting SQLite distro.
     echo Errod code: !ERROR_STATUS!
-  ) else (
-    echo ----- Extracted  SQLite distro -----
   )
 ) else (
   echo ===== Using previously extracted SQLite distro =====
@@ -334,12 +335,12 @@ set URL=https://zlib.net/zlib1211.zip
 if not exist %DISTRO% (
   echo ===== Downloading zlib =====
   curl %URL% --output "%DISTRO%"
-  if %ErrorLevel% NEQ 0 (
+  if %ErrorLevel% EQU 0 (
+    echo ----- Downloaded  ZLIB -----
+  ) else (
     set ERROR_STATUS=%ErrorLevel%
     echo Error downloading zlib distro.
     echo Errod code: !ERROR_STATUS!
-  ) else (
-    echo ----- Downloaded  ZLIB -----
   )
 ) else (
   echo ===== Using previously downloaded zlib =====
@@ -353,14 +354,14 @@ exit /b %ERROR_STATUS%
 set DISTROFILE=zlib.zip
 
 tar -xf %DISTROFILE%
-if %ErrorLevel% NEQ 0 (
+if %ErrorLevel% EQU 0 (
+  echo ----- Extracted  zlib distro -----
+  if exist zlib rd /S /Q zlib  1>>"%STDOUTLOG%" 2>>"%STDERRLOG%"
+  move /Y zlib-* "%DISTRODIR%\compat\zlib" 1>>"%STDOUTLOG%" 2>>"%STDERRLOG%"
+) else (
   set ERROR_STATUS=%ErrorLevel%
   echo Error extracting zlib distro.
   echo Errod code: !ERROR_STATUS!
-) else (
-  echo ----- Extracted  zlib distro -----
-  if exist zlib rd /S /Q zlib  1>>"%STDOUTLOG%" 2>>"%STDERRLOG%"
-  move zlib-* zlib 1>>"%STDOUTLOG%" 2>>"%STDERRLOG%"
 )
 
 exit /b %ERROR_STATUS%
