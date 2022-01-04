@@ -64,6 +64,7 @@ if not exist "%BUILDDIR%" mkdir "%BUILDDIR%"
   
   pushd .
   call :MAKEFILE_MSC_TOP_AND_DEBUG
+  call :MAKEFILE_MSC_ZLIB_STDCALL
 )  1>>"%STDOUTLOG%" 2>>"%STDERRLOG%"
 
 if %WITH_EXTRA_EXT% EQU 1 (
@@ -79,6 +80,7 @@ if %WITH_EXTRA_EXT% EQU 1 (
   call :TEST_PATCH_MAIN_C_SQLITE3_H
   call :EXT_PATCH_MAIN_C
   call :EXT_PATCH_CSV_C
+  call :EXT_PATCH_ZIPFILE_C
 ) 1>>"%STDOUTLOG%" 2>>"%STDERRLOG%"
 
 popd
@@ -142,8 +144,7 @@ exit /b 0
 
 :: ============================================================================
 :ZLIB_OPTIONS
-set USE_ZLIB=1
-set ZLIBDIR=%BASEDIR%\zlib
+set ZLIBDIR=%DISTRODIR%\compat\zlib
 
 exit /b 0
 
@@ -165,6 +166,10 @@ if "/%VSCMD_ARG_TGT_ARCH%/"=="/x86/" (
 set SESSION=1
 set RBU=1
 set NO_TCL=1
+set API_ARMOR=1
+set SYMBOLS=0
+set USE_ZLIB=1
+set DYNAMIC_SHELL=1
 
 set EXT_FEATURE_FLAGS=^
 -DSQLITE_ENABLE_NORMALIZE ^
@@ -352,17 +357,23 @@ exit /b %ERROR_STATUS%
 :: ============================================================================
 :EXTRACT_ZLIB
 set DISTROFILE=zlib.zip
+set ZLIBDIR=%DISTRODIR%\compat\zlib
 
-tar -xf %DISTROFILE%
-if %ErrorLevel% EQU 0 (
-  echo ----- Extracted  zlib distro -----
-  if exist zlib rd /S /Q zlib  1>>"%STDOUTLOG%" 2>>"%STDERRLOG%"
-  move /Y zlib-* "%DISTRODIR%\compat\zlib" 1>>"%STDOUTLOG%" 2>>"%STDERRLOG%"
-) else (
-  set ERROR_STATUS=%ErrorLevel%
-  echo Error extracting zlib distro.
-  echo Errod code: !ERROR_STATUS!
-)
+if not exist "%ZLIBDIR%\win32" (
+  echo ===== Extracting zlib distro =====
+  rmdir /S /Q "%ZLIBDIR%" 1>>"%STDOUTLOG%" 2>>"%STDERRLOG%"
+  tar -xf %DISTROFILE%
+  if %ErrorLevel% EQU 0 (
+    echo ----- Extracted  zlib distro -----
+    mkdir "%DISTRODIR%\compat" 2>nul
+    move /Y zlib-* zlib 1>>"%STDOUTLOG%" 2>>"%STDERRLOG%"
+    move /Y zlib "%DISTRODIR%\compat" 1>>"%STDOUTLOG%" 2>>"%STDERRLOG%"
+  ) else (
+    set ERROR_STATUS=%ErrorLevel%
+    echo Error extracting zlib distro.
+    echo Errod code: !ERROR_STATUS!
+  )
+) else (echo ===== Using previously  extracted zlib =====)
 
 exit /b %ERROR_STATUS%
 
@@ -378,6 +389,19 @@ echo ========== Patching "%FILENAME%" ===========
 copy /Y "%DISTRODIR%\%FILENAME%" "%BUILDDIR%"
 set OLDTEXT=TOP = .
 set NEWTEXT=TOP = %DISTRODIR%
+tclsh "%BASEDIR%\replace.tcl" "%OLDTEXT%" "%NEWTEXT%" "%FILENAME%"
+type "%FILENAME%.debug" >>"%FILENAME%"
+echo ---------- Patched  "%FILENAME%" -----------
+
+exit /b 0
+
+
+:: ============================================================================
+:MAKEFILE_MSC_ZLIB_STDCALL
+set FILENAME=Makefile.msc
+echo ========== Patching "%FILENAME%" ===========
+set OLDTEXT=win32\Makefile.msc clean
+set NEWTEXT=win32\Makefile.msc LOC=""-DZLIB_WINAPI -DZLIB_DLL"" clean
 tclsh "%BASEDIR%\replace.tcl" "%OLDTEXT%" "%NEWTEXT%" "%FILENAME%"
 type "%FILENAME%.debug" >>"%FILENAME%"
 echo ---------- Patched  "%FILENAME%" -----------
@@ -436,6 +460,30 @@ exit /b 0
 set TARGETDIR=%BUILDDIR%\tsrc
 set FILENAME=csv.c
 tclsh "%BASEDIR%\addlines.tcl" "%FILENAME%" "%FILENAME%.ext" "%TARGETDIR%"
+pushd "%TARGETDIR%"
+set FLAG=SQLITE_ENABLE_CSV
+set OLDTEXT=#include ^<sqlite3ext.h^>
+set NEWTEXT=#if defined(%FLAG%)\n\n#include ^<sqlite3ext.h^>
+tclsh "%BASEDIR%\replace.tcl" "%OLDTEXT%" "%NEWTEXT%" "%FILENAME%"
+echo. >>"%FILENAME%"
+echo #endif /* defined^(%FLAG%^) */ >>"%FILENAME%"
+popd
+
+exit /b 0
+
+
+:: ============================================================================
+:EXT_PATCH_ZIPFILE_C
+set TARGETDIR=%BUILDDIR%\tsrc
+set FILENAME=zipfile.c
+pushd "%TARGETDIR%"
+set FLAG=SQLITE_ENABLE_ZIPFILE
+set OLDTEXT=#include \"sqlite3ext.h\"
+set NEWTEXT=#if defined(%FLAG%)\n\n#include \"sqlite3ext.h\"
+tclsh "%BASEDIR%\replace.tcl" "%OLDTEXT%" "%NEWTEXT%" "%FILENAME%"
+echo. >>"%FILENAME%"
+echo #endif /* defined^(%FLAG%^) */ >>"%FILENAME%"
+popd
 
 exit /b 0
 
