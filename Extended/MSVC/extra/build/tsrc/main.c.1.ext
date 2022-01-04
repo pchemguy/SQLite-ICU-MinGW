@@ -5,3 +5,6 @@ int sqlite3CsvInit(sqlite3*);
 #endif
 #ifdef SQLITE_ENABLE_ZIPFILE
 int zipfileRegister(sqlite3*);
+#endif
+#if defined(SQLITE_ENABLE_SQLAR) && defined(SQLITE_ENABLE_ZIPFILE)
+int sqlite3SqlarInit(sqlite3*);

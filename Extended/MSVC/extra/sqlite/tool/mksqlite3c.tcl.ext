@@ -1,3 +1,4 @@
    json1.c
    csv.c
    zipfile.c
+   sqlar.c

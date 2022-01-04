@@ -1,0 +1,29 @@
+#ifdef _WIN32
+#endif
+
+
+int sqlite3SqlarInit(sqlite3 *db){
+  int rc = SQLITE_OK;
+  unsigned int i;
+  static const struct {
+     const char *zName;
+     int nArg;
+     int flag;
+     void (*xFunc)(sqlite3_context*,int,sqlite3_value**);
+  } aFunc[] = {
+    { "sqlar_compress",       1, 0,   sqlarCompressFunc     },
+    { "sqlar_uncompress",     2, 0,   sqlarUncompressFunc   },
+  };
+  static const int enc = 
+       SQLITE_UTF8 |
+       SQLITE_INNOCUOUS;
+  for(i=0; i<sizeof(aFunc)/sizeof(aFunc[0]) && rc==SQLITE_OK; i++){
+    rc = sqlite3_create_function(db, aFunc[i].zName, aFunc[i].nArg, enc,
+                                 (void*)&aFunc[i].flag,
+                                 aFunc[i].xFunc, 0, 0);
+  }
+  return rc;
+}
+
+
+#ifdef _WIN32

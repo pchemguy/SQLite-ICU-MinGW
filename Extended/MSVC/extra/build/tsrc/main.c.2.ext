@@ -5,3 +5,6 @@
 #endif
 #ifdef SQLITE_ENABLE_ZIPFILE
   zipfileRegister,
+#endif
+#if defined(SQLITE_ENABLE_SQLAR) && defined(SQLITE_ENABLE_ZIPFILE)
+  sqlite3SqlarInit,

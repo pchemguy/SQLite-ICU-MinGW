@@ -83,7 +83,8 @@ if %WITH_EXTRA_EXT% EQU 1 (
   call :TEST_PATCH_MAIN_C_SQLITE3_H
   call :EXT_PATCH_MAIN_C
   call :EXT_PATCH_CSV_C
-  if %USE_ZLIB% EQU 1 (call :EXT_PATCH_ZIPFILE_C)
+  if %USE_ZLIB%  EQU 1 (call :EXT_PATCH_ZIPFILE_C)
+  if %USE_SQLAR% EQU 1 (call :EXT_PATCH_SQLAR_C)
 ) 1>>"%STDOUTLOG%" 2>>"%STDERRLOG%"
 
 popd
@@ -151,6 +152,8 @@ set USE_ZLIB=1
 :: Could not get static linking to work
 set ZLIBLIB=zdll.lib
 set ZLIBDIR=%DISTRODIR%\compat\zlib
+:: USE_SQLAR should not be set if is not set
+if %USE_ZLIB% EQU 1 set USE_SQLAR=1
 
 exit /b 0
 
@@ -207,6 +210,11 @@ if %WITH_EXTRA_EXT% EQU 1 (
     set EXT_FEATURE_FLAGS=^
       -DSQLITE_ENABLE_ZIPFILE ^
       !EXT_FEATURE_FLAGS!
+    if %USE_SQLAR% EQU 1 (
+      set EXT_FEATURE_FLAGS=^
+        -DSQLITE_ENABLE_SQLAR ^
+        !EXT_FEATURE_FLAGS!
+    )
   )
   set EXT_FEATURE_FLAGS=^
     -DSQLITE_ENABLE_CSV ^
@@ -486,6 +494,26 @@ set TARGETDIR=%BUILDDIR%\tsrc
 set FILENAME=zipfile.c
 pushd "%TARGETDIR%"
 set FLAG=SQLITE_ENABLE_ZIPFILE
+set OLDTEXT=#include \"sqlite3ext.h\"
+set NEWTEXT=#if defined(%FLAG%)\n\n#include \"sqlite3ext.h\"
+tclsh "%BASEDIR%\replace.tcl" "%OLDTEXT%" "%NEWTEXT%" "%FILENAME%"
+set OLDTEXT=static int zipfileRegister
+set NEWTEXT=int zipfileRegister
+tclsh "%BASEDIR%\replace.tcl" "%OLDTEXT%" "%NEWTEXT%" "%FILENAME%"
+echo. >>"%FILENAME%"
+echo #endif /* defined^(%FLAG%^) */ >>"%FILENAME%"
+popd
+
+exit /b 0
+
+
+:: ============================================================================
+:EXT_PATCH_SQLAR_C
+set TARGETDIR=%BUILDDIR%\tsrc
+set FILENAME=sqlar.c
+tclsh "%BASEDIR%\addlines.tcl" "%FILENAME%" "%FILENAME%.ext" "%TARGETDIR%"
+pushd "%TARGETDIR%"
+set FLAG=SQLITE_ENABLE_SQLAR
 set OLDTEXT=#include \"sqlite3ext.h\"
 set NEWTEXT=#if defined(%FLAG%)\n\n#include \"sqlite3ext.h\"
 tclsh "%BASEDIR%\replace.tcl" "%OLDTEXT%" "%NEWTEXT%" "%FILENAME%"
