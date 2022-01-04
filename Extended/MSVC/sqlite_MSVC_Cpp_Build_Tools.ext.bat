@@ -56,28 +56,27 @@ if not exist "%BUILDDIR%" mkdir "%BUILDDIR%"
   copy /Y "%BASEDIR%\extra\*.tcl" "%BASEDIR%"
   xcopy /H /Y /B /E /Q "%BASEDIR%\extra\sqlite" "%BASEDIR%\sqlite"
   cd /d "%BUILDDIR%
+  
+  pushd .
+  call :MAKEFILE_MSC_TOP_AND_DEBUG
 )  1>>"%STDOUTLOG%" 2>>"%STDERRLOG%"
 
-pushd .
-(call :PATCH_MAKEFILE_MSC) 1>>"%STDOUTLOG%" 2>>"%STDERRLOG%"
-
-(
+if "%WITH_EXTRA_EXT%"=="1" (
   call :EXT_ADD_SOURCES_TO_MAKEFILE_MSC
   call :EXT_ADD_SOURCES_TO_MKSQLITE3C_TCL
-) 1>>"%STDOUTLOG%" 2>>"%STDERRLOG%"
-popd
+  popd
 
-::TSRC
-nmake /nologo /f Makefile.msc .target_source 1>>"%STDOUTLOG%" 2>>"%STDERRLOG%"
+  ::TSRC
+  nmake /nologo /f Makefile.msc .target_source
 
-pushd .
-(
+  pushd .
   xcopy /H /Y /B /E /Q "%BASEDIR%\extra\*" "%BASEDIR%"
+  call :TEST_PATCH_MAIN_C_SQLITE3_H
   call :EXT_PATCH_MAIN_C
   call :EXT_PATCH_CSV_C
 ) 1>>"%STDOUTLOG%" 2>>"%STDERRLOG%"
-popd
 
+popd
 nmake /nologo /f Makefile.msc %TARGETS% 1>>"%STDOUTLOG%" 2>>"%STDERRLOG%"
 cd ..
 rem Leave BUILDDIR
@@ -182,9 +181,25 @@ set EXT_FEATURE_FLAGS=^
 -DSQLITE_USE_URI=1 ^
 -DSQLITE_SOUNDEX
 
-set EXT_FEATURE_FLAGS=^
--DSQLITE_ENABLE_CSV ^
-%EXT_FEATURE_FLAGS%
+if "%WITH_EXTRA_EXT%"=="" set WITH_EXTRA_EXT=1
+if "%WITH_EXTRA_EXT%"=="1" (
+  echo ========== EXTRA EXTENSIONS ARE ENABLED ==========
+  echo ============ TEST FUNCTIONS ARE ENABLED ==========
+  set EXT_FEATURE_FLAGS=^
+    -DSQLITE_ENABLE_CSV ^
+    %EXT_FEATURE_FLAGS%
+) else (
+  echo ========== EXTRA EXTENSIONS ARE DISABLED =========
+  echo ============ TEST FUNCTIONS ARE DISABLED =========
+  set TARGETDIR=%DISTRODIR%\tool
+  set FILENAME=mksqlite3c.tcl
+  pushd "%TARGETDIR%"
+  if exist "%FILENAME%.bak" (
+    echo Resetting %FILENAME%
+    copy /Y "%FILENAME%.bak" "%FILENAME%"
+  )
+  popd
+)
 
 exit /b 0
 
@@ -303,7 +318,7 @@ exit /b %ERROR_STATUS%
 
 
 :: ============================================================================
-:PATCH_MAKEFILE_MSC
+:MAKEFILE_MSC_TOP_AND_DEBUG
 set FILENAME=Makefile.msc
 if exist "%FILENAME%" (
   nmake /nologo /f "%FILENAME%" clean
@@ -335,12 +350,23 @@ set TARGETDIR=%DISTRODIR%\tool
 set FILENAME=mksqlite3c.tcl
 pushd "%TARGETDIR%"
 if not exist "%FILENAME%.bak" (
-    copy /Y "%FILENAME%" "%FILENAME%.bak"
+  copy /Y "%FILENAME%" "%FILENAME%.bak"
 ) else (
-    copy /Y "%FILENAME%.bak" "%FILENAME%"
+  copy /Y "%FILENAME%.bak" "%FILENAME%"
 )
 popd
 tclsh "%BASEDIR%\addlines.tcl" "%FILENAME%" "%FILENAME%.ext" "%TARGETDIR%"
+
+exit /b 0
+
+
+:: ============================================================================
+:TEST_PATCH_MAIN_C_SQLITE3_H
+set TARGETDIR=%BUILDDIR%\tsrc
+set FILENAME=main.c
+tclsh "%BASEDIR%\addlines.tcl" "%FILENAME%" "%FILENAME%.test" "%TARGETDIR%"
+set FILENAME=sqlite3.h
+tclsh "%BASEDIR%\addlines.tcl" "%FILENAME%" "%FILENAME%.test" "%TARGETDIR%"
 
 exit /b 0
 
