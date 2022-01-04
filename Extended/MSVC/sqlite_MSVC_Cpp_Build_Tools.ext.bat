@@ -33,7 +33,8 @@ del "%STDERRLOG%" 2>nul
   call :SET_TARGETS %*
   call :BUILD_OPTIONS
   call :ICU_OPTIONS
-  call :TCL_OPTIONS 
+  call :TCL_OPTIONS
+  call :ZLIB_OPTIONS
 ) 1>"%STDOUTLOG%" 2>"%STDERRLOG%"
 
 call :CHECK_PREREQUISITES
@@ -48,6 +49,10 @@ if not exist "%DISTRODIR%" (
   echo Distro directory does not exists. Exiting
   exit /b 1
 )
+call :DOWNLOAD_ZLIB
+if %ERROR_STATUS%==1 exit /b 1
+call :EXTRACT_ZLIB
+if %ERROR_STATUS%==1 exit /b 1
 
 set BUILDDIR=%BASEDIR%\build
 if not exist "%BUILDDIR%" mkdir "%BUILDDIR%"
@@ -77,6 +82,7 @@ if "%WITH_EXTRA_EXT%"=="1" (
 ) 1>>"%STDOUTLOG%" 2>>"%STDERRLOG%"
 
 popd
+nmake /nologo /f Makefile.msc zlib 1>>"%STDOUTLOG%" 2>>"%STDERRLOG%"
 nmake /nologo /f Makefile.msc %TARGETS% 1>>"%STDOUTLOG%" 2>>"%STDERRLOG%"
 cd ..
 rem Leave BUILDDIR
@@ -131,10 +137,13 @@ set INCLUDE=%ICUINCDIR%;%INCLUDE%
 set Path=%ICUBINDIR%;%Path%
 set LIB=%ICULIBDIR%;%LIB%
 
-set USE_ZLIB=0
-if %USE_ZLIB%==1 (
-  set ZLIBDIR=..\zlib
-)
+exit /b 0
+
+
+:: ============================================================================
+:ZLIB_OPTIONS
+set USE_ZLIB=1
+set ZLIBDIR=%BASEDIR%\zlib
 
 exit /b 0
 
@@ -312,6 +321,46 @@ if not exist "%DISTRODIR%" (
   )
 ) else (
   echo ===== Using previously extracted SQLite distro =====
+)
+
+exit /b %ERROR_STATUS%
+
+
+:: ============================================================================
+:DOWNLOAD_ZLIB
+set DISTRO=zlib.zip
+set URL=https://zlib.net/zlib1211.zip
+
+if not exist %DISTRO% (
+  echo ===== Downloading zlib =====
+  curl %URL% --output "%DISTRO%"
+  if %ErrorLevel% NEQ 0 (
+    set ERROR_STATUS=%ErrorLevel%
+    echo Error downloading zlib distro.
+    echo Errod code: !ERROR_STATUS!
+  ) else (
+    echo ----- Downloaded  ZLIB -----
+  )
+) else (
+  echo ===== Using previously downloaded zlib =====
+)
+
+exit /b %ERROR_STATUS%
+
+
+:: ============================================================================
+:EXTRACT_ZLIB
+set DISTROFILE=zlib.zip
+
+tar -xf %DISTROFILE%
+if %ErrorLevel% NEQ 0 (
+  set ERROR_STATUS=%ErrorLevel%
+  echo Error extracting zlib distro.
+  echo Errod code: !ERROR_STATUS!
+) else (
+  echo ----- Extracted  zlib distro -----
+  if exist zlib rd /S /Q zlib  1>>"%STDOUTLOG%" 2>>"%STDERRLOG%"
+  move zlib-* zlib 1>>"%STDOUTLOG%" 2>>"%STDERRLOG%"
 )
 
 exit /b %ERROR_STATUS%
