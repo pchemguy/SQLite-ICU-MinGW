@@ -1,0 +1,26 @@
+
+echoconfig:
+	@echo --------------------------------
+	@echo REQ_FEATURE_FLAGS
+	@splitline.bat "$(REQ_FEATURE_FLAGS)"
+	@echo --------------------------------
+	@echo OPT_FEATURE_FLAGS
+	@splitline.bat "$(OPT_FEATURE_FLAGS)"
+	@echo --------------------------------
+	@echo EXT_FEATURE_FLAGS
+	@splitline.bat "$(EXT_FEATURE_FLAGS)"
+	@echo --------------------------------
+	@echo TCC
+	@splitline.bat "$(TCC)"
+	@echo --------------------------------
+	@echo USE_STDCALL=$(USE_STDCALL)
+	@echo USE_ZLIB=$(USE_ZLIB)
+	@echo USE_ICU=$(USE_ICU)
+	@echo FOR_WIN10=$(FOR_WIN10)
+	@echo DEBUG=$(DEBUG)
+	@echo SESSION=$(SESSION)
+	@echo RBU=$(RBU)
+	@echo ICUDIR=$(ICUDIR)
+	@echo ICUINCDIR=$(ICUINCDIR)
+	@echo ICULIBDIR=$(ICULIBDIR)
+	@echo ZLIBDIR=$(ZLIBDIR)

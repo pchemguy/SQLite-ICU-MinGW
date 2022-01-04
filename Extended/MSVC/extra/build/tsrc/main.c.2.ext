@@ -1,0 +1,4 @@
+  sqlite3Json1Init,
+#endif
+#ifdef SQLITE_ENABLE_CSV
+  sqlite3CsvInit,

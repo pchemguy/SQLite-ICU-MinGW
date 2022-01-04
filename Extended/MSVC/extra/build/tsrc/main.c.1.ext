@@ -1,0 +1,4 @@
+int sqlite3Json1Init(sqlite3*);
+#endif
+#ifdef SQLITE_ENABLE_CSV
+int sqlite3CsvInit(sqlite3*);
