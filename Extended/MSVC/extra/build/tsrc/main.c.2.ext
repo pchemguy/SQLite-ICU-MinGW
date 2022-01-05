@@ -17,3 +17,9 @@
 #endif
 #ifdef SQLITE_ENABLE_SHATHREE
   sqlite3ShathreeInit,
+#endif
+#ifdef SQLITE_ENABLE_UINT
+  sqlite3UintInit,
+#endif
+#ifdef SQLITE_ENABLE_UUID
+  sqlite3UuidInit,

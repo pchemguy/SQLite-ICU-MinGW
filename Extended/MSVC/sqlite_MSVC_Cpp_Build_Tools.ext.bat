@@ -78,17 +78,20 @@ if %WITH_EXTRA_EXT% EQU 1 (
   ::TSRC
   nmake /nologo /f Makefile.msc .target_source
 
-  pushd .
+  set TARGETDIR=%BUILDDIR%\tsrc
+  pushd "%BUILDDIR%\tsrc"
   xcopy /H /Y /B /E /Q "%BASEDIR%\extra\*" "%BASEDIR%"
-  call :TEST_PATCH_MAIN_C_SQLITE3_H
-  call :EXT_PATCH_MAIN_C
-  call :EXT_PATCH_CSV_C
+  call :TEST_MAIN_C_SQLITE3_H
+  call :EXT_MAIN_C
+  call :EXT_CSV_C
   call :EXT_NORMALIZE_C
   call :EXT_SERIES_C
   call :EXT_SHA1_C
   call :EXT_SHATHREE_C
-  if %USE_ZLIB%  EQU 1 (call :EXT_PATCH_ZIPFILE_C)
-  if %USE_SQLAR% EQU 1 (call :EXT_PATCH_SQLAR_C)
+  call :EXT_UINT_C
+  call :EXT_UUID_C
+  if %USE_ZLIB%  EQU 1 (call :EXT_ZIPFILE_C)
+  if %USE_SQLAR% EQU 1 (call :EXT_SQLAR_C)
 ) 1>>"%STDOUTLOG%" 2>>"%STDERRLOG%"
 
 popd
@@ -225,6 +228,8 @@ if %WITH_EXTRA_EXT% EQU 1 (
     -DSQLITE_ENABLE_SERIES ^
     -DSQLITE_ENABLE_SHA ^
     -DSQLITE_ENABLE_SHATHREE ^
+    -DSQLITE_ENABLE_UINT ^
+    -DSQLITE_ENABLE_UUID ^
     !EXT_FEATURE_FLAGS!
 ) else (
   echo ========== EXTRA EXTENSIONS ARE DISABLED =========
@@ -459,8 +464,7 @@ exit /b 0
 
 
 :: ============================================================================
-:TEST_PATCH_MAIN_C_SQLITE3_H
-set TARGETDIR=%BUILDDIR%\tsrc
+:TEST_MAIN_C_SQLITE3_H
 set FILENAME=main.c
 echo ========== Patching "%FILENAME%" ===========
 tclsh "%BASEDIR%\addlines.tcl" "%FILENAME%" "%FILENAME%.test" "%TARGETDIR%"
@@ -471,8 +475,7 @@ exit /b 0
 
 
 :: ============================================================================
-:EXT_PATCH_MAIN_C
-set TARGETDIR=%BUILDDIR%\tsrc
+:EXT_MAIN_C
 set FILENAME=main.c
 echo ========== Patching "%FILENAME%" ===========
 tclsh "%BASEDIR%\addlines.tcl" "%FILENAME%" "%FILENAME%.1.ext" "%TARGETDIR%"
@@ -482,29 +485,24 @@ exit /b 0
 
 
 :: ============================================================================
-:EXT_PATCH_CSV_C
-set TARGETDIR=%BUILDDIR%\tsrc
+:EXT_CSV_C
 set FLAG=SQLITE_ENABLE_CSV
 set FILENAME=csv.c
 echo ========== Patching "%FILENAME%" ===========
 tclsh "%BASEDIR%\addlines.tcl" "%FILENAME%" "%FILENAME%.ext" "%TARGETDIR%"
-pushd "%TARGETDIR%"
 set OLDTEXT=#include ^<sqlite3ext.h^>
 set NEWTEXT=#if defined(%FLAG%)\n\n#include ^<sqlite3ext.h^>
 tclsh "%BASEDIR%\replace.tcl" "%OLDTEXT%" "%NEWTEXT%" "%FILENAME%"
 echo. >>"%FILENAME%"
 echo #endif /* defined^(%FLAG%^) */ >>"%FILENAME%"
-popd
 
 exit /b 0
 
 
 :: ============================================================================
 :EXT_NORMALIZE_C
-set TARGETDIR=%BUILDDIR%\tsrc
 set FILENAME=normalize.c
 echo ========== Patching "%FILENAME%" ===========
-pushd "%TARGETDIR%"
 set OLDTEXT=int main
 set NEWTEXT=int sqlite3_normalize_main
 tclsh "%BASEDIR%\replace.tcl" "%OLDTEXT%" "%NEWTEXT%" "%FILENAME%"
@@ -535,37 +533,31 @@ tclsh "%BASEDIR%\replace.tcl" "%OLDTEXT%" "%NEWTEXT%" "%FILENAME%"
 set OLDTEXT=sqlite3T
 set NEWTEXT=sqlite3NT
 tclsh "%BASEDIR%\replace.tcl" "%OLDTEXT%" "%NEWTEXT%" "%FILENAME%"
-popd
 
 exit /b 0
 
 
 :: ============================================================================
 :EXT_SERIES_C
-set TARGETDIR=%BUILDDIR%\tsrc
 set FLAG=SQLITE_ENABLE_SERIES
 set FILENAME=series.c
 echo ========== Patching "%FILENAME%" ===========
 tclsh "%BASEDIR%\addlines.tcl" "%FILENAME%" "%FILENAME%.ext" "%TARGETDIR%"
-pushd "%TARGETDIR%"
 set OLDTEXT=#include \"sqlite3ext.h\"
 set NEWTEXT=#if defined(%FLAG%)\n\n#include \"sqlite3ext.h\"
 tclsh "%BASEDIR%\replace.tcl" "%OLDTEXT%" "%NEWTEXT%" "%FILENAME%"
 echo. >>"%FILENAME%"
 echo #endif /* defined^(%FLAG%^) */ >>"%FILENAME%"
-popd
 
 exit /b 0
 
 
 :: ============================================================================
 :EXT_SHA1_C
-set TARGETDIR=%BUILDDIR%\tsrc
 set FLAG=SQLITE_ENABLE_SHA
 set FILENAME=sha1.c
 echo ========== Patching "%FILENAME%" ===========
 tclsh "%BASEDIR%\addlines.tcl" "%FILENAME%" "%FILENAME%.ext" "%TARGETDIR%"
-pushd "%TARGETDIR%"
 set OLDTEXT=#include \"sqlite3ext.h\"
 set NEWTEXT=#if defined(%FLAG%)\n\n#include \"sqlite3ext.h\"
 tclsh "%BASEDIR%\replace.tcl" "%OLDTEXT%" "%NEWTEXT%" "%FILENAME%"
@@ -574,19 +566,16 @@ set NEWTEXT=hash_step_vformat_sha1
 tclsh "%BASEDIR%\replace.tcl" "%OLDTEXT%" "%NEWTEXT%" "%FILENAME%"
 echo. >>"%FILENAME%"
 echo #endif /* defined^(%FLAG%^) */ >>"%FILENAME%"
-popd
 
 exit /b 0
 
 
 :: ============================================================================
 :EXT_SHATHREE_C
-set TARGETDIR=%BUILDDIR%\tsrc
 set FLAG=SQLITE_ENABLE_SHATHREE
 set FILENAME=shathree.c
 echo ========== Patching "%FILENAME%" ===========
 tclsh "%BASEDIR%\addlines.tcl" "%FILENAME%" "%FILENAME%.ext" "%TARGETDIR%"
-pushd "%TARGETDIR%"
 set OLDTEXT=#include \"sqlite3ext.h\"
 set NEWTEXT=#if defined(%FLAG%)\n\n#include \"sqlite3ext.h\"
 tclsh "%BASEDIR%\replace.tcl" "%OLDTEXT%" "%NEWTEXT%" "%FILENAME%"
@@ -595,18 +584,45 @@ set NEWTEXT=hash_step_vformat_sha3
 tclsh "%BASEDIR%\replace.tcl" "%OLDTEXT%" "%NEWTEXT%" "%FILENAME%"
 echo. >>"%FILENAME%"
 echo #endif /* defined^(%FLAG%^) */ >>"%FILENAME%"
-popd
 
 exit /b 0
 
 
 :: ============================================================================
-:EXT_PATCH_ZIPFILE_C
-set TARGETDIR=%BUILDDIR%\tsrc
+:EXT_UINT_C
+set FLAG=SQLITE_ENABLE_UINT
+set FILENAME=uint.c
+echo ========== Patching "%FILENAME%" ===========
+tclsh "%BASEDIR%\addlines.tcl" "%FILENAME%" "%FILENAME%.ext" "%TARGETDIR%"
+set OLDTEXT=#include \"sqlite3ext.h\"
+set NEWTEXT=#if defined(%FLAG%)\n\n#include \"sqlite3ext.h\"
+tclsh "%BASEDIR%\replace.tcl" "%OLDTEXT%" "%NEWTEXT%" "%FILENAME%"
+echo. >>"%FILENAME%"
+echo #endif /* defined^(%FLAG%^) */ >>"%FILENAME%"
+
+exit /b 0
+
+
+:: ============================================================================
+:EXT_UUID_C
+set FLAG=SQLITE_ENABLE_UUID
+set FILENAME=uuid.c
+echo ========== Patching "%FILENAME%" ===========
+tclsh "%BASEDIR%\addlines.tcl" "%FILENAME%" "%FILENAME%.ext" "%TARGETDIR%"
+set OLDTEXT=#include \"sqlite3ext.h\"
+set NEWTEXT=#if defined(%FLAG%)\n\n#include \"sqlite3ext.h\"
+tclsh "%BASEDIR%\replace.tcl" "%OLDTEXT%" "%NEWTEXT%" "%FILENAME%"
+echo. >>"%FILENAME%"
+echo #endif /* defined^(%FLAG%^) */ >>"%FILENAME%"
+
+exit /b 0
+
+
+:: ============================================================================
+:EXT_ZIPFILE_C
 set FLAG=SQLITE_ENABLE_ZIPFILE
 set FILENAME=zipfile.c
 echo ========== Patching "%FILENAME%" ===========
-pushd "%TARGETDIR%"
 set OLDTEXT=#include \"sqlite3ext.h\"
 set NEWTEXT=#if defined(%FLAG%)\n\n#include \"sqlite3ext.h\"
 tclsh "%BASEDIR%\replace.tcl" "%OLDTEXT%" "%NEWTEXT%" "%FILENAME%"
@@ -615,25 +631,21 @@ set NEWTEXT=int zipfileRegister
 tclsh "%BASEDIR%\replace.tcl" "%OLDTEXT%" "%NEWTEXT%" "%FILENAME%"
 echo. >>"%FILENAME%"
 echo #endif /* defined^(%FLAG%^) */ >>"%FILENAME%"
-popd
 
 exit /b 0
 
 
 :: ============================================================================
-:EXT_PATCH_SQLAR_C
-set TARGETDIR=%BUILDDIR%\tsrc
+:EXT_SQLAR_C
 set FLAG=SQLITE_ENABLE_SQLAR
 set FILENAME=sqlar.c
 echo ========== Patching "%FILENAME%" ===========
 tclsh "%BASEDIR%\addlines.tcl" "%FILENAME%" "%FILENAME%.ext" "%TARGETDIR%"
-pushd "%TARGETDIR%"
 set OLDTEXT=#include \"sqlite3ext.h\"
 set NEWTEXT=#if defined(%FLAG%)\n\n#include \"sqlite3ext.h\"
 tclsh "%BASEDIR%\replace.tcl" "%OLDTEXT%" "%NEWTEXT%" "%FILENAME%"
 echo. >>"%FILENAME%"
 echo #endif /* defined^(%FLAG%^) */ >>"%FILENAME%"
-popd
 
 exit /b 0
 

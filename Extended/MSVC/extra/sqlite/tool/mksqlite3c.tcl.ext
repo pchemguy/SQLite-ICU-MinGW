@@ -5,5 +5,7 @@
    series.c
    sha1.c
    shathree.c
+   uint.c
+   uuid.c
    zipfile.c
    sqlar.c
