@@ -31,6 +31,9 @@ readonly DBDIR="sqlite"
 readonly SRC="${BASEDIR}/${DBDIR}"
 readonly LIBNAME="sqlite3.dll"
 readonly BUILDDIR="build"
+readonly WITH_EXTRA_EXT="${WITH_EXTRA_EXT:-1}"
+readonly USE_ZLIB="${USE_ZLIB:-1}"
+readonly USE_SQLAR="${USE_SQLAR:-1}"
 CFLAGS_EXTRAS=""
 LIBS=""
 OPT_FEATURE_FLAGS=""
@@ -183,12 +186,14 @@ set_sqlite3_extra_options() {
   LIBS+=" ${LIBOPTS}"
   
   ICU_CFLAGS="$(icu-config --cflags --cppflags)"
+  ZLIB_CFLAGS="$(pkg-config --cflags zlib)"
   #ICU_CFLAGS="$("${BASEDIR}/icu/dist/bin/icu-config" --noverify --cflags --cppflags)"
-  CFLAGS_EXTRAS+=" ${ICU_CFLAGS}"
+  CFLAGS_EXTRAS+=" ${ICU_CFLAGS} ${ZLIB_CFLAGS}"
   #ICU_LDFLAGS="$("${BASEDIR}/icu/dist/bin/icu-config" --noverify --ldflags)"
   #ICU_LDFLAGS="-Wl,-Bstatic $(./icu/dist/bin/icu-config --noverify --ldflags)"
   ICU_LDFLAGS="$(icu-config --ldflags)"
-  LIBS+=" ${ICU_LDFLAGS}"
+  ZLIB_LDFLAGS="$(pkg-config --libs zlib)"
+  LIBS+=" ${ICU_LDFLAGS} ${ZLIB_LDFLAGS}"
   local libraries
   IFS=$' \n\t'
     libraries=(${DEFAULT_LIBS})
@@ -202,6 +207,7 @@ set_sqlite3_extra_options() {
   
   FEATURES=(
     -D_HAVE_SQLITE_CONFIG_H
+    -DSQLITE_ENABLE_API_ARMOR=1
     -DSQLITE_DQS=0
     -DSQLITE_LIKE_DOESNT_MATCH_BLOBS
     -DSQLITE_MAX_EXPR_DEPTH=0
@@ -228,7 +234,137 @@ set_sqlite3_extra_options() {
     
   OPT_FEATURE_FLAGS="${FEATURES[@]}"
   
+  if [[ "${WITH_EXTRA_EXT}" -eq 1 ]]; then
+    if [[ "${USE_ZLIB}" -eq 1 ]]; then
+      OPT_FEATURE_FLAGS="${OPT_FEATURE_FLAGS} -DSQLITE_ENABLE_ZIPFILE"
+      if [[ "${USE_SQLAR}" -eq 1 ]]; then
+        OPT_FEATURE_FLAGS="${OPT_FEATURE_FLAGS} -DSQLITE_ENABLE_SQLAR"
+      fi
+    fi
+  fi
+  EXTRA_EXTS=(
+    -DSQLITE_ENABLE_CSV
+    -DSQLITE_ENABLE_SERIES
+    -DSQLITE_ENABLE_SHA
+    -DSQLITE_ENABLE_SHATHREE
+    -DSQLITE_ENABLE_UINT
+    -DSQLITE_ENABLE_UUID
+  )
+  OPT_FEATURE_FLAGS="${OPT_FEATURE_FLAGS} ${EXTRA_EXTS[@]}"
+
   export CFLAGS_EXTRAS OPT_FEATURE_FLAGS LIBS
+  return 0
+}
+
+
+extras() {
+  cd "${BASEDIR}/extra/${BUILDDIR}" && \
+    ls -1 *.ext | xargs -I{} cp {} "${BASEDIR}/${BUILDDIR}" \
+    || ( echo "Cannot copy extras" && exit 109 )
+  cd "${BASEDIR}/extra" && ls -1 *.tcl | xargs -I{} cp {} "${BASEDIR}" \
+    || ( echo "Cannot copy extras" && exit 109 )
+  cp -r "${BASEDIR}/extra/${DBDIR}" "${BASEDIR}" \
+    || ( echo "Cannot copy extras" && exit 109 )
+
+  TARGETDIR="${BASEDIR}/${BUILDDIR}"
+  FILENAME="Makefile"
+  echo "========== Patching ${FILENAME} ==========="
+  "${BASEDIR}/addlines.tcl" "${FILENAME}" "${FILENAME}.ext" "${TARGETDIR}"
+  cd "${TARGETDIR}" && mv makefile Makefile
+
+  TARGETDIR="${BASEDIR}/${DBDIR}/tool"
+  FILENAME="mksqlite3c.tcl"
+  echo "========== Patching ${FILENAME} ==========="
+  "${BASEDIR}/addlines.tcl" "${FILENAME}" "${FILENAME}.ext" "${TARGETDIR}"
+
+  rm "${BASEDIR}/${BUILDDIR}/.target_source"
+  make -C "${BASEDIR}/${BUILDDIR}" .target_source \
+    || ( echo "Cannot make target_source" && exit 204 )
+
+  cd "${BASEDIR}/extra" && ls -1 | xargs -I{} cp -r {} "${BASEDIR}" \
+    || ( echo "Cannot copy extras" && exit 109 )
+
+
+  TARGETDIR="${BASEDIR}/${BUILDDIR}/tsrc"
+  cd "${TARGETDIR}" || ( echo "Cannot enter ${TARGETDIR}" && exit 204 )
+
+  FILENAME="sqlite3.h"
+  echo "========== Patching ${FILENAME} ==========="
+  "${BASEDIR}/addlines.tcl" "${FILENAME}" "${FILENAME}.test" "${TARGETDIR}"
+
+  FILENAME="main.c"
+  echo "========== Patching ${FILENAME} ==========="
+  "${BASEDIR}/addlines.tcl" "${FILENAME}" "${FILENAME}.test" "${TARGETDIR}"
+  "${BASEDIR}/addlines.tcl" "${FILENAME}" "${FILENAME}.1.ext" "${TARGETDIR}"
+  "${BASEDIR}/addlines.tcl" "${FILENAME}" "${FILENAME}.2.ext" "${TARGETDIR}"
+
+  FILENAME="normalize.c"
+  echo "========== Patching ${FILENAME} ==========="
+  sed -e 's|^int main|int sqlite3_normalize_main|;' -e 's|CC_|CCN_|g;' \
+      -e 's|CCN__|CC__|g;' -e 's|TK_|TKN_|g;' -e 's|aiClass|aiClassN|g;' \
+      -e 's|sqlite3UpperToLower|sqlite3UpperToLowerN|g;' \
+      -e 's|sqlite3CtypeMap|sqlite3CtypeMapN|g;' \
+      -e 's|sqlite3GetToken|sqlite3GetTokenN|g;' -e 's|IdChar|IdCharN|g;' \
+      -e 's|sqlite3I|sqlite3NI|g;' -e 's|sqlite3T|sqlite3NT|g;' \
+      -i ${FILENAME}
+
+  FILENAME="sha1.c"
+  echo "========== Patching ${FILENAME} ==========="
+  sed -e 's|hash_step_vformat|hash_step_vformat_sha1|g;' \
+      -i ${FILENAME}
+
+  FILENAME=shathree.c
+  echo "========== Patching ${FILENAME} ==========="
+  sed -e 's|hash_step_vformat|hash_step_vformat_sha3|g;' \
+      -i ${FILENAME}
+
+  if [[ "${USE_ZLIB}" -eq 1 ]]; then
+    FILENAME="zipfile.c"
+    echo "========== Patching ${FILENAME} ==========="
+    FLAG="SQLITE_ENABLE_ZIPFILE"
+    sed -e 's|^static int zipfileRegister|int zipfileRegister|;' \
+        -e "s|^#include .sqlite3ext.h.\$|#if defined(${FLAG})\n\n\0|;" \
+        -i ${FILENAME}
+    echo "" >>${FILENAME}
+    echo "#endif /* defined(${FLAG}) */" >>${FILENAME}
+
+    if [[ "${USE_SQLAR}" -eq 1 ]]; then
+      FLAG="SQLAR" FILENAME="" ext_patch_base
+    fi
+  fi
+
+  FLAG="CSV"      FILENAME=""       ext_patch_base
+  FLAG="SERIES"   FILENAME=""       ext_patch_base
+  FLAG="UINT"     FILENAME=""       ext_patch_base
+  FLAG="UUID"     FILENAME=""       ext_patch_base
+  FLAG="SHATHREE" FILENAME=""       ext_patch_base
+  FLAG="SHA"      FILENAME="sha1.c" ext_patch_base
+
+  return 0
+}
+
+
+# Before call, set
+#   FLAG - SQLITE_ENABLE_XXX flag suffix (XXX)
+#   FILENAME - name of the file or blank
+#   TARGETDIR - file location
+ext_patch_base() {
+  [[ -z "${FILENAME}" ]] \
+    && FILENAME="$(echo "${FLAG}" | tr '[:upper:]' '[:lower:]').c"
+  FLAG="SQLITE_ENABLE_${FLAG}"
+  echo "========== Patching ${FILENAME} ==========="
+
+  sed -e "s|^#include .sqlite3ext.h.\$|#if defined(${FLAG})\n\n\0|;" \
+      -i ${FILENAME}
+  echo "" >>${FILENAME}
+  echo "#endif /* defined(${FLAG}) */" >>${FILENAME}
+
+  if [[ -f "./${FILENAME}.ext" ]]; then
+    "${BASEDIR}/addlines.tcl" "${FILENAME}" "${FILENAME}.ext" "${TARGETDIR}"
+  fi
+
+  FILENAME=""
+
   return 0
 }
 
@@ -289,11 +425,13 @@ main() {
   patch_mksqlite3ctcl || EXITCODE=$?
   #patch_mksqlite3htcl || EXITCODE=$?
 
+  set_sqlite3_extra_options || EXITCODE=$?
+  extras || EXITCODE=$?
+
   echo "_____________________"
   echo "Patching complete... "
   echo "---------------------"
 
-  set_sqlite3_extra_options || EXITCODE=$?
 
   cd "${BASEDIR}/${BUILDDIR}" \
     || ( echo "Cannot enter ./${BUILDDIR}" && exit 204 )
