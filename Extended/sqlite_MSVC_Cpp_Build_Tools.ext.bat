@@ -434,6 +434,7 @@ set OLDTEXT=win32\Makefile.msc clean
 set NEWTEXT=win32\Makefile.msc LOC=$(ZLIBLOC) clean
 tclsh "%BASEDIR%\replace.tcl" "%OLDTEXT%" "%NEWTEXT%" "%FILENAME%"
 type "%FILENAME%.debug" >>"%FILENAME%"
+ren "%FILENAME%" "%FILENAME%" 
 
 exit /b 0
 
@@ -471,6 +472,7 @@ set FILENAME=main.c
 echo ========== Patching "%FILENAME%" ===========
 tclsh "%BASEDIR%\addlines.tcl" "%FILENAME%" "%FILENAME%.test" "%TARGETDIR%"
 set FILENAME=sqlite3.h
+echo ========== Patching "%FILENAME%" ===========
 tclsh "%BASEDIR%\addlines.tcl" "%FILENAME%" "%FILENAME%.test" "%TARGETDIR%"
 
 exit /b 0
@@ -500,6 +502,7 @@ tclsh "%BASEDIR%\replace.tcl" "sqlite3GetToken" "sqlite3GetTokenN" "%FILENAME%"
 tclsh "%BASEDIR%\replace.tcl" "IdChar(" "IdCharN(" "%FILENAME%"
 tclsh "%BASEDIR%\replace.tcl" "sqlite3I" "sqlite3NI" "%FILENAME%"
 tclsh "%BASEDIR%\replace.tcl" "sqlite3T" "sqlite3NT" "%FILENAME%"
+tclsh "%BASEDIR%\replace.tcl" "CCN__" "CC__" "%FILENAME%"
 
 exit /b 0
 
