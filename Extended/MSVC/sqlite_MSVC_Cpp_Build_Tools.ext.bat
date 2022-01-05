@@ -489,36 +489,16 @@ exit /b 0
 :EXT_NORMALIZE
 set FILENAME=normalize.c
 echo ========== Patching "%FILENAME%" ===========
-set OLDTEXT=int main
-set NEWTEXT=int sqlite3_normalize_main
-tclsh "%BASEDIR%\replace.tcl" "%OLDTEXT%" "%NEWTEXT%" "%FILENAME%"
-set OLDTEXT=CC_
-set NEWTEXT=CCN_
-tclsh "%BASEDIR%\replace.tcl" "%OLDTEXT%" "%NEWTEXT%" "%FILENAME%"
-set OLDTEXT=TK_
-set NEWTEXT=TKN_
-tclsh "%BASEDIR%\replace.tcl" "%OLDTEXT%" "%NEWTEXT%" "%FILENAME%"
-set OLDTEXT=aiClass
-set NEWTEXT=aiClassN
-tclsh "%BASEDIR%\replace.tcl" "%OLDTEXT%" "%NEWTEXT%" "%FILENAME%"
-set OLDTEXT=sqlite3UpperToLower
-set NEWTEXT=sqlite3UpperToLowerN
-tclsh "%BASEDIR%\replace.tcl" "%OLDTEXT%" "%NEWTEXT%" "%FILENAME%"
-set OLDTEXT=sqlite3CtypeMap
-set NEWTEXT=sqlite3CtypeMapN
-tclsh "%BASEDIR%\replace.tcl" "%OLDTEXT%" "%NEWTEXT%" "%FILENAME%"
-set OLDTEXT=sqlite3GetToken
-set NEWTEXT=sqlite3GetTokenN
-tclsh "%BASEDIR%\replace.tcl" "%OLDTEXT%" "%NEWTEXT%" "%FILENAME%"
-set OLDTEXT=IdChar(
-set NEWTEXT=IdCharN(
-tclsh "%BASEDIR%\replace.tcl" "%OLDTEXT%" "%NEWTEXT%" "%FILENAME%"
-set OLDTEXT=sqlite3I
-set NEWTEXT=sqlite3NI
-tclsh "%BASEDIR%\replace.tcl" "%OLDTEXT%" "%NEWTEXT%" "%FILENAME%"
-set OLDTEXT=sqlite3T
-set NEWTEXT=sqlite3NT
-tclsh "%BASEDIR%\replace.tcl" "%OLDTEXT%" "%NEWTEXT%" "%FILENAME%"
+tclsh "%BASEDIR%\replace.tcl" "int main" "int sqlite3_normalize_main" "%FILENAME%"
+tclsh "%BASEDIR%\replace.tcl" "CC_" "CCN_" "%FILENAME%"
+tclsh "%BASEDIR%\replace.tcl" "TK_" "TKN_" "%FILENAME%"
+tclsh "%BASEDIR%\replace.tcl" "aiClass" "aiClassN" "%FILENAME%"
+tclsh "%BASEDIR%\replace.tcl" "sqlite3UpperToLower" "sqlite3UpperToLowerN" "%FILENAME%"
+tclsh "%BASEDIR%\replace.tcl" "sqlite3CtypeMap" "sqlite3CtypeMapN" "%FILENAME%"
+tclsh "%BASEDIR%\replace.tcl" "sqlite3GetToken" "sqlite3GetTokenN" "%FILENAME%"
+tclsh "%BASEDIR%\replace.tcl" "IdChar(" "IdCharN(" "%FILENAME%"
+tclsh "%BASEDIR%\replace.tcl" "sqlite3I" "sqlite3NI" "%FILENAME%"
+tclsh "%BASEDIR%\replace.tcl" "sqlite3T" "sqlite3NT" "%FILENAME%"
 
 exit /b 0
 
