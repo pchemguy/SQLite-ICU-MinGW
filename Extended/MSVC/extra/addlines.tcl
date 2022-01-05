@@ -9,7 +9,7 @@ if { $argc != 3 } {
     throw {CMDLINE ARGCOUNT} {Wrong number of arguments.}
 }
 
-set SourceName [lindex $argv 0]
+set SourceName [string tolower [lindex $argv 0]]
 set NewLinesName [lindex $argv 1]
 cd [lindex $argv 2]
  
@@ -24,6 +24,10 @@ close $fd
 set AddLinesAfter [string map {"\r" ""} [lindex $NewLines 0]]
 set Patched [string map -nocase [list $AddLinesAfter [join $NewLines "\n"]] $Source]
  
+set from "#ifdef _WIN32\r?\n#endif\r?\n"
+set to ""
+set Patched [regsub $from $Patched $to]
+
 set fd [open "${SourceName}.tmp" wb]
 puts $fd $Patched
 close $fd
