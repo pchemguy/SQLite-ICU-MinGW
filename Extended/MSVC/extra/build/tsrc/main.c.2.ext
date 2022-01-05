@@ -8,3 +8,12 @@
 #endif
 #if defined(SQLITE_ENABLE_SQLAR) && defined(SQLITE_ENABLE_ZIPFILE)
   sqlite3SqlarInit,
+#endif
+#ifdef SQLITE_ENABLE_SERIES
+  sqlite3SeriesInit,
+#endif
+#ifdef SQLITE_ENABLE_SHA
+  sqlite3ShaInit,
+#endif
+#ifdef SQLITE_ENABLE_SHATHREE
+  sqlite3ShathreeInit,

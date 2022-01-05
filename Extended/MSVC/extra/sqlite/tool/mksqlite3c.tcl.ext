@@ -1,5 +1,9 @@
    json1.c
    csv.c
    mmapwarm.c
+   normalize.c
+   series.c
+   sha1.c
+   shathree.c
    zipfile.c
    sqlar.c

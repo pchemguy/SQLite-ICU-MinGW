@@ -8,3 +8,12 @@ int zipfileRegister(sqlite3*);
 #endif
 #if defined(SQLITE_ENABLE_SQLAR) && defined(SQLITE_ENABLE_ZIPFILE)
 int sqlite3SqlarInit(sqlite3*);
+#endif
+#ifdef SQLITE_ENABLE_SERIES
+int sqlite3SeriesInit(sqlite3*);
+#endif
+#ifdef SQLITE_ENABLE_SHA
+int sqlite3ShaInit(sqlite3*);
+#endif
+#ifdef SQLITE_ENABLE_SHATHREE
+int sqlite3ShathreeInit(sqlite3*);
