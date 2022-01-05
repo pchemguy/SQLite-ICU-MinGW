@@ -160,6 +160,7 @@ set USE_ZLIB=1
 :: Could not get static linking to work
 set ZLIBLIB=zdll.lib
 set ZLIBDIR=%DISTRODIR%\compat\zlib
+set ZLIBLOC="-DZLIB_WINAPI -DZLIB_DLL"
 :: USE_SQLAR should not be set if is not set
 if %USE_ZLIB% EQU 1 set USE_SQLAR=1
 
@@ -430,7 +431,7 @@ exit /b 0
 set FILENAME=Makefile.msc
 echo ========== Patching "%FILENAME%" ===========
 set OLDTEXT=win32\Makefile.msc clean
-set NEWTEXT=win32\Makefile.msc LOC=""-DZLIB_WINAPI -DZLIB_DLL"" clean
+set NEWTEXT=win32\Makefile.msc LOC=$(ZLIBLOC) clean
 tclsh "%BASEDIR%\replace.tcl" "%OLDTEXT%" "%NEWTEXT%" "%FILENAME%"
 type "%FILENAME%.debug" >>"%FILENAME%"
 
