@@ -1,4 +1,5 @@
   $(TOP)\ext\misc\json1.c \
   $(TOP)\ext\misc\csv.c \
-  $(TOP)\ext\misc\zipfile.c \
+  $(TOP)\ext\misc\mmapwarm.c \
   $(TOP)\ext\misc\sqlar.c \
+  $(TOP)\ext\misc\zipfile.c \

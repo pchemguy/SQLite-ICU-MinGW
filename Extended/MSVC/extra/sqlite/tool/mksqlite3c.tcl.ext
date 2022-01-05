@@ -1,4 +1,5 @@
    json1.c
    csv.c
+   mmapwarm.c
    zipfile.c
    sqlar.c
