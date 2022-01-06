@@ -7,6 +7,8 @@
 ::   - Visual Studio installer (including CE):
 ::       https://visualstudio.microsoft.com/downloads
 :: TCL must also be available, as it is required by the building workflow.
+::
+:: Usage: run the script with "/?" or see :SHOW_HELP at the end.
 :: ============================================================================
 
 
@@ -24,13 +26,18 @@ set ERROR_STATUS=0
 
 set BASEDIR=%~dp0
 set BASEDIR=%BASEDIR:~0,-1%
+set DISTRODIR=%BASEDIR%\sqlite
 set STDOUTLOG=%BASEDIR%\stdout.log
 set STDERRLOG=%BASEDIR%\stderr.log
 del "%STDOUTLOG%" 2>nul
 del "%STDERRLOG%" 2>nul
 
+set SHOW_HELP=0
+call :HELP_CHECK %*
+if %SHOW_HELP% EQU 1 (exit /b 0)
+
+call :SET_TARGETS %*
 (
-  call :SET_TARGETS %*
   call :ICU_OPTIONS
   call :TCL_OPTIONS
   call :ZLIB_OPTIONS
@@ -40,7 +47,6 @@ del "%STDERRLOG%" 2>nul
 call :CHECK_PREREQUISITES
 if %ERROR_STATUS% NEQ 0 exit /b 1
 
-set DISTRODIR=%BASEDIR%\sqlite
 call :DOWNLOAD_SQLITE
 if %ERROR_STATUS% NEQ 0 exit /b 1
 call :EXTRACT_SQLITE
@@ -50,11 +56,13 @@ if not exist "%DISTRODIR%" (
   exit /b 1
 )
 
-if %USE_ZLIB% EQU 1 (
-  call :DOWNLOAD_ZLIB
-  if %ERROR_STATUS% NEQ 0 exit /b 1
-  call :EXTRACT_ZLIB
-  if %ERROR_STATUS% NEQ 0 exit /b 1
+if %WITH_EXTRA_EXT% EQU 1 (
+  if %USE_ZLIB% EQU 1 (
+    call :DOWNLOAD_ZLIB
+    if %ERROR_STATUS% NEQ 0 exit /b 1
+    call :EXTRACT_ZLIB
+    if %ERROR_STATUS% NEQ 0 exit /b 1
+  )
 )
 
 set BUILDDIR=%BASEDIR%\build
@@ -96,7 +104,8 @@ if %WITH_EXTRA_EXT% EQU 1 (
 ) 1>>"%STDOUTLOG%" 2>>"%STDERRLOG%"
 
 popd
-nmake /nologo /f Makefile.msc zlib 1>>"%STDOUTLOG%" 2>>"%STDERRLOG%"
+if %USE_ZLIB% EQU 1 nmake /nologo /f Makefile.msc zlib 1>>"%STDOUTLOG%" 2>>"%STDERRLOG%"
+echo ===== Making TARGETS ----- %TARGETS% -----
 nmake /nologo /f Makefile.msc %TARGETS% 1>>"%STDOUTLOG%" 2>>"%STDERRLOG%"
 cd ..
 rem Leave BUILDDIR
@@ -112,10 +121,9 @@ exit /b 0
 :SET_TARGETS
 echo ===== Setting targets =====
 set TARGETS=####%*
-set TARGETS=%TARGETS:"=%
-set TARGETS=%TARGETS:####=%
-echo on
-@if "/##%TARGETS%##/"=="/####/" (
+set TARGETS=!TARGETS:"=!
+set TARGETS=!TARGETS:####=!
+if "/##%TARGETS%##/"=="/####/" (
   echo.
   echo WARNING: no targets have been specified. Expected
   echo a space-separated list of targets as the first quoted
@@ -133,20 +141,25 @@ exit /b 0
 :ICU_OPTIONS
 :: In VBA6, it might be necessary to load individual libraries explicitly in the
 :: correct order (dependencies must be loaded before the depending libraries.
-set USE_ICU=1
-if %USE_ICU% EQU 1 (
-  if /%Platform%/==/x86/ (
-    set ARCH=
-  ) else (
-    set ARCH=64
-  )
-  set ICUDIR=%ProgramFiles%\icu4c
-  set ICUDIR=!ICUDIR: =!
-  set ICUINCDIR=!ICUDIR!\include
-  set ICULIBDIR=!ICUDIR!\lib!ARCH!
-  set ICUBINDIR=!ICUDIR!\bin!ARCH!
-)
+if not defined USE_ICU (set USE_ICU=1)
+if not %USE_ICU% EQU 1 (exit /b 0)
 
+if /%Platform%/==/x86/ (set "ARCH=") else (set ARCH=64)
+for /f "usebackq" %%I in (`where uconv 2^>nul`) do (set UCONV=%%I)
+if not "/%UCONV%/"=="//" (
+  if not defined ICU_HOME (set ICU_HOME=%UCONV:\bin!ARCH!\uconv.exe=%)
+)
+if "/%ICU_HOME%/"=="//" (set ICU_HOME=%ProgramFiles%\icu4c)
+if not exist "%ICU_HOME%\bin\uconv.exe" (
+  echo ICU binaries not found, disabling the ICU extension.
+  set USE_ICU=0
+  exit /b 0
+) else (echo Found ICU binaries.)
+
+set ICUDIR=%ICU_HOME%
+set ICUINCDIR=%ICUDIR%\include
+set ICULIBDIR=%ICUDIR%\lib%ARCH%
+set ICUBINDIR=%ICUDIR%\bin%ARCH%
 set INCLUDE=%ICUINCDIR%;%INCLUDE%
 set Path=%ICUBINDIR%;%Path%
 set LIB=%ICULIBDIR%;%LIB%
@@ -156,13 +169,13 @@ exit /b 0
 
 :: ============================================================================
 :ZLIB_OPTIONS
-set USE_ZLIB=1
+if not defined USE_ZLIB set USE_ZLIB=1
 :: Could not get static linking to work
 set ZLIBLIB=zdll.lib
 set ZLIBDIR=%DISTRODIR%\compat\zlib
 set ZLIBLOC="-DZLIB_WINAPI -DZLIB_DLL"
 :: USE_SQLAR should not be set if is not set
-if %USE_ZLIB% EQU 1 set USE_SQLAR=1
+if %USE_ZLIB% EQU 1 if not defined USE_SQLAR set USE_SQLAR=1
 
 exit /b 0
 
@@ -170,22 +183,43 @@ exit /b 0
 :: ============================================================================
 :TCL_OPTIONS
 set NO_TCL=1
-set Path=%ProgramFiles%\TCL\bin;%Path%
+where tclshz 1>nul 2>nul && set "TCL_OK=1" || set "TCL_OK=0"
+if %TCL_OK% EQU 1 exit /b 0
+
+if defined TCL_HOME (
+  set TCL_BIN=%TCL_HOME%\bin
+) else (
+  set TCL_BIN=%ProgramFiles%\TCL\bin
+)
+if exist "%TCL_BIN%\tclsh.exe" (
+  set TCL_OK=1
+  set Path=!TCL_BIN!;%Path%
+) else (
+  set TCL_BIN=
+  set TCL_OK=0
+)
 
 exit /b 0
 
 
 :: ============================================================================
 :BUILD_OPTIONS
-if "/%VSCMD_ARG_TGT_ARCH%/"=="/x86/" (
-  set USE_STDCALL=1
-) else (
-  set USE_STDCALL=0
+if not defined USE_STDCALL (
+  if "/%VSCMD_ARG_TGT_ARCH%/"=="/x86/" (
+    set USE_STDCALL=1
+  ) else (
+    set USE_STDCALL=0
+  )
 )
 set SESSION=1
 set RBU=1
 set API_ARMOR=1
-set SYMBOLS=0
+if not defined SYMBOLS set SYMBOLS=0
+if %SYMBOLS% EQU 1 (
+  echo SYMBOLS=1 means the DLL is about 50% larger.
+) else if %SYMBOLS% EQU 0 (
+  echo With SYMBOLS=0 the ImpEx plugin reported an issue with the DLL.
+)
 
 set EXT_FEATURE_FLAGS=^
 -DSQLITE_ENABLE_NORMALIZE ^
@@ -211,7 +245,7 @@ set EXT_FEATURE_FLAGS=^
 -DSQLITE_USE_URI=1 ^
 -DSQLITE_SOUNDEX
 
-if "%WITH_EXTRA_EXT%"=="" set WITH_EXTRA_EXT=1
+if not defined WITH_EXTRA_EXT set WITH_EXTRA_EXT=1
 if %WITH_EXTRA_EXT% EQU 1 (
   echo ========== EXTRA EXTENSIONS ARE ENABLED ==========
   echo ============ TEST FUNCTIONS ARE ENABLED ==========
@@ -238,10 +272,10 @@ if %WITH_EXTRA_EXT% EQU 1 (
   echo ============ TEST FUNCTIONS ARE DISABLED =========
   set TARGETDIR=%DISTRODIR%\tool
   set FILENAME=mksqlite3c.tcl
-  pushd "%TARGETDIR%"
-  if exist "%FILENAME%.bak" (
-    echo Resetting %FILENAME%
-    copy /Y "%FILENAME%.bak" "%FILENAME%"
+  pushd "!TARGETDIR!"
+  if exist "!FILENAME!.bak" (
+    echo Resetting !FILENAME!
+    copy /Y "!FILENAME!.bak" "!FILENAME!"
   )
   popd
 )
@@ -324,7 +358,7 @@ exit /b %ERROR_STATUS%
 set DISTRO=sqlite.zip
 set URL=https://www.sqlite.org/src/zip/sqlite.zip
 
-if not exist %DISTRO% (
+if not exist "%DISTRO%" (
   echo ===== Downloading current SQLite release =====
   curl %URL% --output "%DISTRO%"
   if %ErrorLevel% EQU 0 (
@@ -347,7 +381,7 @@ set DISTROFILE=sqlite.zip
 
 if not exist "%DISTRODIR%" (
   echo ===== Extracting SQLite distro =====
-  tar -xf %DISTROFILE%
+  tar -xf "%DISTROFILE%"
   if %ErrorLevel% EQU 0 (
     echo ----- Extracted  SQLite distro -----
   ) else (
@@ -367,7 +401,7 @@ exit /b %ERROR_STATUS%
 set DISTRO=zlib.zip
 set URL=https://zlib.net/zlib1211.zip
 
-if not exist %DISTRO% (
+if not exist "%DISTRO%" (
   echo ===== Downloading zlib =====
   curl %URL% --output "%DISTRO%"
   if %ErrorLevel% EQU 0 (
@@ -392,7 +426,7 @@ set ZLIBDIR=%DISTRODIR%\compat\zlib
 if not exist "%ZLIBDIR%\win32" (
   echo ===== Extracting zlib distro =====
   rmdir /S /Q "%ZLIBDIR%" 1>>"%STDOUTLOG%" 2>>"%STDERRLOG%"
-  tar -xf %DISTROFILE%
+  tar -xf "%DISTROFILE%"
   if %ErrorLevel% EQU 0 (
     echo ----- Extracted  zlib distro -----
     mkdir "%DISTRODIR%\compat" 2>nul
@@ -571,5 +605,80 @@ if exist "%BUILDDIR%\sqlite3.exe" copy "%BUILDDIR%\sqlite3.exe" "%BINDIR%"
 if %USE_ICU%  EQU 1 copy /Y "%ICUBINDIR%\icu*.dll" "%BINDIR%"
 if %USE_ZLIB% EQU 1 copy /Y "%ZLIBDIR%\zlib1.dll"  "%BINDIR%"
 echo ---------- Copied  binaries -----------
+
+exit /b 0
+
+
+:: ============================================================================
+:HELP_CHECK
+set ARG1=%~1
+if "/%~1/"=="//" (
+  set SHOW_HELP=0
+  exit /b 0
+)
+set ARG1=%ARG1:/=-%
+set ARG1=%ARG1:--=-%
+set ARG1=%ARG1:?=h%
+set ARG1=%ARG1:~,2%
+if /I "/%ARG1%/"=="/-h/" (
+  set SHOW_HELP=1
+  call :SHOW_HELP
+) else (set SHOW_HELP=0)
+
+exit /b 0
+
+
+:: ============================================================================
+:SHOW_HELP
+     ::==============================================================================
+echo.
+echo //================================== USAGE ===================================\\
+echo ^|^|                                                                            ^|^|
+echo ^|^| This script builds SQLite from standard source release using Microsoft     ^|^|
+echo ^|^| Visual C++ Build Tools (MSVC toolset). The script enables all extensions   ^|^|
+echo ^|^| integrated into the official SQLite amalgamtion release. The ICU extension ^|^|
+echo ^|^| is enabled by default if ICU binaries are available. Additionaly, several  ^|^|
+echo ^|^| extension from ext/misc are also integrated by default. If executed from   ^|^|
+echo ^|^| an x32 shell, STDCALL convention is activated by default.                  ^|^|
+echo ^|^|                                                                            ^|^|
+echo ^|^| Prerequisites:                                                             ^|^|
+echo ^|^|   - The script must be exectuted from an appropriate (either x32 or x64)   ^|^|
+echo ^|^|     Build Tools shell.                                                     ^|^|
+echo ^|^|   - Internet connection must be available, unless the distro archives are  ^|^|
+echo ^|^|     placed alongside the script.                                           ^|^|
+echo ^|^|   - TCL must be available. Either add TCL binary folder to the Path or set ^|^|
+echo ^|^|     TCL_HOME environment variable, so that %%TCL_HOME%%\bin\tclsh.exe points ^|^|
+echo ^|^|     to tclsh.exe.                                                          ^|^|
+echo ^|^|   - ICU binaries are required for ICU enabled build. Either add ICU binary ^|^|
+echo ^|^|     folder to the path or set ICU_HOME environment variable to the root of ^|^|
+echo ^|^|     ICU, e.g., ICU_HOME=%%ProgramFiles%%\icu4c. If ICU binaries are not      ^|^|
+echo ^|^|     found, ICU is disabled.                                                ^|^|
+echo ^|^|                                                                            ^|^|
+echo ^|^| Usage:                                                                     ^|^|
+echo ^|^|   Place this script and the "extra" folder in an empty folder. It will     ^|^|
+echo ^|^|   download the current standard SQLite release and zlib sources. If        ^|^|
+echo ^|^|   "sqlite.zip" or "zlib.zip" are in the same folder, the script will use   ^|^|
+echo ^|^|   them. Make sure that the archives are good, otherwise the script will    ^|^|
+echo ^|^|   fail (e.g., if partially downloaded files are found).                    ^|^|
+echo ^|^|                                                                            ^|^|
+echo ^|^|   Build targets should be provided as one quoted space separated argument  ^|^|
+echo ^|^|   or as individual arguments, e.g.,                                        ^|^|
+echo ^|^|     SOMEPATH^> sqlite_MSVC_Cpp_Build_Tools.ext.bat_ "sqlite3.c dll"         ^|^|
+echo ^|^|     SOMEPATH^> sqlite_MSVC_Cpp_Build_Tools.ext.bat_ sqlite3.c dll           ^|^|
+echo ^|^|   If no build targets are provided, the script will print debugging info   ^|^|
+echo ^|^|   to the log file.                                                         ^|^|
+echo ^|^|                                                                            ^|^|
+echo ^|^|   Additional options should be set in advance, e.g.,                       ^|^|
+echo ^|^|     SOMEPATH^> set "USE_ICU=0" ^&^& set "USE_ZLIB=1" ^&^& ^<...^>.ext.bat dll     ^|^|
+echo ^|^|                                                                            ^|^|
+echo ^|^|   Available options (1 - enable, 0 - disable, not defined - default):      ^|^|
+echo ^|^|     USE_ICU (defaults to 1) - ICU support.                                 ^|^|
+echo ^|^|     SYMBOLS (defaults to 0) - keep symbols in DLL (see printed warnings).  ^|^|
+echo ^|^|     WITH_EXTRA_EXT (defaults to 1) - integrate additional extensions.      ^|^|
+echo ^|^|     USE_ZLIB (defaults to 1) - ZLIB support (WITH_EXTRA_EXT must be 1).    ^|^|
+echo ^|^|     USE_SQLAR (defaults to 1) - SQLAR support (requires ZLIB support).     ^|^|
+echo ^|^|     USE_STDCALL (defaults to 1 for x32) - use STDCALL instead of CDECL.    ^|^|
+echo \\============================================================================//
+echo.
 
 exit /b 0
