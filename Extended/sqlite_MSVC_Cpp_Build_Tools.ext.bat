@@ -106,15 +106,21 @@ if %WITH_EXTRA_EXT% EQU 1 (
 ) 1>>"%STDOUTLOG%" 2>>"%STDERRLOG%"
 
 popd
-if %USE_ZLIB% EQU 1 nmake /nologo /f Makefile.msc zlib 1>>"%STDOUTLOG%" 2>>"%STDERRLOG%"
+if %USE_ZLIB% EQU 1 (
+  nmake /nologo /f Makefile.msc zlib
+) 1>>"%STDOUTLOG%" 2>>"%STDERRLOG%"
 echo ===== Making TARGETS ----- %TARGETS% -----
 nmake /nologo /f Makefile.msc %TARGETS% 1>>"%STDOUTLOG%" 2>>"%STDERRLOG%"
 cd ..
 rem Leave BUILDDIR
 
-if exist "%BUILDDIR%\sqlite3.dll" (call :COPY_BINARIES) 1>>"%STDOUTLOG%" 2>>"%STDERRLOG%"
+set COPY_BINARIES=0
+if exist "%BUILDDIR%\sqlite3.dll" (set COPY_BINARIES=1)
+if exist "%BUILDDIR%\sqlite3.exe" (set COPY_BINARIES=1)
+if %COPY_BINARIES% EQU 1 (call :COPY_BINARIES) 1>>"%STDOUTLOG%" 2>>"%STDERRLOG%"
 
 EndLocal
+
 exit /b 0
 :: ================================= END MAIN =================================
 
@@ -177,8 +183,7 @@ if not defined USE_ZLIB set USE_ZLIB=1
 set ZLIBLIB=zdll.lib
 set ZLIBDIR=%DISTRODIR%\compat\zlib
 set ZLIBLOC="-DZLIB_WINAPI -DZLIB_DLL"
-:: USE_SQLAR should not be set if is not set
-if %USE_ZLIB% EQU 1 if not defined USE_SQLAR set USE_SQLAR=1
+if not defined USE_SQLAR (set USE_SQLAR=1)
 
 exit /b 0
 
@@ -599,7 +604,7 @@ echo ========== Copying binaries ===========
 set BINDIR=%~dp0bin
 if not exist "%BINDIR%" mkdir "%BINDIR%"
 del /Q bin\* 2>nul
-copy "%BUILDDIR%\sqlite3.dll" "%BINDIR%"
+if exist "%BUILDDIR%\sqlite3.dll" copy "%BUILDDIR%\sqlite3.dll" "%BINDIR%"
 if exist "%BUILDDIR%\sqlite3.exe" copy "%BUILDDIR%\sqlite3.exe" "%BINDIR%"
 if %USE_ICU%  EQU 1 copy /Y "%ICUBINDIR%\icu*.dll" "%BINDIR%"
 if %USE_ZLIB% EQU 1 copy /Y "%ZLIBDIR%\zlib1.dll"  "%BINDIR%"
@@ -660,6 +665,9 @@ echo ^|^|   sources. If "sqlite.zip" or "zlib.zip" are in the same folder, the  
 echo ^|^|   script will use them. Make sure that the archives are good, otherwise    ^|^|
 echo ^|^|   the script will fail (e.g., if partially downloaded files are found).    ^|^|
 echo ^|^|                                                                            ^|^|
+echo ^|^|   Because some of the extra extensions are included in the shell, extra    ^|^|
+echo ^|^|   extension must be disabled when building the shell (WITH_EXTRA_EXT=0).   ^|^|
+echo ^|^|                                                                            ^|^|
 echo ^|^|   Build targets should be provided as one quoted space separated argument  ^|^|
 echo ^|^|   or as individual arguments, e.g.,                                        ^|^|
 echo ^|^|     SOMEPATH^> sqlite_MSVC_Cpp_Build_Tools.ext.bat_ "sqlite3.c dll"         ^|^|
@@ -677,7 +685,16 @@ echo ^|^|     WITH_EXTRA_EXT (defaults to 1) - integrate additional extensions. 
 echo ^|^|     USE_ZLIB (defaults to 1) - ZLIB support (WITH_EXTRA_EXT must be 1).    ^|^|
 echo ^|^|     USE_SQLAR (defaults to 1) - SQLAR support (requires ZLIB support).     ^|^|
 echo ^|^|     USE_STDCALL (defaults to 1 for x32) - use STDCALL instead of CDECL.    ^|^|
+echo ^|^|                                                                            ^|^|
+echo ^|^|     Presently, USE_ZLIB/USE_SQLAR should not be used. Either all extras    ^|^|
+echo ^|^|     should be activated or none; otherwise, build process may fail.        ^|^|
+echo ^|^|                                                                            ^|^|
+echo ^|^|   Build shell:                                                             ^|^|
+echo ^|^|   set WITH_EXTRA_EXT=0 ^&^& sqlite_MSVC_Cpp_Build_Tools.ext.bat sqlite3.exe  ^|^|
+echo ^|^|   Build dll with all extras and symbols:                                   ^|^|
+echo ^|^|   set SYMBOLS=1 ^&^& sqlite_MSVC_Cpp_Build_Tools.ext.bat dll                 ^|^|
+echo ^|^|                                                                            ^|^|
 echo \\============================================================================//
 echo.
-
+            
 exit /b 0
