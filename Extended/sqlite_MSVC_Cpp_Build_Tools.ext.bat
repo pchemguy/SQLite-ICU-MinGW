@@ -219,11 +219,7 @@ set SESSION=1
 set RBU=1
 set API_ARMOR=1
 if not defined SYMBOLS set SYMBOLS=0
-if %SYMBOLS% EQU 1 (
-  echo SYMBOLS=1 means the DLL is about 50% larger.
-) else if %SYMBOLS% EQU 0 (
-  echo With SYMBOLS=0 the ImpEx plugin reported an issue with the DLL.
-)
+if %SYMBOLS% EQU 1 (echo SYMBOLS=1 means the DLL is about 50% larger.)
 
 set EXT_FEATURE_FLAGS=^
 -DSQLITE_ENABLE_NORMALIZE ^
