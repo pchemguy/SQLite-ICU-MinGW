@@ -158,6 +158,7 @@ if not exist "%ICU_HOME%\bin\uconv.exe" (
   exit /b 0
 ) else (echo Found ICU binaries.)
 
+set ICU_HOME=%ICU_HOME: =%
 set ICUDIR=%ICU_HOME%
 set ICUINCDIR=%ICUDIR%\include
 set ICULIBDIR=%ICUDIR%\lib%ARCH%
@@ -185,23 +186,19 @@ exit /b 0
 :: ============================================================================
 :TCL_OPTIONS
 set NO_TCL=1
-where tclshz 1>nul 2>nul && set "TCL_OK=1" || set "TCL_OK=0"
-if %TCL_OK% EQU 1 exit /b 0
+set TCL_OK=0
+where tclsh 1>nul 2>nul && exit /b 0 || set "TCL_OK=1"
+if not defined TCL_HOME (set TCL_HOME=%ProgramFiles%\TCL)
+if exist "%TCL_HOME%\bin\tclsh.exe" set "TCL_OK=0"
 
-if defined TCL_HOME (
-  set TCL_BIN=%TCL_HOME%\bin
+if %TCL_OK% EQU 0 (
+  set "Path=%TCL_HOME%\bin;%Path%"
+  echo TCL found.
 ) else (
-  set TCL_BIN=%ProgramFiles%\TCL\bin
-)
-if exist "%TCL_BIN%\tclsh.exe" (
-  set TCL_OK=1
-  set Path=!TCL_BIN!;%Path%
-) else (
-  set TCL_BIN=
-  set TCL_OK=0
+  echo TCL not found.
 )
 
-exit /b 0
+exit /b %TCL_OK%
 
 
 :: ============================================================================
@@ -653,15 +650,15 @@ echo ^|^|     TCL_HOME environment variable, so that %%TCL_HOME%%\bin\tclsh.exe 
 echo ^|^|     to tclsh.exe.                                                          ^|^|
 echo ^|^|   - ICU binaries are required for ICU enabled build. Either add ICU binary ^|^|
 echo ^|^|     folder to the path or set ICU_HOME environment variable to the root of ^|^|
-echo ^|^|     ICU, e.g., ICU_HOME=%%ProgramFiles%%\icu4c. If ICU binaries are not      ^|^|
-echo ^|^|     found, ICU is disabled.                                                ^|^|
+echo ^|^|     ICU, e.g., ICU_HOME=%%ProgramFiles%%\icu4c (spaces in Path are not       ^|^|
+echo ^|^|     allowed). If ICU binaries are not found, ICU is disabled.              ^|^|
 echo ^|^|                                                                            ^|^|
 echo ^|^| Usage:                                                                     ^|^|
-echo ^|^|   Place this script and the "extra" folder in an empty folder. It will     ^|^|
-echo ^|^|   download the current standard SQLite release and zlib sources. If        ^|^|
-echo ^|^|   "sqlite.zip" or "zlib.zip" are in the same folder, the script will use   ^|^|
-echo ^|^|   them. Make sure that the archives are good, otherwise the script will    ^|^|
-echo ^|^|   fail (e.g., if partially downloaded files are found).                    ^|^|
+echo ^|^|   Place this script and the "extra" folder in an empty folder (no spaces   ^|^|
+echo ^|^|   in path). It will download the current standard SQLite release and zlib  ^|^|
+echo ^|^|   sources. If "sqlite.zip" or "zlib.zip" are in the same folder, the       ^|^|
+echo ^|^|   script will use them. Make sure that the archives are good, otherwise    ^|^|
+echo ^|^|   the script will fail (e.g., if partially downloaded files are found).    ^|^|
 echo ^|^|                                                                            ^|^|
 echo ^|^|   Build targets should be provided as one quoted space separated argument  ^|^|
 echo ^|^|   or as individual arguments, e.g.,                                        ^|^|
