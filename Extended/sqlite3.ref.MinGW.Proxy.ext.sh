@@ -30,8 +30,11 @@ readonly BASEDIR="$(dirname "$(realpath "$0")")"
 readonly DBDIR="sqlite"
 readonly SRC="${BASEDIR}/${DBDIR}"
 readonly LIBNAME="sqlite3.dll"
+readonly SHNAME="sqlite3.exe"
+readonly DEFNAME="sqlite3.def"
 readonly BUILDDIR="build"
 readonly WITH_EXTRA_EXT="${WITH_EXTRA_EXT:-1}"
+readonly WITH_TEST_FIX="${WITH_TEST_FIX:-1}"
 readonly USE_ZLIB="${USE_ZLIB:-1}"
 readonly USE_SQLAR="${USE_SQLAR:-1}"
 CFLAGS_EXTRAS=""
@@ -123,8 +126,8 @@ patch_sqlite3_makefile() {
       -e 's|^\(TCC = \${CC} \${CFLAGS}\)\( [^$]\)|\1 \${CFLAGS_EXTRAS}\2|;' \
       -e 's|^OPT_FEATURE_FLAGS =\(.*\)$|OPT_FEATURE_FLAGS :=\1 \$(OPT_FEATURE_FLAGS)|;' \
       -e 's|^\(dll:.*\)$|\1\nexe: sqlite3\$(TEXE)|;' \
-      -e "s/' T ' | grep ' _sqlite3_'/-E ' (T|R|B) sqlite3'/;" \
-      -e "s| _//' >>sqlite3.def$| sqlite3/    sqlite3/' >>sqlite3.def|;" \
+      -e "s/' T ' | grep ' _sqlite3_'/-E '^.{8} (T|R|B) _?sqlite3'/;" \
+      -e "s| _//' >>sqlite3.def$| _\\\\?sqlite3/    sqlite3/' >>sqlite3.def|;" \
       <Makefile.bak >Makefile
 
   pattern="\t\t-Wl,\"\?--strip-all\"\? \(\$(REAL_LIBOBJ)\)"
@@ -166,7 +169,6 @@ patch_mksqlite3htcl() {
     cp "mksqlite3h.tcl" "mksqlite3h.tcl.bak" \
       || ( echo "Cannot copy mksqlite3h.tcl" && exit 113 )
   fi
-  
   # SQLite3RBU API is missing from SQLite3.h
   sed -e '/sqlite3rebaser_/a \
          \nset declpattern6 \\\n    {^ *([a-zA-Z][a-zA-Z_0-9 ]+ \\**)(sqlite3rbu_[_a-zA-Z0-9]+)(\\(.*)$}' \
@@ -232,25 +234,23 @@ set_sqlite3_extra_options() {
     -DNDEBUG
   )
     
-  OPT_FEATURE_FLAGS="${FEATURES[@]}"
-  
   if [[ "${WITH_EXTRA_EXT}" -eq 1 ]]; then
     if [[ "${USE_ZLIB}" -eq 1 ]]; then
-      OPT_FEATURE_FLAGS="${OPT_FEATURE_FLAGS} -DSQLITE_ENABLE_ZIPFILE"
+      EXTRA_EXTS=(-DSQLITE_ENABLE_ZIPFILE)
       if [[ "${USE_SQLAR}" -eq 1 ]]; then
-        OPT_FEATURE_FLAGS="${OPT_FEATURE_FLAGS} -DSQLITE_ENABLE_SQLAR"
+        EXTRA_EXTS=(${EXTRA_EXTS[@]} -DSQLITE_ENABLE_SQLAR)
       fi
     fi
+    EXTRA_EXTS=(${EXTRA_EXTS[@]}
+      -DSQLITE_ENABLE_CSV
+      -DSQLITE_ENABLE_SERIES
+      -DSQLITE_ENABLE_SHA
+      -DSQLITE_ENABLE_SHATHREE
+      -DSQLITE_ENABLE_UINT
+      -DSQLITE_ENABLE_UUID
+    )
   fi
-  EXTRA_EXTS=(
-    -DSQLITE_ENABLE_CSV
-    -DSQLITE_ENABLE_SERIES
-    -DSQLITE_ENABLE_SHA
-    -DSQLITE_ENABLE_SHATHREE
-    -DSQLITE_ENABLE_UINT
-    -DSQLITE_ENABLE_UUID
-  )
-  OPT_FEATURE_FLAGS="${OPT_FEATURE_FLAGS} ${EXTRA_EXTS[@]}"
+  OPT_FEATURE_FLAGS="${FEATURES[@]} ${EXTRA_EXTS[@]:-}"
 
   export CFLAGS_EXTRAS OPT_FEATURE_FLAGS LIBS
   return 0
@@ -278,6 +278,7 @@ extras() {
   "${BASEDIR}/addlines.tcl" "${FILENAME}" "${FILENAME}.ext" "${TARGETDIR}"
 
   rm "${BASEDIR}/${BUILDDIR}/.target_source"
+  rm -rf "${BASEDIR}/${BUILDDIR}/tsrc"
   make -C "${BASEDIR}/${BUILDDIR}" .target_source \
     || ( echo "Cannot make target_source" && exit 204 )
 
@@ -288,15 +289,19 @@ extras() {
   TARGETDIR="${BASEDIR}/${BUILDDIR}/tsrc"
   cd "${TARGETDIR}" || ( echo "Cannot enter ${TARGETDIR}" && exit 204 )
 
-  FILENAME="sqlite3.h"
-  echo "========== Patching ${FILENAME} ==========="
-  "${BASEDIR}/addlines.tcl" "${FILENAME}" "${FILENAME}.test" "${TARGETDIR}"
-
   FILENAME="main.c"
   echo "========== Patching ${FILENAME} ==========="
-  "${BASEDIR}/addlines.tcl" "${FILENAME}" "${FILENAME}.test" "${TARGETDIR}"
   "${BASEDIR}/addlines.tcl" "${FILENAME}" "${FILENAME}.1.ext" "${TARGETDIR}"
   "${BASEDIR}/addlines.tcl" "${FILENAME}" "${FILENAME}.2.ext" "${TARGETDIR}"
+
+  if [[ "${WITH_TEST_FIX}" -eq 1 ]]; then
+    "${BASEDIR}/addlines.tcl" "${FILENAME}" "${FILENAME}.test" "${TARGETDIR}"
+
+    FILENAME="sqlite3.h"
+    echo "========== Patching ${FILENAME} ==========="
+    "${BASEDIR}/addlines.tcl" "${FILENAME}" "${FILENAME}.test" "${TARGETDIR}"
+  fi
+  
 
   FILENAME="normalize.c"
   echo "========== Patching ${FILENAME} ==========="
@@ -318,25 +323,20 @@ extras() {
   sed -e 's|hash_step_vformat|hash_step_vformat_sha3|g;' \
       -i ${FILENAME}
 
-  if [[ "${USE_ZLIB}" -eq 1 ]]; then
-    FILENAME="zipfile.c"
-    echo "========== Patching ${FILENAME} ==========="
-    FLAG="SQLITE_ENABLE_ZIPFILE"
-    sed -e 's|^static int zipfileRegister|int zipfileRegister|;' \
-        -e "s|^#include .sqlite3ext.h.\$|#if defined(${FLAG})\n\n\0|;" \
-        -i ${FILENAME}
-    echo "" >>${FILENAME}
-    echo "#endif /* defined(${FLAG}) */" >>${FILENAME}
-
-    if [[ "${USE_SQLAR}" -eq 1 ]]; then
-      FLAG="SQLAR" FILENAME="" ext_patch_base
-    fi
-  fi
+  FILENAME="zipfile.c"
+  echo "========== Patching ${FILENAME} ==========="
+  FLAG="SQLITE_ENABLE_ZIPFILE"
+  sed -e 's|^static int zipfileRegister|int zipfileRegister|;' \
+      -e "s|^#include .sqlite3ext.h.\$|#if defined(${FLAG})\n\n\0|;" \
+      -i ${FILENAME}
+  echo "" >>${FILENAME}
+  echo "#endif /* defined(${FLAG}) */" >>${FILENAME}
 
   FLAG="CSV"      FILENAME=""       ext_patch_base
   FLAG="SERIES"   FILENAME=""       ext_patch_base
   FLAG="UINT"     FILENAME=""       ext_patch_base
   FLAG="UUID"     FILENAME=""       ext_patch_base
+  FLAG="SQLAR"    FILENAME=""       ext_patch_base
   FLAG="SHATHREE" FILENAME=""       ext_patch_base
   FLAG="SHA"      FILENAME="sha1.c" ext_patch_base
 
@@ -369,10 +369,10 @@ ext_patch_base() {
 }
 
 
-copy_dependencies() {
-  echo "________________________"
-  echo "Copying dependencies... "
-  echo "------------------------"
+collect_bins() {
+  echo "_______________________"
+  echo "Collecting binaries... "
+  echo "-----------------------"
   readonly BUILDBINDIR="bin"
   readonly SRCBINDIR="${MSYSTEM_PREFIX}/bin"
   readonly ICUVERSION="$(expr match "$(uconv -V)" '.*ICU \([0-9]*\).*')"
@@ -386,22 +386,24 @@ copy_dependencies() {
     zlib1.dll
   )
 
-  mkdir -p "${BASEDIR}/${BUILDBINDIR}"
+  mkdir -p "${BASEDIR}/${BUILDBINDIR}" && cd "${BASEDIR}/${BUILDBINDIR}"
 
   for dependency in "${DEPENDENCIES[@]}"; do
-    dependency="$(ls ${SRCBINDIR}/${dependency})"
-    cp "${dependency}" "${BASEDIR}/${BUILDBINDIR}" \
-      || ( echo "Cannot copy ${dependency}" && exit 109 )
+    dependency="$(ls -1 ${SRCBINDIR}/${dependency})"
+    cp "${dependency}" . || ( echo "Cannot copy ${dependency}" && exit 109 )
   done
-  cp "${BASEDIR}/${BUILDDIR}/${LIBNAME}" "${BASEDIR}/${BUILDBINDIR}" \
-    || ( echo "Cannot copy ${LIBNAME}" && exit 110 )
-  
+  mv "${BASEDIR}/${BUILDDIR}/${LIBNAME}" . 2>/dev/null \
+    || EXITCODE=$?
+  mv "${BASEDIR}/${BUILDDIR}/${DEFNAME}" . 2>/dev/null \
+    || EXITCODE=$?
+  mv "${BASEDIR}/${BUILDDIR}/${SHNAME}" . 2>/dev/null \
+    || EXITCODE=$?
   return 0
 }
 
 
 main() {
-  readonly DEF_ARG=(all dll)
+  readonly DEF_ARG=("all" "dll")
   readonly TARGETS=("${@:-${DEF_ARG[@]}}")
   export LOG_FILE=${LOG_FILE:-${BASEDIR}/makelog.log}
   { 
@@ -426,12 +428,11 @@ main() {
   #patch_mksqlite3htcl || EXITCODE=$?
 
   set_sqlite3_extra_options || EXITCODE=$?
-  extras || EXITCODE=$?
+  [[ "${WITH_EXTRA_EXT}" -eq 1 ]] && extras
 
   echo "_____________________"
   echo "Patching complete... "
   echo "---------------------"
-
 
   cd "${BASEDIR}/${BUILDDIR}" \
     || ( echo "Cannot enter ./${BUILDDIR}" && exit 204 )
@@ -440,8 +441,9 @@ main() {
   echo "------------------"
   make ${MAKEFLAGS} ${TARGETS[@]}
 
-  if [[ -f "${BASEDIR}/${BUILDDIR}/${LIBNAME}" ]]; then
-    copy_dependencies || EXITCODE=$?
+  if [[ -f "${BASEDIR}/${BUILDDIR}/${LIBNAME}" || \
+        -f "${BASEDIR}/${BUILDDIR}/${SHNAME}" ]]; then
+    collect_bins || EXITCODE=$?
   fi
   return 0
 }
