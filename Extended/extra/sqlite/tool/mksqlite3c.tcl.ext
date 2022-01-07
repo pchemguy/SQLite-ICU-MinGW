@@ -1,5 +1,6 @@
    json1.c
    csv.c
+   regexp.c
    mmapwarm.c
    normalize.c
    series.c

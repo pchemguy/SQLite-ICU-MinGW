@@ -3,6 +3,9 @@
 #ifdef SQLITE_ENABLE_CSV
   sqlite3CsvInit,
 #endif
+#ifdef SQLITE_ENABLE_REGEXP
+  sqlite3RegexpInit,
+#endif
 #ifdef SQLITE_ENABLE_ZIPFILE
   zipfileRegister,
 #endif

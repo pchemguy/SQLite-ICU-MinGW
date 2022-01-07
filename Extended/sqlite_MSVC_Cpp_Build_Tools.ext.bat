@@ -94,13 +94,13 @@ if %WITH_EXTRA_EXT% EQU 1 (
   call :TEST_MAIN_C_SQLITE3_H
   call :EXT_MAIN
   call :EXT_NORMALIZE
+  call :EXT_REGEXP
+  call :EXT_SHA1
   call :EXT_BASE_PATCH CSV
   call :EXT_BASE_PATCH SERIES
   call :EXT_BASE_PATCH UINT
   call :EXT_BASE_PATCH UUID
-  call :EXT_BASE_PATCH SHA sha1.c
   call :EXT_BASE_PATCH SHATHREE
-  call :EXT_SHA1_SHATHREE
   if %USE_ZLIB%  EQU 1 (call :EXT_ZIPFILE)
   if %USE_SQLAR% EQU 1 (call :EXT_BASE_PATCH SQLAR)
 ) 1>>"%STDOUTLOG%" 2>>"%STDERRLOG%"
@@ -261,6 +261,7 @@ if %WITH_EXTRA_EXT% EQU 1 (
   )
   set EXT_FEATURE_FLAGS=^
     -DSQLITE_ENABLE_CSV ^
+    -DSQLITE_ENABLE_REGEXP ^
     -DSQLITE_ENABLE_SERIES ^
     -DSQLITE_ENABLE_SHA ^
     -DSQLITE_ENABLE_SHATHREE ^
@@ -542,14 +543,26 @@ exit /b 0
 
 
 :: ============================================================================
-:EXT_SHA1_SHATHREE
+:EXT_SHA1
 set FILENAME=sha1.c
 set OLDTEXT=hash_step_vformat
 set NEWTEXT=hash_step_vformat_sha1
 tclsh "%BASEDIR%\replace.tcl" "%OLDTEXT%" "%NEWTEXT%" "%FILENAME%"
-set FILENAME=shathree.c
-set NEWTEXT=hash_step_vformat_sha3
+call :EXT_BASE_PATCH SHA sha1.c
+
+exit /b 0
+
+
+:: ============================================================================
+:EXT_REGEXP
+set FILENAME=regexp.c
+set OLDTEXT=#include ^<string.h^>
+set NEWTEXT=#include ^<sqlite3ext.h^>
 tclsh "%BASEDIR%\replace.tcl" "%OLDTEXT%" "%NEWTEXT%" "%FILENAME%"
+set OLDTEXT=#include \"sqlite3ext.h\"
+set NEWTEXT=#include ^<string.h^>
+tclsh "%BASEDIR%\replace.tcl" "%OLDTEXT%" "%NEWTEXT%" "%FILENAME%"
+call :EXT_BASE_PATCH REGEXP
 
 exit /b 0
 

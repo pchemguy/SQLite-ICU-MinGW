@@ -1,5 +1,6 @@
   $(TOP)\ext\misc\json1.c \
   $(TOP)\ext\misc\csv.c \
+  $(TOP)\ext\misc\regexp.c \
   $(TOP)\ext\misc\mmapwarm.c \
   $(TOP)\ext\misc\normalize.c \
   $(TOP)\ext\misc\series.c \

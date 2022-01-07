@@ -243,6 +243,7 @@ set_sqlite3_extra_options() {
     fi
     EXTRA_EXTS=(${EXTRA_EXTS[@]}
       -DSQLITE_ENABLE_CSV
+      -DSQLITE_ENABLE_REGEXP
       -DSQLITE_ENABLE_SERIES
       -DSQLITE_ENABLE_SHA
       -DSQLITE_ENABLE_SHATHREE
@@ -277,8 +278,8 @@ extras() {
   echo "========== Patching ${FILENAME} ==========="
   "${BASEDIR}/addlines.tcl" "${FILENAME}" "${FILENAME}.ext" "${TARGETDIR}"
 
-  rm "${BASEDIR}/${BUILDDIR}/.target_source"
-  rm -rf "${BASEDIR}/${BUILDDIR}/tsrc"
+  rm "${BASEDIR}/${BUILDDIR}/.target_source" || true
+  rm -rf "${BASEDIR}/${BUILDDIR}/tsrc" || true
   make -C "${BASEDIR}/${BUILDDIR}" .target_source \
     || ( echo "Cannot make target_source" && exit 204 )
 
@@ -313,14 +314,15 @@ extras() {
       -e 's|sqlite3I|sqlite3NI|g;' -e 's|sqlite3T|sqlite3NT|g;' \
       -i ${FILENAME}
 
+  FILENAME="regexp.c"
+  echo "========== Patching ${FILENAME} ==========="
+  sed -e 's|<string.h>\$|<sqlite3ext.h>|;' \
+      -e 's|"sqlite3ext.h"\$|<string.h>|;' \
+      -i ${FILENAME}
+
   FILENAME="sha1.c"
   echo "========== Patching ${FILENAME} ==========="
   sed -e 's|hash_step_vformat|hash_step_vformat_sha1|g;' \
-      -i ${FILENAME}
-
-  FILENAME=shathree.c
-  echo "========== Patching ${FILENAME} ==========="
-  sed -e 's|hash_step_vformat|hash_step_vformat_sha3|g;' \
       -i ${FILENAME}
 
   FILENAME="zipfile.c"
@@ -333,6 +335,7 @@ extras() {
   echo "#endif /* defined(${FLAG}) */" >>${FILENAME}
 
   FLAG="CSV"      FILENAME=""       ext_patch_base
+  FLAG="REGEXP"   FILENAME=""       ext_patch_base
   FLAG="SERIES"   FILENAME=""       ext_patch_base
   FLAG="UINT"     FILENAME=""       ext_patch_base
   FLAG="UUID"     FILENAME=""       ext_patch_base

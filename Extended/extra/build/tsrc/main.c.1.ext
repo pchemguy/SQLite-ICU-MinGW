@@ -3,6 +3,9 @@ int sqlite3Json1Init(sqlite3*);
 #ifdef SQLITE_ENABLE_CSV
 int sqlite3CsvInit(sqlite3*);
 #endif
+#ifdef SQLITE_ENABLE_REGEXP
+int sqlite3RegexpInit(sqlite3*);
+#endif
 #ifdef SQLITE_ENABLE_ZIPFILE
 int zipfileRegister(sqlite3*);
 #endif
