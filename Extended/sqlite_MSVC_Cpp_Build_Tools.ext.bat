@@ -117,7 +117,7 @@ rem Leave BUILDDIR
 set COPY_BINARIES=0
 if exist "%BUILDDIR%\sqlite3.dll" (set COPY_BINARIES=1)
 if exist "%BUILDDIR%\sqlite3.exe" (set COPY_BINARIES=1)
-if %COPY_BINARIES% EQU 1 (call :COPY_BINARIES) 1>>"%STDOUTLOG%" 2>>"%STDERRLOG%"
+if %COPY_BINARIES% EQU 1 (call :COLLECT_BINARIES) 1>>"%STDOUTLOG%" 2>>"%STDERRLOG%"
 
 EndLocal
 
@@ -608,13 +608,14 @@ exit /b 0
 
 
 :: ============================================================================
-:COPY_BINARIES
-echo ========== Copying binaries ===========
+:COLLECT_BINARIES
+echo ========== Collecting binaries ===========
 set BINDIR=%~dp0bin
 if not exist "%BINDIR%" mkdir "%BINDIR%"
 del /Q bin\* 2>nul
-if exist "%BUILDDIR%\sqlite3.dll" copy "%BUILDDIR%\sqlite3.dll" "%BINDIR%"
-if exist "%BUILDDIR%\sqlite3.exe" copy "%BUILDDIR%\sqlite3.exe" "%BINDIR%"
+if exist "%BUILDDIR%\sqlite3.dll" move "%BUILDDIR%\sqlite3.dll" "%BINDIR%"
+if exist "%BUILDDIR%\sqlite3.exe" move "%BUILDDIR%\sqlite3.exe" "%BINDIR%"
+if exist "%BUILDDIR%\sqlite3.def" move "%BUILDDIR%\sqlite3.def" "%BINDIR%"
 if %USE_ICU%  EQU 1 copy /Y "%ICUBINDIR%\icu*.dll" "%BINDIR%"
 if %USE_ZLIB% EQU 1 copy /Y "%ZLIBDIR%\zlib1.dll"  "%BINDIR%"
 echo ---------- Copied  binaries -----------
