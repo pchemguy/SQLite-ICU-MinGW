@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 #
 # Usage example (run from MinGW shell):
 #   $ MAKEDEBUG=0 ./sqlite3.ref.sh "sqlite3.c sqlite3.h dll"
@@ -35,6 +35,7 @@ readonly DEFNAME="sqlite3.def"
 readonly BUILDDIR="build"
 readonly WITH_EXTRA_EXT="${WITH_EXTRA_EXT:-1}"
 readonly WITH_TEST_FIX="${WITH_TEST_FIX:-1}"
+readonly USE_ICU="${USE_ICU:-1}"
 readonly USE_ZLIB="${USE_ZLIB:-1}"
 readonly USE_SQLAR="${USE_SQLAR:-1}"
 CFLAGS_EXTRAS=""
@@ -188,15 +189,20 @@ set_sqlite3_extra_options() {
   LIBOPTS="-static-libgcc -static-libstdc++"
   LIBS+=" ${LIBOPTS}"
   
-  ICU_CFLAGS="$(icu-config --cflags --cppflags)"
-  ZLIB_CFLAGS="$(pkg-config --cflags zlib)"
-  #ICU_CFLAGS="$("${BASEDIR}/icu/dist/bin/icu-config" --noverify --cflags --cppflags)"
-  CFLAGS_EXTRAS+=" ${ICU_CFLAGS} ${ZLIB_CFLAGS}"
-  #ICU_LDFLAGS="$("${BASEDIR}/icu/dist/bin/icu-config" --noverify --ldflags)"
-  #ICU_LDFLAGS="-Wl,-Bstatic $(./icu/dist/bin/icu-config --noverify --ldflags)"
-  ICU_LDFLAGS="$(icu-config --ldflags)"
-  ZLIB_LDFLAGS="$(pkg-config --libs zlib)"
-  LIBS+=" ${ICU_LDFLAGS} ${ZLIB_LDFLAGS}"
+  if [[ "${USE_ICU}" -eq 1 ]]; then
+    ICU_CFLAGS="$(icu-config --cflags --cppflags)"
+    #ICU_CFLAGS="$("${BASEDIR}/icu/dist/bin/icu-config" --noverify --cflags --cppflags)"
+    #ICU_LDFLAGS="$("${BASEDIR}/icu/dist/bin/icu-config" --noverify --ldflags)"
+    #ICU_LDFLAGS="-Wl,-Bstatic $(./icu/dist/bin/icu-config --noverify --ldflags)"
+    ICU_LDFLAGS="$(icu-config --ldflags)"
+  fi
+  if [[ "${USE_ZLIB}" -eq 1 ]]; then 
+    ZLIB_CFLAGS="$(pkg-config --cflags zlib)"
+    ZLIB_LDFLAGS="$(pkg-config --libs zlib)"
+  fi
+  CFLAGS_EXTRAS+=" ${ICU_CFLAGS:-} ${ZLIB_CFLAGS:-}"
+  LIBS+=" ${ICU_LDFLAGS:-} ${ZLIB_LDFLAGS:-}"
+
   local libraries
   IFS=$' \n\t'
     libraries=(${DEFAULT_LIBS})
@@ -227,13 +233,13 @@ set_sqlite3_extra_options() {
     -DSQLITE_ENABLE_FTS3_TOKENIZER
     -DSQLITE_ENABLE_QPSG
     -DSQLITE_ENABLE_RBU
-    -DSQLITE_ENABLE_ICU
     -DSQLITE_ENABLE_STMTVTAB
     -DSQLITE_ENABLE_STAT4
     -DSQLITE_USE_URI=1
     -DSQLITE_SOUNDEX
     -DNDEBUG
   )
+  [[ "${USE_ICU}" -eq 1 ]] && FEATURES=(${FEATURES[@]} "-DSQLITE_ENABLE_ICU")
     
   if [[ "${WITH_EXTRA_EXT}" -eq 1 ]]; then
     if [[ "${USE_ZLIB}" -eq 1 ]]; then
@@ -242,7 +248,7 @@ set_sqlite3_extra_options() {
         EXTRA_EXTS=(${EXTRA_EXTS[@]} -DSQLITE_ENABLE_SQLAR)
       fi
     fi
-    EXTRA_EXTS=(${EXTRA_EXTS[@]}
+    EXTRA_EXTS=(${EXTRA_EXTS[@]:-}
       -DSQLITE_ENABLE_CSV
       -DSQLITE_ENABLE_REGEXP
       -DSQLITE_ENABLE_SERIES
@@ -380,22 +386,35 @@ collect_bins() {
   readonly BUILDBINDIR="bin"
   readonly SRCBINDIR="${MSYSTEM_PREFIX}/bin"
   readonly ICUVERSION="$(expr match "$(uconv -V)" '.*ICU \([0-9]*\).*')"
-  readonly DEPENDENCIES=(
-    libgcc_s_*.dll
+  readonly ICUDLL=(
     libicudt${ICUVERSION}.dll
     libicuin${ICUVERSION}.dll
     libicuuc${ICUVERSION}.dll
+  )
+  readonly SYSDLL=(
+    libgcc_s_*.dll
     libstdc++-6.dll
     libwinpthread-1.dll
-    zlib1.dll
   )
 
   mkdir -p "${BASEDIR}/${BUILDBINDIR}" && cd "${BASEDIR}/${BUILDBINDIR}"
 
-  for dependency in "${DEPENDENCIES[@]}"; do
-    dependency="$(ls -1 ${SRCBINDIR}/${dependency})"
-    cp "${dependency}" . || ( echo "Cannot copy ${dependency}" && exit 109 )
-  done
+  if [[ "${USE_ICU}" -eq 1 ]]; then
+    for dependency in "${SYSDLL[@]}"; do
+      dependency="$(ls -1 ${SRCBINDIR}/${dependency})"
+      cp "${dependency}" . || ( echo "Cannot copy ${dependency}" && exit 109 )
+    done
+
+    for dependency in "${ICUDLL[@]}"; do
+      cp "${SRCBINDIR}/${dependency}" . \
+        || ( echo "Cannot copy ${dependency}" && exit 109 )
+    done
+  fi
+
+  if [[ "${USE_ZLIB}" -eq 1 && "${WITH_EXTRA_EXT}" -eq 1 ]]; then
+    cp ${SRCBINDIR}/zlib1.dll . || ( echo "Cannot copy zlib1.dll" && exit 109 )
+  fi
+  
   mv "${BASEDIR}/${BUILDDIR}/${LIBNAME}" . 2>/dev/null \
     || EXITCODE=$?
   mv "${BASEDIR}/${BUILDDIR}/${DEFNAME}" . 2>/dev/null \
@@ -407,7 +426,7 @@ collect_bins() {
 
 
 main() {
-  readonly DEF_ARG=("all" "dll")
+  readonly DEF_ARG=("dll")
   readonly TARGETS=("${@:-${DEF_ARG[@]}}")
   export LOG_FILE=${LOG_FILE:-${BASEDIR}/makelog.log}
   { 
