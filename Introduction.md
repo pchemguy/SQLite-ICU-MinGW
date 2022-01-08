@@ -1,12 +1,9 @@
 ---
 layout: default
-title: Overview
-nav_order: 1
-permalink: /
+title: Introduction
+nav_order: 2
+permalink: /introduction
 ---
-
-### How to compile SQLite with ICU and SQLiteODBC on Windows with MinGW
-<p></p>
 
 [SQLite][] is arguably the most used database engine worldwide, characterized by especially compact size and modular design. By design, the essential functions form the engine core, with other features developed as extensions. Since extensions provide widely used functions, most of them are available as a part of source code distributions. Select extensions are also enabled in the official [precompiled binaries][SQLite Distros] available for various platforms.
 
@@ -15,9 +12,7 @@ A notable extension not included in the official SQLite binaries or [documentati
 Additionally, I go over the build process for the Christian Werner's [SQLite ODBC driver][] (the source code is also available from [GitHub][SQLite ODBC GitHub]). The SQLite library embedded into the provided binaries has all extensions disabled and is almost a year old. The binaries include some extensions as loadable modules, but integrated extensions are more convenient. An alternative build, designed to work with the system SQLite library, did not work for me either. Thus, I decided to build the driver from the source.
 
 
-<!---
-### References
---->
+<!-- References -->
 
 [SQLite]: https://sqlite.org
 [SQLite Distros]: https://sqlite.org/download.html
