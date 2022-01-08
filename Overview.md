@@ -2,7 +2,7 @@
 layout: default
 title: Overview
 nav_order: 1
-permalink: /repo-scripts
+permalink: /
 ---
 
 ### Summary
@@ -16,7 +16,7 @@ This project explores the building process of the SQLite library and the SQLiteO
   - **STDCALL x32 build (MSVC script)**
     VBA can access the SQLite library directly, but x32 VBA on Windows can only call STDCALL routines. The official SQLite binaries follow the CDECL calling convention and cannot be accessed from VBA-x32 directly. While building an STDCALL version using the MSYS2/MinGW toolset proved to be problematic, the MSVC toolset turned out to be more friendly in this aspect.
   - **Integrated extensions enabled by default**
-    Loadable extensions implement a large portion of SQLite functionality. Òhe SQLite amalgamation incorporates mature extensions but disables most of them by default. Conversely, all scripts provided by this project enable integrated extensions by default.
+    Loadable extensions implement a large portion of SQLite functionality. The SQLite amalgamation incorporates mature extensions but disables most of them by default. Conversely, all scripts provided by this project enable integrated extensions by default.
   - **Extra extensions integrated with the core**
     SQLite includes a set of extensions providing less widely used features as dynamically loadable modules, while their source is not part of the amalgamation source. I have selected a few of them for further evaluation and integrated the selected extensions into a custom amalgamation, avoiding the need to load them individually and learning the SQLite building process while doing so. Presently, the following sqlite/ext/misc extensions have been integrated: *csv, regexp, normalize, series, uint, uuid, zipfile, sqlar, sha, and shathree*.
   - **SQLiteODBC driver embedding current SQLite release with all features enabled**
