@@ -7,9 +7,9 @@ permalink: /devenv
 
 ### MSYS2/MinGW
 
-This tutorial relies on MSYS2/MinGW development environment. MSYS2 provides three mutually incompatible toolchains (MSYS2, MinGW x32, and MinGW x64), and any accidental mixing will likely fail the building process. More toolchains are available (see MSYS2 [package groups][MSYS2 Groups]), but for native compilation on a Windows x64 system, just two base toolchains (x32 and x64) are sufficient. The official x64 installer for a minimum MSYS2 environment can be downloaded from the [front page][MSYS2] or [directly][MSYS2 Setup x64].
+MSYS2 provides several toolchains, and any accidental mixing will likely fail the building process. This project uses MinGW x32 and MinGW x64 toolchains, and one should be careful not to mix MinGW components with those from the base MSYS2 environment. The official bootstrapping MSYS2 installer is available from the [front page][MSYS2] or [directly][MSYS2 Setup x64].
 
-Let us assume that the “msys64” folder (e.g., “B:\dev\msys64”) contains MSYS2x64, and the “msys2pkgs” folder (e.g., “B:\dev\msys2pkgs”) has cached packages. (While MSYS2 integrates with [ConEmu][ConEmu], this customization is beyond the scope of this tutorial.) [Pacman][MSYS2 Pacman] package manager is available for interactive or script-based package management from the MSYS2 shell (msys64\msys2.exe).
+Let us assume that the “msys64” folder (e.g., “C:\dev\msys64”) contains MSYS2x64, and the “msys2pkgs” folder (e.g., “C:\dev\msys2pkgs”) has cached packages. (While MSYS2 integrates with [ConEmu][ConEmu], this customization is beyond the scope of this tutorial.) [Pacman][MSYS2 Pacman] package manager is available for interactive or script-based package management from the MSYS2 shell (msys64\msys2.exe).
 
 ```bash
 #!/bin/bash
@@ -41,7 +41,7 @@ Both MinGWx32 and MinGWx64 environments now have the same set of tools installed
 
 ### Microsoft Visual C++ Build Tools
 
-Microsoft Visual C++ Build Tools (MSVC) is the other toolset used by this project. The main motivation for using it was the need to build an STDCALL version of the SQLite library. MSVC can be installed via a [dedicated installer][MSVC] or as part of [Visual Studio][] (including the CE version). Either installer provides the ability to choose various optional components. The minimum configuration should include the Build Tools component and an appropriate SDK package. Since SQLite building workflow relies on [TCL][], it must also be available (its *bin* subfolder containing the *tclsh.exe* executable must be in the path). The ICU extension requires the ICU4C library. [ICU4C][] binary releases are available from GitHub.  
+Microsoft Visual C++ Build Tools (MSVC) is the other toolset used by this project. MSVC can be installed via a [dedicated installer][MSVC] or as part of [Visual Studio][] (including the CE version). Either installer provides the ability to choose various optional components. The minimum configuration should include the Build Tools component and an appropriate SDK package. Since SQLite building workflow relies on [TCL][], it must also be available (its *bin* subfolder containing the *tclsh.exe* executable must be in the path). The ICU extension requires the ICU4C library. [ICU4C][] binary releases are available from GitHub.  
 *icu4c-XXX-Win32-MSVCyyy.zip*  and
 *icu4c-XXX-Win64-MSVCyyy.zip*
 should be used. Both archives should be extracted in the same directory (the *include* folders should be identical), yielding this directory structure:  
