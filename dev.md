@@ -1,9 +1,11 @@
 ---
 layout: default
-title: Development Environment
-nav_order: 2
+title: Development environment
+nav_order: 3
 permalink: /devenv
 ---
+
+### MSYS2/MinGW
 
 This tutorial relies on MSYS2/MinGW development environment. MSYS2 provides three mutually incompatible toolchains (MSYS2, MinGW x32, and MinGW x64), and any accidental mixing will likely fail the building process. More toolchains are available (see MSYS2 [package groups][MSYS2 Groups]), but for native compilation on a Windows x64 system, just two base toolchains (x32 and x64) are sufficient. The official x64 installer for a minimum MSYS2 environment can be downloaded from the [front page][MSYS2] or [directly][MSYS2 Setup x64].
 
@@ -35,8 +37,22 @@ pkgs=( toolchain:m clang:m dlfcn:m icu:m nsis:m )
 pacboy --noconfirm --needed -S --cachedir "${PWD}/../msys2pkgs" ${pkgs[@]}
 ```
 
-<p> </p>
 Both MinGWx32 and MinGWx64 environments now have the same set of tools installed. The same workflow, commands, and scripts work with either toolchain, yielding x32 and x64 applications. The active toolchain is selected based on the environment settings applied by the proper launcher (msys64/mingw32.exe or msys64/mingw64.exe).
+
+### Microsoft Visual C++ Build Tools
+
+Microsoft Visual C++ Build Tools (MSVC) is the other toolset used by this project. The main motivation for using it was the need to build an STDCALL version of the SQLite library. MSVC can be installed via a [dedicated installer][MSVC] or as part of [Visual Studio][] (including the CE version). Either installer provides the ability to choose various optional components. The minimum configuration should include the Build Tools component and an appropriate SDK package. Since SQLite building workflow relies on [TCL][], it must also be available (its *bin* subfolder containing the *tclsh.exe* executable must be in the path). The ICU extension requires the ICU4C library. [ICU4C][] binary releases are available from GitHub.  
+*icu4c-XXX-Win32-MSVCyyy.zip*  and
+*icu4c-XXX-Win64-MSVCyyy.zip*
+should be used. Both archives should be extracted in the same directory (the *include* folders should be identical), yielding this directory structure:  
+C:\Program Files\icu4c\bin
+C:\Program Files\icu4c\bin64
+C:\Program Files\icu4c\include
+C:\Program Files\icu4c\lib
+C:\Program Files\icu4c\lib64
+ICU_HOME environment variable should point to the icu4c folder, and if not set, *%ProgramFiles%\icu4c* is checked as the default location.
+
+---
 
 In addition to these toolchains, there are several useful tools for checking library dependencies:
 
@@ -56,6 +72,11 @@ I have also used [ShellCheck] to check shell scripts.
 [MSYS2 Setup x64]: https://repo.msys2.org/distrib/msys2-x86_64-latest.exe
 [MSYS2 Pacman]: https://www.msys2.org/docs/package-management
 [ConEmu]: https://conemu.github.io/en/CygwinMsysConnector.html
+
+[TCL]: https://wiki.tcl-lang.org/page/Binary+Distributions
+[MSVC]: https://go.microsoft.com/fwlink/?LinkId=691126
+[Visual Studio]: https://visualstudio.microsoft.com/downloads
+[ICU4C]: https://github.com/unicode-org/icu/releases/
 
 [Dependency Walker]: https://dependencywalker.com
 [Dependencies]: https://github.com/lucasg/Dependencies
