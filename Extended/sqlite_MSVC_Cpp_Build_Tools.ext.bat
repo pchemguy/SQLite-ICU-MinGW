@@ -158,7 +158,7 @@ if not "/%UCONV%/"=="//" (
   if not defined ICU_HOME (set ICU_HOME=%UCONV:\bin!ARCH!\uconv.exe=%)
 )
 if "/%ICU_HOME%/"=="//" (set ICU_HOME=%ProgramFiles%\icu4c)
-if not exist "%ICU_HOME%\bin\uconv.exe" (
+if not exist "%ICU_HOME%\bin%ARCH%\uconv.exe" (
   echo ICU binaries not found, disabling the ICU extension.
   set USE_ICU=0
   exit /b 0
