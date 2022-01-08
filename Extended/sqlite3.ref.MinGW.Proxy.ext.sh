@@ -40,6 +40,7 @@ readonly USE_SQLAR="${USE_SQLAR:-1}"
 CFLAGS_EXTRAS=""
 LIBS=""
 OPT_FEATURE_FLAGS=""
+ADDRESS_SIZE=""
 
 
 get_sqlite() {
@@ -126,7 +127,7 @@ patch_sqlite3_makefile() {
       -e 's|^\(TCC = \${CC} \${CFLAGS}\)\( [^$]\)|\1 \${CFLAGS_EXTRAS}\2|;' \
       -e 's|^OPT_FEATURE_FLAGS =\(.*\)$|OPT_FEATURE_FLAGS :=\1 \$(OPT_FEATURE_FLAGS)|;' \
       -e 's|^\(dll:.*\)$|\1\nexe: sqlite3\$(TEXE)|;' \
-      -e "s/' T ' | grep ' _sqlite3_'/-E '^.{8} (T|R|B) _?sqlite3'/;" \
+      -e "s/' T ' | grep ' _sqlite3_'/-E '^.{${ADDRESS_SIZE}} (T|R|B) _?sqlite3'/;" \
       -e "s| _//' >>sqlite3.def$| _\\\\?sqlite3/    sqlite3/' >>sqlite3.def|;" \
       <Makefile.bak >Makefile
 
@@ -414,6 +415,8 @@ main() {
     echo "###############################################################";
     echo "";
   } >>"${LOG_FILE}"
+
+  [[ "${MSYSTEM}" == "MINGW64" ]] && ADDRESS_SIZE=16 || ADDRESS_SIZE=8
 
   readonly MAKEDEBUG="${MAKEDEBUG:-}"
   if [[ "${MAKEDEBUG}" != "1" ]]; then
