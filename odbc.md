@@ -20,9 +20,9 @@ To build the SQLiteODBC, download all five files from the repo (Makefile.mingw, 
 <!-- References -->
 
 [SQLite ODBC]: http://www.ch-werner.de/sqliteodbc/
-[ODBC scripts]: https://github.com/pchemguy/SQLite-ICU-MinGW/tree/master/MinGW/SQLiteODBC/Build%20Scripts/
-[insta.c]: https://github.com/pchemguy/SQLite-ICU-MinGW/blob/master/MinGW/SQLiteODBC/Build%20Scripts/V3/insta.c
-[sqliteodbc_w32w64.nsi]: https://github.com/pchemguy/SQLite-ICU-MinGW/blob/master/MinGW/SQLiteODBC/Build%20Scripts/V3/sqliteodbc_w32w64.nsi
-[mingw-build.sh]: https://github.com/pchemguy/SQLite-ICU-MinGW/blob/master/MinGW/SQLiteODBC/Build%20Scripts/V3/mingw-build.sh
-[Makefile.mingw]: https://github.com/pchemguy/SQLite-ICU-MinGW/blob/master/MinGW/SQLiteODBC/Build%20Scripts/V3/Makefile.mingw
-[mingw-cross-build_d.sh]: https://github.com/pchemguy/SQLite-ICU-MinGW/blob/master/MinGW/SQLiteODBC/Debug%20Versions/mingw-cross-build_d.sh
+[ODBC scripts]: https://github.com/pchemguy/SQLite-ICU-MinGW/tree/master/Current/SQLiteODBC/Build%20Scripts/
+[insta.c]: https://github.com/pchemguy/SQLite-ICU-MinGW/blob/master/Current/SQLiteODBC/Build%20Scripts/V3/insta.c
+[sqliteodbc_w32w64.nsi]: https://github.com/pchemguy/SQLite-ICU-MinGW/blob/master/Current/SQLiteODBC/Build%20Scripts/V3/sqliteodbc_w32w64.nsi
+[mingw-build.sh]: https://github.com/pchemguy/SQLite-ICU-MinGW/blob/master/Current/SQLiteODBC/Build%20Scripts/V3/mingw-build.sh
+[Makefile.mingw]: https://github.com/pchemguy/SQLite-ICU-MinGW/blob/master/Current/SQLiteODBC/Build%20Scripts/V3/Makefile.mingw
+[mingw-cross-build_d.sh]: https://github.com/pchemguy/SQLite-ICU-MinGW/blob/master/Current/SQLiteODBC/Debug%20Versions/mingw-cross-build_d.sh
