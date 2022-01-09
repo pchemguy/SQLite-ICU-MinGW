@@ -23,6 +23,7 @@ This project explores the building process of the SQLite library and the SQLiteO
     The SQLiteODBC driver has not been updated for a while, and it embeds an outdated SQLite release with many features disabled by default. The scripts provided by this project build a custom version of the SQLiteODBC driver with the current SQLite release and all integrated SQLite extensions enabled.
   - **Dependencies together with SQLite binaries**
     Three SQLite extensions, ICU and Zipfile/SQLAR, require external dependencies (ICU and Zlib). Since I have encountered problems with static linking of Zlib, I linked both ICU and Zlib dynamically. The building scripts, in turn, copy the Zlib and ICU dependencies as necessary into the folder containing built SQLite binaries.
+  - **MSVC Build Tools and MSYS2/MinGW shell scripts**
 
 ### Usage
 
