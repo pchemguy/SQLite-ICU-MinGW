@@ -5,13 +5,13 @@ nav_order: 8
 permalink: /stdcall
 ---
 
-There are several ways to connect to SQLite from VBA. The simplest way probably is to use the [SQLite ODBC][] driver and connect via the [ADODB][] library. At the same time, the VBA code can call dll routines directly. While the x64 version of the dll should be usable for this purpose [as is][x64 convention], the x32 version must follow the [STDCALL][]/WINAPI [ABI][] calling [convention][calling convention].
+There are several ways to connect to SQLite from VBA. The simplest way probably is to use the [SQLite ODBC][] driver and connect via the [ADODB][] library. At the same time, the VBA code can call dll routines directly. While the x64 version of the dll should be usable for this purpose [as built][x64 convention], the x32 version must follow the [STDCALL][]/WINAPI [ABI][] calling [convention][calling convention].
 
 The official SQLite binaries follow the CDECL convention, but Windows distribution includes a suitable (at least in theory) SQLite copy, winsqlite3.dll. [Rene Nyffenegger][] published a basic [winsqlite3.dll][] example, illustrating this approach. Alternatively, a C-based dll adapter can translate CDECL to STDCALL, making it possible to use the current official SQLite release. [SQLiteForExcel][] developed a dll adapter for the official SQLite binaries, and its [fork][cSQLiteForExcel] demonstrates a refactored version employing a VBA class.
 
-A third approach relies on a custom-built STDCALL version of the library, and it provides the most flexibility. I could produce a usable STDCALL build using the MinGW toolchain, so I decided to use another SQLite-supported Windows toolchain, MSVC, for this purpose.
+The most flexible approach relies on a custom-built STDCALL version of the library. I could not produce a usable STDCALL build using the MinGW toolchain (I could build it but not load it), so I decided to use another SQLite-supported Windows toolchain, MSVC, for this purpose.
 
-The [sqlite_MSVC_Cpp_Build_Tools.bat][SQLite MSVC] script placed in an empty writable directory and executed from an MSVCx32 shell builds a working SQLite x32/STDCALL.  However, I could not load the ICU-enabled SQLite build in VBA6 initially. It turned out that, for some reason, Windows failed to resolve and load ICU dependencies automatically. After I had added the LoadLibrary calls loading individual ICU libraries explicitly in order of dependency (icudtXX.dll, icuucXX.dll, icuinXX.dll, icuioXX.dll, icutuXX.dll, sqlite3.dll), sqlite3.dll loaded successfully. Curiously, when compiled with MinGW, the library loads without any issues, with all dependencies being automatically loaded as expected (a more recently recompiled version has exhibited the same problem, however).
+The [sqlite_MSVC_Cpp_Build_Tools.ext.bat][SQLite MSVC] script, placed in an empty writable directory and executed from an MSVCx32 shell, builds a working SQLite x32/STDCALL. Initially, I could not load an ICU-enabled build in VBA6. It turned out that, for some reason, Windows failed to resolve and load ICU dependencies automatically. After I had added the LoadLibrary calls loading individual ICU libraries explicitly in order of dependency (icudtXX.dll, icuucXX.dll, icuinXX.dll, icuioXX.dll, icutuXX.dll, sqlite3.dll), sqlite3.dll loaded successfully. (I have automated the loading process in VBA in a [separate project][DllTools].) Curiously, the x64 version compiled with MinGW did not exhibit this dependency resolution issue; however, a more recently compiled version using a newer ICU library has also become affected.
 
 <!-- References -->
 
@@ -30,4 +30,5 @@ The [sqlite_MSVC_Cpp_Build_Tools.bat][SQLite MSVC] script placed in an empty wri
 [SQLite script]: https://github.com/pchemguy/SQLite-ICU-MinGW/blob/master/MinGW/Proxy/sqlite3.ref.sh
 [VCppBT]: https://go.microsoft.com/fwlink/?LinkId=691126
 [Visual Studio]: https://visualstudio.microsoft.com/downloads
-[SQLite MSVC]: https://github.com/pchemguy/SQLite-ICU-MinGW/blob/master/MSVC/sqlite_MSVC_Cpp_Build_Tools.bat
+[SQLite MSVC]: https://github.com/pchemguy/SQLite-ICU-MinGW/blob/master/Current/sqlite_MSVC_Cpp_Build_Tools.ext.bat
+[DllTools]: https://pchemguy.github.io/DllTools/
