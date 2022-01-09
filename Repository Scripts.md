@@ -1,7 +1,7 @@
 ---
 layout: default
-title: Repository Scripts
-nav_order: 8
+title: Repository scripts
+nav_order: 12
 permalink: /repo-scripts
 ---
 
