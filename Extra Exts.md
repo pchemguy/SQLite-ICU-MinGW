@@ -1,6 +1,6 @@
 ---
 layout: default
-title: 7. Integrating extensions with the core
+title: Integrating extra extensions
 nav_order: 7
 permalink: /extra-exts
 ---
