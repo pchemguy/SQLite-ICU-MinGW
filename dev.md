@@ -42,14 +42,14 @@ Both MinGWx32 and MinGWx64 environments now have the same set of tools installed
 ### Microsoft Visual C++ Build Tools
 
 Microsoft Visual C++ Build Tools (MSVC) is the other toolset used by this project. MSVC can be installed via a [dedicated installer][MSVC] or as part of [Visual Studio][] (including the CE version). Either installer provides the ability to choose various optional components. The minimum configuration should include the Build Tools component and an appropriate SDK package. Since SQLite building workflow relies on [TCL][], it must also be available (its *bin* subfolder containing the *tclsh.exe* executable must be in the path). The ICU extension requires the ICU4C library. [ICU4C][] binary releases are available from GitHub.  
-*icu4c-XXX-Win32-MSVCyyy.zip*  and
-*icu4c-XXX-Win64-MSVCyyy.zip*
+*icu4c-XXX-Win32-MSVCyyy.zip* and  
+*icu4c-XXX-Win64-MSVCyyy.zip*  
 should be used. Both archives should be extracted in the same directory (the *include* folders should be identical), yielding this directory structure:  
-C:\Program Files\icu4c\bin
-C:\Program Files\icu4c\bin64
-C:\Program Files\icu4c\include
-C:\Program Files\icu4c\lib
-C:\Program Files\icu4c\lib64
+C:\Program Files\icu4c\bin  
+C:\Program Files\icu4c\bin64  
+C:\Program Files\icu4c\include  
+C:\Program Files\icu4c\lib  
+C:\Program Files\icu4c\lib64  
 ICU_HOME environment variable should point to the icu4c folder, and if not set, *%ProgramFiles%\icu4c* is checked as the default location.
 
 ---
