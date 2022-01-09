@@ -1,6 +1,6 @@
 ---
 layout: default
-title: Default Build
+title: Default build
 nav_order: 4
 permalink: /defaultbuild
 ---
