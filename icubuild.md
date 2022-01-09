@@ -1,7 +1,7 @@
 ---
 layout: default
-title: ICU-Enabled Build
-nav_order: 5
+title: ICU-enabled build
+nav_order: 6
 permalink: /icubuild
 ---
 
@@ -22,7 +22,7 @@ via pkg-config
 ICU_CFLAGS="$(pkg-config --cflags icu-i18n)"
 ICU_LDFLAGS="$(pkg-config --libs --static icu-i18n)"
 ```
-<p> </p>
+
 These flags then need to be injected into the commands executed by the SQLite Makefile. Rather than manually editing the generated Makefile, we should go over the provided [shell script][SQLite Build Proxy Script].
 
 - Download the source  
@@ -51,7 +51,7 @@ get_sqlite() {
   return 0
 } 
 ```
-<p> </p>
+
 - Configure  
 This routine creates a “build” subfolder inside the source folder. If “Makefile” is present in the “build” folder, configure is not run. "readline" flags are obtained via “pkg-config” as full Windows paths. The "$(cygpath -m /)" command returns the Windows path to the MSYS2 root folder, and this prefix is removed from the previously saved flags. Additional options to “configure” enable certain extensions, and “libtool” “lt_cv_deplibs_check_method” is set as a workaround.
 
@@ -100,7 +100,7 @@ configure_sqlite() {
   return 0
 }  
 ```
-<p> </p>
+
 - Patch the Makefile  
 This routine patches the generated SQLite Makefile in the “build” folder, cleaning up the $(TOP) variable and ensuring that the Makefile takes ${CFLAGS}, ${CFLAGS_EXTRAS}, $(OPT_FEATURE_FLAGS), and $(LIBS) variables from the environment.
 
@@ -120,9 +120,9 @@ patch_sqlite3_makefile() {
   return 0
 }
 ```
-<p> </p>
+
 - Set the variables from step 3  
-This routine sets default library flags, flags for static binding of the standard libraries, ICU flags, enables additional SQLite features and optionally changes the calling convention.
+This routine sets default library flags, flags for static binding of the standard libraries, ICU flags, and enables additional SQLite features.
 
 ```bash
 set_sqlite3_extra_options() {
@@ -169,22 +169,6 @@ set_sqlite3_extra_options() {
     -DSQLITE_SOUNDEX
     -DNDEBUG
   )
-    
-  ABI_STDCALL=(
-    -DSQLITE_CDECL=__cdecl
-    -DSQLITE_APICALL=__stdcall
-    -DSQLITE_CALLBACK=__stdcall
-    -DSQLITE_SYSAPI=__stdcall
-    -DSQLITE_TCLAPI=__cdecl
-  )
-
-  if [[ "${ABI:-}" == "STDCALL" ]]; then
-    echo "Using Stdcall ABI"
-    FEATURES=("${FEATURES[@]}" "${ABI_STDCALL[@]}")
-  fi
-
-  SERVER_API="-DSQLITE_API=__declspec(dllexport)"
-  CLIENT_API="-DSQLITE_API=__declspec(dllimport)"
 
   OPT_FEATURE_FLAGS="${FEATURES[@]}"
   
@@ -192,19 +176,19 @@ set_sqlite3_extra_options() {
   return 0
 }
 ```
-<p> </p>
+
 - Run "main" routine  
 The main routine calls the above subroutines and, in the end, runs the Makefile.
 
 - Required libraries (specific versions will change when the corresponding packages are updated)  
     The following general libraries, if not statically linked, may be required:
     - libgcc_s_dw2-1.dll/libgcc_s_seh-1.dll
-    - libstdc++-6.dll
+    - libstdc++\-6.dll
     - libwinpthread-1.dll
     
     ICU libraries:
-    - libicudt68.dll
-    - libicuin68.dll
-    - libicuuc68.dll
+    - libicudtXX.dll
+    - libicuinXX.dll
+    - libicuucXX.dll
 
     Copy these libraries from "${MINGW_PREFIX}/bin" to the folder containing SQLite binaries (system folder should also do the job).
