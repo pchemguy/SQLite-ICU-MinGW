@@ -7,7 +7,7 @@ permalink: /extra-exts
 
 The SQLite source distribution includes a suite of small extensions within the *sqlite/ext/misc* folder. These extensions, except for *json*, must be compiled as independent loadable modules. Integrated extensions, such as *json*, are simpler to use, so I picked several *sqlite/ext/misc* extensions for integration into the amalgamation. Integration of an extension into the amalgamation consists of several steps. To illustrate them, lets use the *sqlite/ext/misc/csv.c* extension as an example and the *sqlite/ext/misc/json1.c* extension as a reference.
 
-**Source file references**
+**Source file references**  
 As discussed earlier, the SQLite building process starts with copying the source files into the *build/tsrc* folder based on the information in the *make* files. Make files contain several sections accumulating the list of source files. (The *Makefile* file is generated in the *build* folder by the *configure* script, and the *Makefile.msc* is copied from the source folder into the *build* folder by the shell script.) The source file names of the selected extensions can be added, for example,
 
 after `$(TOP)\ext\misc\json1.c \` in *build\Makefile.msc*:
@@ -30,7 +30,7 @@ Target file names must also be added to the list of source names in *sqlite\tool
 
 --- 
 
-**Conditional inclusion**
+**Conditional inclusion**  
 The source of an integrated extension needs to be wrapped in a conditional:
 
 ```c
@@ -38,10 +38,10 @@ The source of an integrated extension needs to be wrapped in a conditional:
 #endif
 ```
  
- ---
+---
  
-**Extension initialization**
-A loadable extension must define the init function `sqlite3_\<module name\>_init` called by SQLite when the extension is loaded, e.g.:
+**Extension initialization**  
+A loadable extension must define the init function `sqlite3_<module name>_init` called by SQLite when the extension is loaded, e.g.:
  
 ```c
 sqlite3_csv_init
@@ -98,6 +98,7 @@ int sqlite3Json1Init(sqlite3*);
 int sqlite3CsvInit(sqlite3*);
 #endif
 ```
+
 and the sqlite3CsvInit pointer must be added to the *sqlite3BuiltinExtensions* array:
 
 ```c
