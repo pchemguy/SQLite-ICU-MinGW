@@ -1,28 +1,49 @@
-### How to compile SQLite with ICU and SQLiteODBC on Windows with MinGW
-<p></p>
+### Summary
 
-[SQLite][] is arguably the most used database engine worldwide, characterized by especially compact size and modular design. By design, the essential functions form the engine core, with other features developed as extensions. Since extensions provide widely used functions, most of them are available as a part of source code distributions. Select extensions are also enabled in the official [precompiled binaries][SQLite Distros] available for various platforms.
+This project explores the building process of the SQLite library and the SQLiteODBC driver on Windows with two toolchains: Microsoft Visual C++ Build Tools (MSVC) and MSYS2/MinGW. The particular focus is on the SQLite-specific building workflow and customizing/extending the building process. The project provides several scripts producing custom builds of the SQLite library and the SQLiteODBC driver. These builds incorporate extended SQLite-related functionality, and the scripts can be used as templates and further tailored to specific needs.
 
-A notable extension not included in the official SQLite binaries or [documentation][SQLite Docs] is [ICU][]. It enables case insensitive string treatment and case conversion for non-ASCII Unicode symbols, whereas the core provides such functions for the Latin alphabet only. The official website has brief SQLite building instructions ([here][How To Compile SQLite], [here][Compile-time Options], and [here][README.md]) but no information on how to enable the ICU extension. Since figuring out the necessary steps was not straightforward because of several obscure issues, I share and discuss scripts that automate the entire process. I also give instructions for setting up [MSYS2/MinGW][MSYS2] toolchains from scratch.
+### Features
 
-Additionally, I go over the build process for the Christian Werner's [SQLite ODBC driver][] (the source code is also available from [GitHub][SQLite ODBC GitHub]). The SQLite library embedded into the provided binaries has all extensions disabled and is almost a year old. The binaries include some extensions as loadable modules, but integrated extensions are more convenient. An alternative build, designed to work with the system SQLite library, did not work for me either. Thus, I decided to build the driver from the source.
+  - **ICU enabled builds**  
+    SQLite does not support insensitive string operations of non-Latin characters, which is essential for user-oriented applications. Instead, the ICU extension enables this functionality. ICU is disabled by default, and no ICU-enabled binaries are available from the official website. Enabling the ICU extension on Windows is not a straightforward process, but I could not find any adequate building/usage instruction on the Internet, so I am sharing my recipe.
+  - **STDCALL x32 build (MSVC script)**  
+    VBA can access the SQLite library directly, but x32 VBA on Windows can only call STDCALL routines. The official SQLite binaries follow the CDECL calling convention and cannot be accessed from VBA-x32 directly. While building an STDCALL version using the MSYS2/MinGW toolset proved to be problematic, the MSVC toolset turned out to be more friendly in this aspect.
+  - **Integrated extensions enabled by default**  
+    Loadable extensions implement a large portion of SQLite functionality. The SQLite amalgamation incorporates mature extensions but disables most of them by default. Conversely, all scripts provided by this project enable integrated extensions by default.
+  - **Extra extensions integrated with the core**  
+    SQLite includes a set of extensions providing less widely used features as dynamically loadable modules, while their source is not part of the amalgamation source. I have selected a few of them for further evaluation and integrated the selected extensions into a custom amalgamation, avoiding the need to load them individually and learning the SQLite building process while doing so. Presently, the following sqlite/ext/misc extensions have been integrated: *csv, regexp, normalize, series, uint, uuid, zipfile, sqlar, sha, and shathree*.
+  - **SQLiteODBC driver embedding current SQLite release with all features enabled**  
+    The SQLiteODBC driver has not been updated for a while, and it embeds an outdated SQLite release with many features disabled by default. The scripts provided by this project build a custom version of the SQLiteODBC driver with the current SQLite release and all integrated SQLite extensions enabled.
+  - **Dependencies together with SQLite binaries**  
+    Three SQLite extensions, ICU and Zipfile/SQLAR, require external dependencies (ICU and Zlib). Since I have encountered problems with static linking of Zlib, I linked both ICU and Zlib dynamically. The building scripts, in turn, copy the Zlib and ICU dependencies as necessary into the folder containing built SQLite binaries.
+  - **MSVC Build Tools and MSYS2/MinGW shell scripts**  
 
-This tutorial is hosted on GitHub pages [here.](https://pchemguy.github.io/SQLite-ICU-MinGW/devenv)
+### Usage
 
-<!---
-### References
---->
+Build x32-STDCALL SQLite DLL with all standard and extra feature enabled:
 
-[SQLite]: https://sqlite.org
-[SQLite Distros]: https://sqlite.org/download.html
-[SQLite Docs]: https://sqlite.org/docs.html
+```batch
+MSVC-x32 Path-to-script> sqlite_MSVC_Cpp_Build_Tools.ext.bat dll
+```
 
-[How To Compile SQLite]: https://sqlite.org/howtocompile.html
-[Compile-time Options]: https://sqlite.org/compile.html
-[README.md]: https://sqlite.org/src/doc/trunk/README.md
+Build x64 SQLite DLL and SQLite shell (extra features must be disabled when building the shell):
 
-[ICU]: https://icu-project.org
-[MSYS2]: https://msys2.org
+```bash
+MinGW-x64 Path-to-script> WITH_EXTRA_EXT=0 ./sqlite3.ref.MinGW.Proxy.ext.sh dll sqlite3.exe
+```
 
-[SQLite ODBC driver]: http://ch-werner.de/sqliteodbc
-[SQLite ODBC GitHub]: https://github.com/softace/sqliteodbc
+or
+
+```batch
+MSVC-x64 Path-to-script> set WITH_EXTRA_EXT=0 && sqlite_MSVC_Cpp_Build_Tools.ext.bat dll sqlite3.exe
+```
+
+Build SQLiteODBC driver (not configurable):
+
+```batch
+MinGW-x32 Path-to-script> ./mingw-build.sh
+rem OR
+MinGW-x64 Path-to-script> ./mingw-build.sh
+```
+
+Further information is available from a GitHub [pages site](https://pchemguy.github.io/SQLite-ICU-MinGW/).
