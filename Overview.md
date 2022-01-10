@@ -5,7 +5,7 @@ nav_order: 1
 permalink: /
 ---
 
-This project explores the building process of the SQLite library and the SQLiteODBC driver on Windows with two toolchains: Microsoft Visual C++ Build Tools (MSVC) and MSYS2/MinGW. The particular focus is on the SQLite-specific building workflow and customizing/extending the building process. The project provides several scripts producing custom builds of the SQLite library and the SQLiteODBC driver. These builds incorporate extended SQLite-related functionality, and the scripts can be used as templates and further tailored to specific needs.
+The project explores the building process of the SQLite library and the SQLiteODBC driver on Windows with two toolchains (MS VC++ Build Tools (MSVC) and MSYS2/MinGW) and a particular focus on customizing and extending it. The project repository hosts several scripts producing custom SQLite/SQLiteODBC builds with extended functionality, and these scripts can be further tailored to specific needs.
 
 ### Features
 
