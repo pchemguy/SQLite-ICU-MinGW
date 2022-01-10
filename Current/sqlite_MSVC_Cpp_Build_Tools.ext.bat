@@ -579,9 +579,9 @@ tclsh "%BASEDIR%\expandinclude.tcl" "%FILENAME%" "test_windirent.h" .
   echo #include "test_windirent.c"
   echo #include "fileio.c"
 ) >>sqlite3.c
-
 tclsh "%BASEDIR%\expandinclude.tcl" "sqlite3.c" "test_windirent.c" .
 tclsh "%BASEDIR%\expandinclude.tcl" "sqlite3.c" "fileio.c" .
+
 exit /b 0
 
 
