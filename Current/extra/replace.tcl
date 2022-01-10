@@ -10,7 +10,7 @@ if { $argc != 3 } {
 
 set match [lindex $argv 0]
 set replacement [string map -nocase [list "\\n" "\n"] [lindex $argv 1]]
-set filename [lindex $argv 2]
+set filename [string tolower [lindex $argv 2]]
 
 set fd [open $filename rb]                     
 set source [read -nonewline $fd]                      
