@@ -76,8 +76,7 @@ if not exist "%BUILDDIR%" mkdir "%BUILDDIR%"
   cd /d "%BUILDDIR%
   
   pushd .
-  call :MAKEFILE_MSC_TOP_AND_DEBUG
-  call :MAKEFILE_MSC_ZLIB_STDCALL
+  call :MAKEFILE_MSC_TOP_AND_DEBUG_ZLIB_STDCALL
 )  1>>"%STDOUTLOG%" 2>>"%STDERRLOG%"
 
 if %WITH_EXTRA_EXT% EQU 1 (
@@ -444,7 +443,7 @@ exit /b %ERROR_STATUS%
 
 
 :: ============================================================================
-:MAKEFILE_MSC_TOP_AND_DEBUG
+:MAKEFILE_MSC_TOP_AND_DEBUG_ZLIB_STDCALL
 set FILENAME=Makefile.msc
 if exist "%FILENAME%" (
   nmake /nologo /f "%FILENAME%" clean
@@ -455,16 +454,6 @@ copy /Y "%DISTRODIR%\%FILENAME%" "%BUILDDIR%"
 set OLDTEXT=TOP = .
 set NEWTEXT=TOP = %DISTRODIR%
 tclsh "%BASEDIR%\replace.tcl" "%OLDTEXT%" "%NEWTEXT%" "%FILENAME%"
-type "%FILENAME%.debug" >>"%FILENAME%"
-echo ---------- Patched  "%FILENAME%" -----------
-
-exit /b 0
-
-
-:: ============================================================================
-:MAKEFILE_MSC_ZLIB_STDCALL
-set FILENAME=Makefile.msc
-echo ========== Patching "%FILENAME%" ===========
 set OLDTEXT=win32\Makefile.msc clean
 set NEWTEXT=win32\Makefile.msc LOC=$(ZLIBLOC) clean
 tclsh "%BASEDIR%\replace.tcl" "%OLDTEXT%" "%NEWTEXT%" "%FILENAME%"
