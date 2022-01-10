@@ -250,6 +250,7 @@ set_sqlite3_extra_options() {
     fi
     EXTRA_EXTS=(${EXTRA_EXTS[@]:-}
       -DSQLITE_ENABLE_CSV
+      -DSQLITE_ENABLE_FILEIO
       -DSQLITE_ENABLE_REGEXP
       -DSQLITE_ENABLE_SERIES
       -DSQLITE_ENABLE_SHA
@@ -293,7 +294,6 @@ extras() {
   cd "${BASEDIR}/extra" && ls -1 | xargs -I{} cp -r {} "${BASEDIR}" \
     || ( echo "Cannot copy extras" && exit 109 )
 
-
   TARGETDIR="${BASEDIR}/${BUILDDIR}/tsrc"
   cd "${TARGETDIR}" || ( echo "Cannot enter ${TARGETDIR}" && exit 204 )
 
@@ -309,7 +309,6 @@ extras() {
     echo "========== Patching ${FILENAME} ==========="
     "${BASEDIR}/addlines.tcl" "${FILENAME}" "${FILENAME}.test" "${TARGETDIR}"
   fi
-  
 
   FILENAME="normalize.c"
   echo "========== Patching ${FILENAME} ==========="
@@ -343,6 +342,7 @@ extras() {
 
   FLAG="CSV"      FILENAME=""       ext_patch_base
   FLAG="REGEXP"   FILENAME=""       ext_patch_base
+  FLAG="FILEIO"   FILENAME=""       ext_patch_base
   FLAG="SERIES"   FILENAME=""       ext_patch_base
   FLAG="UINT"     FILENAME=""       ext_patch_base
   FLAG="UUID"     FILENAME=""       ext_patch_base
@@ -376,6 +376,29 @@ ext_patch_base() {
   FILENAME=""
 
   return 0
+}
+
+
+# This is a workaround when there are problems with going through the
+# amalgamation generator. Make amalgamation and add stuff to it before
+# building.
+patch_sqlite3c() {
+  cd "${BASEDIR}/${BUILDDIR}" \
+    || ( echo "Cannot enter ${BASEDIR}/${BUILDDIR}" && exit 112 )
+  echo "_______________________"
+  echo "Patching sqlite3.c ... "
+  echo "-----------------------"
+
+  # Integrating sqlite/ext/misc/fileio.c
+  cd tsrc && cp test_windirent.c test_windirent.h fileio.c .. && cd ..
+  "${BASEDIR}/expandinclude.tcl" test_windirent.c test_windirent.h .
+  sed -e "s|_MSC_VER|_WIN32|g;" \
+      -i test_windirent.c
+  echo '#include "test_windirent.c"' >>sqlite3.c
+  echo '#include "fileio.c"' >>sqlite3.c
+  echo "" >>sqlite3.c
+  "${BASEDIR}/expandinclude.tcl" sqlite3.c test_windirent.c .
+  "${BASEDIR}/expandinclude.tcl" sqlite3.c fileio.c .  
 }
 
 
@@ -454,6 +477,11 @@ main() {
 
   set_sqlite3_extra_options || EXITCODE=$?
   [[ "${WITH_EXTRA_EXT}" -eq 1 ]] && extras
+
+  # This is a workaround when there are problems with going through the
+  # amalgamation generator. Make amalgamation and add stuff to it before
+  # building.
+  make -C "${BASEDIR}/${BUILDDIR}" ${MAKEFLAGS} sqlite3.c && patch_sqlite3c
 
   echo "_____________________"
   echo "Patching complete... "
