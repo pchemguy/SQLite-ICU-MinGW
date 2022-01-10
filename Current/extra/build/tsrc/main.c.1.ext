@@ -21,6 +21,9 @@ int sqlite3ShaInit(sqlite3*);
 #ifdef SQLITE_ENABLE_SHATHREE
 int sqlite3ShathreeInit(sqlite3*);
 #endif
+#ifdef SQLITE_ENABLE_FILEIO
+int sqlite3FileioInit(sqlite3*);
+#endif
 #ifdef SQLITE_ENABLE_UINT
 int sqlite3UintInit(sqlite3*);
 #endif

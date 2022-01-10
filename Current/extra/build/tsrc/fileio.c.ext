@@ -1,0 +1,25 @@
+#ifdef _WIN32
+#endif
+
+int sqlite3FileioInit(sqlite3 *db){
+  int rc = SQLITE_OK;
+  rc = sqlite3_create_function(db, "readfile", 1, 
+                               SQLITE_UTF8|SQLITE_DIRECTONLY, 0,
+                               readfileFunc, 0, 0);
+  if( rc==SQLITE_OK ){
+    rc = sqlite3_create_function(db, "writefile", -1,
+                                 SQLITE_UTF8|SQLITE_DIRECTONLY, 0,
+                                 writefileFunc, 0, 0);
+  }
+  if( rc==SQLITE_OK ){
+    rc = sqlite3_create_function(db, "lsmode", 1, SQLITE_UTF8, 0,
+                                 lsModeFunc, 0, 0);
+  }
+  if( rc==SQLITE_OK ){
+    rc = fsdirRegister(db);
+  }
+  return rc;
+}
+
+
+#ifdef _WIN32

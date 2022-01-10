@@ -21,6 +21,9 @@
 #ifdef SQLITE_ENABLE_SHATHREE
   sqlite3ShathreeInit,
 #endif
+#ifdef SQLITE_ENABLE_FILEIO
+  sqlite3FileioInit,
+#endif
 #ifdef SQLITE_ENABLE_UINT
   sqlite3UintInit,
 #endif

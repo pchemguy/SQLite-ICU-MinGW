@@ -1,5 +1,8 @@
   $(TOP)\ext\misc\json1.c \
   $(TOP)\ext\misc\csv.c \
+  $(TOP)\src\test_windirent.h \
+  $(TOP)\src\test_windirent.c \
+  $(TOP)\ext\misc\fileio.c \
   $(TOP)\ext\misc\regexp.c \
   $(TOP)\ext\misc\mmapwarm.c \
   $(TOP)\ext\misc\normalize.c \

@@ -97,6 +97,7 @@ if %WITH_EXTRA_EXT% EQU 1 (
   call :EXT_SHA1
   call :EXT_BASE_PATCH CSV
   call :EXT_BASE_PATCH SERIES
+  call :EXT_BASE_PATCH FILEIO
   call :EXT_BASE_PATCH UINT
   call :EXT_BASE_PATCH UUID
   call :EXT_BASE_PATCH SHATHREE
@@ -109,6 +110,15 @@ if %USE_ZLIB% EQU 1 (
   nmake /nologo /f Makefile.msc zlib
 ) 1>>"%STDOUTLOG%" 2>>"%STDERRLOG%"
 echo ===== Making TARGETS ----- %TARGETS% -----
+nmake /nologo /f Makefile.msc sqlite3.c 1>>"%STDOUTLOG%" 2>>"%STDERRLOG%"
+
+:: There is a problem with integration of fileio properly resulting in
+:: '_stat' related errors. But bypassing the amalgmation generation tool
+:: works.
+if %WITH_EXTRA_EXT% EQU 1 (
+  call :EXT_WINDIRENT
+) 1>>"%STDOUTLOG%" 2>>"%STDERRLOG%"
+
 nmake /nologo /f Makefile.msc %TARGETS% 1>>"%STDOUTLOG%" 2>>"%STDERRLOG%"
 cd ..
 rem Leave BUILDDIR
@@ -260,6 +270,7 @@ if %WITH_EXTRA_EXT% EQU 1 (
   )
   set EXT_FEATURE_FLAGS=^
     -DSQLITE_ENABLE_CSV ^
+    -DSQLITE_ENABLE_FILEIO ^
     -DSQLITE_ENABLE_REGEXP ^
     -DSQLITE_ENABLE_SERIES ^
     -DSQLITE_ENABLE_SHA ^
@@ -553,6 +564,24 @@ set NEWTEXT=#include ^<string.h^>
 tclsh "%BASEDIR%\replace.tcl" "%OLDTEXT%" "%NEWTEXT%" "%FILENAME%"
 call :EXT_BASE_PATCH REGEXP
 
+exit /b 0
+
+
+:: ============================================================================
+:EXT_WINDIRENT
+copy tsrc\test_windirent.c .
+copy tsrc\test_windirent.h .
+copy tsrc\fileio.c .
+set FILENAME=test_windirent.c
+echo ========== Patching "%FILENAME%" ===========
+tclsh "%BASEDIR%\expandinclude.tcl" "%FILENAME%" "test_windirent.h" .
+(
+  echo #include "test_windirent.c"
+  echo #include "fileio.c"
+) >>sqlite3.c
+
+tclsh "%BASEDIR%\expandinclude.tcl" "sqlite3.c" "test_windirent.c" .
+tclsh "%BASEDIR%\expandinclude.tcl" "sqlite3.c" "fileio.c" .
 exit /b 0
 
 
