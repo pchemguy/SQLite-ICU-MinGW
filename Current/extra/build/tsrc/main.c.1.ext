@@ -29,3 +29,6 @@ int sqlite3UintInit(sqlite3*);
 #endif
 #ifdef SQLITE_ENABLE_UUID
 int sqlite3UuidInit(sqlite3*);
+#endif
+#ifdef SQLITE_ENABLE_LIBSHELL
+SQLITE_EXTERN int LibshellInit(sqlite3*);

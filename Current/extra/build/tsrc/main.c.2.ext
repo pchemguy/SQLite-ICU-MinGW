@@ -29,3 +29,6 @@
 #endif
 #ifdef SQLITE_ENABLE_UUID
   sqlite3UuidInit,
+#endif
+#ifdef SQLITE_ENABLE_LIBSHELL
+  LibshellInit,

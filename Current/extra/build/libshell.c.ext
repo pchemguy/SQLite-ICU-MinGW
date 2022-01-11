@@ -1,4 +1,4 @@
-int sqlite3LibshellInit(sqlite3 *db){
+int LibshellInit(sqlite3 *db){
   int rc = SQLITE_OK;
   unsigned int i;
 
