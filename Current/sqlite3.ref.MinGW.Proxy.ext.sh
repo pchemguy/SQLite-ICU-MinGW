@@ -38,6 +38,7 @@ readonly WITH_TEST_FIX="${WITH_TEST_FIX:-1}"
 readonly USE_ICU="${USE_ICU:-1}"
 readonly USE_ZLIB="${USE_ZLIB:-1}"
 readonly USE_SQLAR="${USE_SQLAR:-1}"
+readonly USE_LIBSHELL="${USE_LIBSHELL:-0}"
 CFLAGS_EXTRAS=""
 LIBS=""
 OPT_FEATURE_FLAGS=""
@@ -133,7 +134,7 @@ patch_sqlite3_makefile() {
       <Makefile.bak >Makefile
 
   pattern="\t\t-Wl,\"\?--strip-all\"\? \(\$(REAL_LIBOBJ)\)"
-  replace="\t\t-Wl,--strip-all -Wl,--subsystem,windows,--kill-at \1 \$(LIBS)"
+  replace="\t\t-Wl,--strip-all -Wl,--subsystem,windows,--kill-at \1 \$(LIBSHELL) \$(LIBS)"
   sed -e "s|^${pattern}|${replace}|" \
       -i Makefile
 
@@ -183,7 +184,7 @@ patch_mksqlite3htcl() {
 }
 
 
-set_sqlite3_extra_options() {
+sqlite3_extra_options() {
   DEFAULT_LIBS="-lpthread -lm -ldl"
   #LIBOPTS="-static"
   LIBOPTS="-static-libgcc -static-libstdc++"
@@ -242,24 +243,33 @@ set_sqlite3_extra_options() {
   [[ "${USE_ICU}" -eq 1 ]] && FEATURES=(${FEATURES[@]} "-DSQLITE_ENABLE_ICU")
     
   if [[ "${WITH_EXTRA_EXT}" -eq 1 ]]; then
-    if [[ "${USE_ZLIB}" -eq 1 ]]; then
-      EXTRA_EXTS=(-DSQLITE_ENABLE_ZIPFILE)
-      if [[ "${USE_SQLAR}" -eq 1 ]]; then
-        EXTRA_EXTS=(${EXTRA_EXTS[@]} -DSQLITE_ENABLE_SQLAR)
+    EXTRA_EXTS=${EXTRA_EXTS:-}
+    if [[ "${USE_LIBSHELL}" -eq 1 ]]; then
+      EXTRA_EXTS=(${EXTRA_EXTS[@]} "-DSQLITE_ENABLE_LIBSHELL")
+      export LIBSHELL="libshell.c"
+    else
+      if [[ "${USE_ZLIB}" -eq 1 ]]; then
+        EXTRA_EXTS=(-DSQLITE_ENABLE_ZIPFILE)
+        if [[ "${USE_SQLAR}" -eq 1 ]]; then
+          EXTRA_EXTS=(${EXTRA_EXTS[@]} -DSQLITE_ENABLE_SQLAR)
+        fi
       fi
+      EXTRA_EXTS=(${EXTRA_EXTS[@]}
+        -DSQLITE_ENABLE_FILEIO
+        -DSQLITE_ENABLE_SHATHREE
+        -DSQLITE_ENABLE_UINT
+        -DSQLITE_ENABLE_REGEXP
+        -DSQLITE_ENABLE_SERIES
+      )
     fi
-    EXTRA_EXTS=(${EXTRA_EXTS[@]:-}
+
+    EXTRA_EXTS=(${EXTRA_EXTS[@]}
       -DSQLITE_ENABLE_CSV
-      -DSQLITE_ENABLE_FILEIO
-      -DSQLITE_ENABLE_REGEXP
-      -DSQLITE_ENABLE_SERIES
       -DSQLITE_ENABLE_SHA
-      -DSQLITE_ENABLE_SHATHREE
-      -DSQLITE_ENABLE_UINT
       -DSQLITE_ENABLE_UUID
     )
   fi
-  OPT_FEATURE_FLAGS="${FEATURES[@]} ${EXTRA_EXTS[@]:-}"
+  OPT_FEATURE_FLAGS="${FEATURES[@]} ${EXTRA_EXTS[@]}"
 
   export CFLAGS_EXTRAS OPT_FEATURE_FLAGS LIBS
   return 0
@@ -372,10 +382,30 @@ ext_patch_base() {
   if [[ -f "./${FILENAME}.ext" ]]; then
     "${BASEDIR}/addlines.tcl" "${FILENAME}" "${FILENAME}.ext" "${TARGETDIR}"
   fi
-
   FILENAME=""
 
   return 0
+}
+
+
+libshell() {
+  cd "${BASEDIR}/${BUILDDIR}" \
+    || ( echo "Cannot enter ./${BUILDDIR}" && exit 108 )
+  make shell.c || ( echo "Cannot make shell.c" && exit 204 )
+  echo "========== Patching libshell.c ==========="
+  Guard="!defined(LIBSHELL_C) && defined(SQLITE_ENABLE_LIBSHELL)"
+  echo "#if ${Guard}"  >libshell.c
+  echo "#define LIBSHELL_C" >>libshell.c
+  echo "" >>libshell.c
+  sed -e 's|^int SQLITE_CDECL main|int SQLITE_CDECL libshell_main|;' \
+      -e 's|appendText|shAppendText|g;' \
+    <shell.c >>libshell.c
+  echo "" >>libshell.c
+  echo "" >>libshell.c
+  cat libshell.c.ext >>libshell.c
+  echo "" >>libshell.c
+  echo "" >>libshell.c
+  echo "#endif /* ${Guard} */" >>libshell.c
 }
 
 
@@ -389,16 +419,18 @@ patch_sqlite3c() {
   echo "Patching sqlite3.c ... "
   echo "-----------------------"
 
-  # Integrating sqlite/ext/misc/fileio.c
-  cd tsrc && cp test_windirent.c test_windirent.h fileio.c .. && cd ..
-  "${BASEDIR}/expandinclude.tcl" test_windirent.c test_windirent.h .
-  sed -e "s|_MSC_VER|_WIN32|g;" \
-      -i test_windirent.c
-  echo '#include "test_windirent.c"' >>sqlite3.c
-  echo '#include "fileio.c"' >>sqlite3.c
-  echo "" >>sqlite3.c
-  "${BASEDIR}/expandinclude.tcl" sqlite3.c test_windirent.c .
-  "${BASEDIR}/expandinclude.tcl" sqlite3.c fileio.c .  
+  if [[ "${USE_LIBSHELL}" -eq 0 ]]; then
+    # Integrating sqlite/ext/misc/fileio.c
+    cd tsrc && cp test_windirent.c test_windirent.h fileio.c .. && cd ..
+    "${BASEDIR}/expandinclude.tcl" test_windirent.c test_windirent.h .
+    sed -e "s|_MSC_VER|_WIN32|g;" \
+        -i test_windirent.c
+    echo '#include "test_windirent.c"' >>sqlite3.c
+    echo '#include "fileio.c"' >>sqlite3.c
+    echo "" >>sqlite3.c
+    "${BASEDIR}/expandinclude.tcl" sqlite3.c test_windirent.c .
+    "${BASEDIR}/expandinclude.tcl" sqlite3.c fileio.c .
+  fi
 }
 
 
@@ -475,8 +507,9 @@ main() {
   patch_mksqlite3ctcl || EXITCODE=$?
   #patch_mksqlite3htcl || EXITCODE=$?
 
-  set_sqlite3_extra_options || EXITCODE=$?
+  sqlite3_extra_options || EXITCODE=$?
   [[ "${WITH_EXTRA_EXT}" -eq 1 ]] && extras
+  [[ "${USE_LIBSHELL}"   -eq 1 ]] && libshell
 
   # This is a workaround when there are problems with going through the
   # amalgamation generator. Make amalgamation and add stuff to it before

@@ -10,3 +10,4 @@
    uuid.c
    zipfile.c
    sqlar.c
+   minshell.c
