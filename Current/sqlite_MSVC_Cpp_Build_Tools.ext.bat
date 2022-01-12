@@ -74,7 +74,7 @@ if not exist "%BUILDDIR%" mkdir "%BUILDDIR%"
   copy /Y "%BASEDIR%\extra\build\*" "%BUILDDIR%"
   copy /Y "%BASEDIR%\extra\*.tcl" "%BASEDIR%"
   xcopy /H /Y /B /E /Q "%BASEDIR%\extra\sqlite" "%BASEDIR%\sqlite"
-  cd /d "%BUILDDIR%
+  cd /d "%BUILDDIR%"
   
   pushd .
   call :MAKEFILE_MSC_TOP_AND_DEBUG_ZLIB_STDCALL
@@ -408,7 +408,7 @@ exit /b %ERROR_STATUS%
 :EXTRACT_SQLITE
 set DISTROFILE=sqlite.zip
 
-if not exist "%DISTRODIR%" (
+if not exist "%DISTRODIR%\Makefile.msc" (
   echo ===== Extracting SQLite distro =====
   tar -xf "%DISTROFILE%"
   if %ErrorLevel% EQU 0 (
@@ -452,7 +452,7 @@ exit /b %ERROR_STATUS%
 set DISTROFILE=zlib.zip
 set ZLIBDIR=%DISTRODIR%\compat\zlib
 
-if not exist "%ZLIBDIR%\win32" (
+if not exist "%ZLIBDIR%\win32\Makefile.msc" (
   echo ===== Extracting zlib distro =====
   rmdir /S /Q "%ZLIBDIR%" 1>>"%STDOUTLOG%" 2>>"%STDERRLOG%"
   tar -xf "%DISTROFILE%"

@@ -1,4 +1,4 @@
-  $(TOP)/ext/misc/json1.c \
+  $(TOP)/ext/rtree/rtree.c \
   $(TOP)/ext/misc/csv.c \
   $(TOP)/src/test_windirent.h \
   $(TOP)/src/test_windirent.c \
