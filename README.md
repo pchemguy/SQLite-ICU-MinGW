@@ -20,11 +20,14 @@ This project explores the building process of the SQLite library and the SQLiteO
 
 **N.B.: these scripts are from the *Current* folder! Do not use scripts from MinGW/MSVC folders (these are dev folders)!**
 
+
 Build x32-STDCALL SQLite DLL with all standard and extra feature enabled:
 
 ```batch
 MSVC-x32 Path-to-script> sqlite_MSVC_Cpp_Build_Tools.ext.bat dll
 ```
+
+---
 
 Build x64 SQLite DLL and SQLite shell (extra features must be disabled when building the shell):
 
@@ -37,6 +40,22 @@ or
 ```batch
 MSVC-x64 Path-to-script> set WITH_EXTRA_EXT=0 && sqlite_MSVC_Cpp_Build_Tools.ext.bat dll sqlite3.exe
 ```
+
+---
+
+Build SQLite with LibShell feature:
+
+```bash
+MinGW-x64 Path-to-script> USE_LIBSHELL=1 ./sqlite3.ref.MinGW.Proxy.ext.sh dll
+```
+
+or
+
+```batch
+MSVC-x32 Path-to-script> set USE_LIBSHELL=1 && sqlite_MSVC_Cpp_Build_Tools.ext.bat libshell
+```
+
+---
 
 Build SQLiteODBC driver (not configurable):
 
