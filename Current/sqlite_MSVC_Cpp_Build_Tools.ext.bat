@@ -486,21 +486,9 @@ tclsh "%BASEDIR%\replace.tcl" "%OLDTEXT%" "%NEWTEXT%" "%FILENAME%"
 set OLDTEXT=win32\Makefile.msc clean
 set NEWTEXT=win32\Makefile.msc LOC=$(ZLIBLOC) clean
 tclsh "%BASEDIR%\replace.tcl" "%OLDTEXT%" "%NEWTEXT%" "%FILENAME%"
-if %USE_LIBSHELL% EQU 1 call :MAKEFILE_MSC_LIBSHELL
-
-exit /b 0
-
-:MAKEFILE_MSC_LIBSHELL
-set OLDTEXT=CORE_LINK_DEP = sqlite3.def
-set NEWTEXT=CORE_LINK_DEP = sqlite3ex.def
-tclsh "%BASEDIR%\replace.tcl" "!OLDTEXT!" "!NEWTEXT!" "%FILENAME%"
-
-tclsh "%BASEDIR%\addlines.tcl" "%FILENAME%" "%FILENAME%.libshell" %BUILDDIR%
-
-set OLDTEXT=/OUT:$@ $(LIBOBJ) $(LIBRESOBJS)
-set NEWTEXT=/OUT:$@ $(LIBOBJ) $(LIBSHELLOBJ) $(LIBRESOBJS)
-tclsh "%BASEDIR%\replace.tcl" "!OLDTEXT!" "!NEWTEXT!" "%FILENAME%"
-
+if %USE_LIBSHELL% EQU 1 call (
+  tclsh "%BASEDIR%\addlines.tcl" "%FILENAME%" "%FILENAME%.libshell" %BUILDDIR%
+)
 type "%FILENAME%.debug" >>"%FILENAME%"
 ren "%FILENAME%" "%FILENAME%" 
 

@@ -3,17 +3,17 @@ shell:	$(SQLITE3EXE)
 libshell.lo:	libshell.c
 	$(LTCOMPILE) $(CORE_COMPILE_OPTS) -c libshell.c
 
-liblibshell.lib:	libshell.lo
-	$(LTLIB) $(LTLIBOPTS) /OUT:$@ libshell.lo $(TLIBS)
+libshell.lib:	libshell.lo libsqlite3.lib 
+	$(LTLIB) $(LTLIBOPTS) /OUT:$@ libshell.lo libsqlite3.lib $(TLIBS)
 
-libshell.def:	liblibshell.lib
-	del libshell.def
-	dumpbin /all liblibshell.lib \
+libshell.def:	libshell.lib
+	echo EXPORTS > libshell.def
+	dumpbin /all libshell.lib \
 		| $(TCLSH_CMD) $(TOP)\tool\replace.tcl include "^\s+1 _?(sqlite3(?:session|changeset|changegroup|rebaser|rbu)?_[^@]*)(?:@\d+)?$$" \1 \
 		| sort >> libshell.def
 
-sqlite3ex.def: sqlite3.def libshell.def
-	type sqlite3.def >sqlite3ex.def
-	type libshell.def >>sqlite3ex.def
-	type sqlite3ex.def | sort >sqlite3ex.def.tmp
-	move sqlite3ex.def.tmp sqlite3ex.def
+libshell shelldll: libshell.dll
+
+libshell.dll:	$(LIBOBJ) $(LIBSHELLOBJ) $(LIBRESOBJS) $(CORE_LINK_DEP:sqlite3=libshell)
+	$(LD) $(LDFLAGS) $(LTLINKOPTS) $(LTLIBPATHS) /DLL $(CORE_LINK_OPTS:sqlite3=libshell) /OUT:$@ $(LIBOBJ) $(LIBSHELLOBJ) $(LIBRESOBJS) $(LTLIBS) $(TLIBS)
+	move libshell.dll sqlite3.dll
