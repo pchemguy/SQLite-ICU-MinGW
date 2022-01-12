@@ -9,7 +9,8 @@
 :: TCL must also be available, as it is required by the building workflow.
 ::
 :: Usage: run the script with "/?" or see :SHOW_HELP at the end.
-:: ============================================================================
+:: ===========================================================================
+
 
 
 :: ============================= BEGIN DISPATCHER =============================
@@ -105,6 +106,8 @@ if %WITH_EXTRA_EXT% EQU 1 (
   if %USE_SQLAR% EQU 1 (call :EXT_BASE_PATCH SQLAR)
 ) 1>>"%STDOUTLOG%" 2>>"%STDERRLOG%"
 
+if %USE_LIBSHELL% EQU 1 call :LIBSHELL
+
 popd
 if %USE_ZLIB% EQU 1 (
   nmake /nologo /f Makefile.msc zlib
@@ -119,6 +122,9 @@ if %WITH_EXTRA_EXT% EQU 1 (
   call :EXT_WINDIRENT
 ) 1>>"%STDOUTLOG%" 2>>"%STDERRLOG%"
 
+if %USE_LIBSHELL% EQU 1 (
+  nmake /nologo /f Makefile.msc %LIBSHELLOBJ%
+) 1>>"%STDOUTLOG%" 2>>"%STDERRLOG%"
 nmake /nologo /f Makefile.msc %TARGETS% 1>>"%STDOUTLOG%" 2>>"%STDERRLOG%"
 cd ..
 rem Leave BUILDDIR
@@ -254,28 +260,40 @@ set EXT_FEATURE_FLAGS=^
 -DSQLITE_USE_URI=1 ^
 -DSQLITE_SOUNDEX
 
+if not defined USE_LIBSHELL set USE_LIBSHELL=0
 if not defined WITH_EXTRA_EXT set WITH_EXTRA_EXT=1
 if %WITH_EXTRA_EXT% EQU 1 (
   echo ========== EXTRA EXTENSIONS ARE ENABLED ==========
   echo ============ TEST FUNCTIONS ARE ENABLED ==========
-  if %USE_ZLIB% EQU 1 (
+  if %USE_LIBSHELL% EQU 1 (
     set EXT_FEATURE_FLAGS=^
-      -DSQLITE_ENABLE_ZIPFILE ^
+      -DSQLITE_ENABLE_LIBSHELL ^
       !EXT_FEATURE_FLAGS!
-    if %USE_SQLAR% EQU 1 (
+    set LIBSHELL=libshell.c
+    set LIBSHELLOBJ=libshell.lo
+  ) else (
+    if %USE_ZLIB% EQU 1 (
       set EXT_FEATURE_FLAGS=^
-        -DSQLITE_ENABLE_SQLAR ^
+        -DSQLITE_ENABLE_ZIPFILE ^
         !EXT_FEATURE_FLAGS!
+      if %USE_SQLAR% EQU 1 (
+        set EXT_FEATURE_FLAGS=^
+          -DSQLITE_ENABLE_SQLAR ^
+          !EXT_FEATURE_FLAGS!
+      )
     )
+    set EXT_FEATURE_FLAGS=^
+      -DSQLITE_ENABLE_FILEIO ^
+      -DSQLITE_ENABLE_REGEXP ^
+      -DSQLITE_ENABLE_SERIES ^
+      -DSQLITE_ENABLE_SHATHREE ^
+      -DSQLITE_ENABLE_UINT ^
+      !EXT_FEATURE_FLAGS!
   )
+
   set EXT_FEATURE_FLAGS=^
     -DSQLITE_ENABLE_CSV ^
-    -DSQLITE_ENABLE_FILEIO ^
-    -DSQLITE_ENABLE_REGEXP ^
-    -DSQLITE_ENABLE_SERIES ^
     -DSQLITE_ENABLE_SHA ^
-    -DSQLITE_ENABLE_SHATHREE ^
-    -DSQLITE_ENABLE_UINT ^
     -DSQLITE_ENABLE_UUID ^
     !EXT_FEATURE_FLAGS!
 ) else (
@@ -468,6 +486,21 @@ tclsh "%BASEDIR%\replace.tcl" "%OLDTEXT%" "%NEWTEXT%" "%FILENAME%"
 set OLDTEXT=win32\Makefile.msc clean
 set NEWTEXT=win32\Makefile.msc LOC=$(ZLIBLOC) clean
 tclsh "%BASEDIR%\replace.tcl" "%OLDTEXT%" "%NEWTEXT%" "%FILENAME%"
+if %USE_LIBSHELL% EQU 1 call :MAKEFILE_MSC_LIBSHELL
+
+exit /b 0
+
+:MAKEFILE_MSC_LIBSHELL
+set OLDTEXT=CORE_LINK_DEP = sqlite3.def
+set NEWTEXT=CORE_LINK_DEP = sqlite3ex.def
+tclsh "%BASEDIR%\replace.tcl" "!OLDTEXT!" "!NEWTEXT!" "%FILENAME%"
+
+tclsh "%BASEDIR%\addlines.tcl" "%FILENAME%" "%FILENAME%.libshell" %BUILDDIR%
+
+set OLDTEXT=/OUT:$@ $(LIBOBJ) $(LIBRESOBJS)
+set NEWTEXT=/OUT:$@ $(LIBOBJ) $(LIBSHELLOBJ) $(LIBRESOBJS)
+tclsh "%BASEDIR%\replace.tcl" "!OLDTEXT!" "!NEWTEXT!" "%FILENAME%"
+
 type "%FILENAME%.debug" >>"%FILENAME%"
 ren "%FILENAME%" "%FILENAME%" 
 
@@ -480,6 +513,7 @@ set TARGETDIR=%BUILDDIR%
 set FILENAME=Makefile.msc
 echo ========== Patching "%FILENAME%" ===========
 tclsh "%BASEDIR%\addlines.tcl" "%FILENAME%" "%FILENAME%.ext" "%TARGETDIR%"
+ren "%FILENAME%" "%FILENAME%" 
 
 exit /b 0
 
@@ -569,18 +603,20 @@ exit /b 0
 
 :: ============================================================================
 :EXT_WINDIRENT
-copy tsrc\test_windirent.c .
-copy tsrc\test_windirent.h .
-copy tsrc\fileio.c .
-set FILENAME=test_windirent.c
-echo ========== Patching "%FILENAME%" ===========
-tclsh "%BASEDIR%\expandinclude.tcl" "%FILENAME%" "test_windirent.h" .
-(
-  echo #include "test_windirent.c"
-  echo #include "fileio.c"
-) >>sqlite3.c
-tclsh "%BASEDIR%\expandinclude.tcl" "sqlite3.c" "test_windirent.c" .
-tclsh "%BASEDIR%\expandinclude.tcl" "sqlite3.c" "fileio.c" .
+if %USE_LIBSHELL% EQU 0 (
+  copy tsrc\test_windirent.c .
+  copy tsrc\test_windirent.h .
+  copy tsrc\fileio.c .
+  set FILENAME=test_windirent.c
+  echo ========== Patching "!FILENAME!" ===========
+  tclsh "%BASEDIR%\expandinclude.tcl" "!FILENAME!" "test_windirent.h" .
+  (
+    echo #include "test_windirent.c"
+    echo #include "fileio.c"
+  ) >>sqlite3.c
+  tclsh "%BASEDIR%\expandinclude.tcl" "sqlite3.c" "test_windirent.c" .
+  tclsh "%BASEDIR%\expandinclude.tcl" "sqlite3.c" "fileio.c" .
+)
 
 exit /b 0
 
@@ -621,6 +657,39 @@ set NEWTEXT=#if defined(%FLAG%)\n\n#include \"sqlite3ext.h\"
 tclsh "%BASEDIR%\replace.tcl" "%OLDTEXT%" "%NEWTEXT%" "%FILENAME%"
 echo. >>"%FILENAME%"
 echo #endif /* defined^(%FLAG%^) */ >>"%FILENAME%"
+
+exit /b 0
+
+
+:: ============================================================================
+:LIBSHELL
+set FLAG=SQLITE_ENABLE_LIBSHELL
+set FILENAME=libshell.c
+echo ========== Patching "%FILENAME%" ===========
+
+pushd "%BUILDDIR%"
+nmake /nologo /f Makefile.msc shell.c
+
+echo #if ^^!defined^^(LIBSHELL_C^^) ^&^& defined^^(%FLAG%^^) >%FILENAME%
+echo #define LIBSHELL_C >>%FILENAME%
+type shell.c >>%FILENAME%
+
+set OLDTEXT=int SQLITE_CDECL main
+set NEWTEXT=int SQLITE_CDECL libshell_main
+tclsh "%BASEDIR%\replace.tcl" "%OLDTEXT%" "%NEWTEXT%" "%FILENAME%"
+
+set OLDTEXT=appendText
+set NEWTEXT=shAppendText
+tclsh "%BASEDIR%\replace.tcl" "%OLDTEXT%" "%NEWTEXT%" "%FILENAME%"
+
+echo. >>%FILENAME%
+echo. >>%FILENAME%
+type libshell.c.ext >>%FILENAME%
+echo. >>%FILENAME%
+echo. >>%FILENAME%
+echo #endif /* ^^!defined^^(LIBSHELL_C^^) ^&^& defined^^(%FLAG%^^) */ >>%FILENAME%
+
+popd
 
 exit /b 0
 

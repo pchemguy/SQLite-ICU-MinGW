@@ -16,6 +16,8 @@ echoconfig:
 	@echo USE_STDCALL=$(USE_STDCALL)
 	@echo USE_ZLIB=$(USE_ZLIB)
 	@echo USE_ICU=$(USE_ICU)
+	@echo USE_LIBSHELL=$(USE_LIBSHELL)
+	@echo LIBSHELL=$(LIBSHELL)
 	@echo FOR_WIN10=$(FOR_WIN10)
 	@echo DEBUG=$(DEBUG)
 	@echo SESSION=$(SESSION)
