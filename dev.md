@@ -52,6 +52,51 @@ C:\Program Files\icu4c\lib
 C:\Program Files\icu4c\lib64  
 ICU_HOME environment variable should point to the icu4c folder, and if not set, *%ProgramFiles%\icu4c* is checked as the default location.
 
+**Checking environment**
+To do a quick check, run the following commands from your dev shell:
+
+```batch
+rem IF ANY OF THESE COMMANDS FAIL, CHECK YOUR SETTINGS
+
+rem MSVC
+where cl
+where nmake
+
+rem TCL
+rem If TCL\bin is in Path
+where tclsh
+rem If TCL_HOME is set
+cd /d "%TCL_HOME%\bin" && where tclsh
+
+rem ICU
+rem If icu4c\bin(|64) is in Path
+where uconv
+rem If ICU_HOME is set
+cd /d "%ICU_HOME%" && (if "/%Platform%/"=="/x64/" (cd bin64) else (cd bin)) && where uconv
+```
+
+Also, make sure that
+
+```batch
+reg query "HKLM\Software\Microsoft\Command Processor" /s /f nsion
+```
+
+displays at least these two *dword* values set to 1 (not set by default):
+
+```
+    EnableExtensions    REG_DWORD    0x1
+    DelayedExpansion    REG_DWORD    0x1`
+```
+
+If missing, either use *regedit.exe* or run these commands from an admin shell:
+
+```batch
+reg add "HKLM\Software\Microsoft\Command Processor" /f /v EnableExtensions /t REG_DWORD /d 1
+reg add "HKLM\Software\Microsoft\Command Processor" /f /v DelayedExpansion /t REG_DWORD /d 1
+```
+
+The dev shell must be restarted if these values have been missing.
+
 ---
 
 In addition to these toolchains, there are several useful tools for checking library dependencies:
