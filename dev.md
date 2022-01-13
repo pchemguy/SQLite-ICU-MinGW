@@ -53,7 +53,7 @@ C:\Program Files\icu4c\lib64
 ICU_HOME environment variable should point to the icu4c folder, and if not set, *%ProgramFiles%\icu4c* is checked as the default location.
 
 **Checking environment**
-To do a quick check, run the following commands from your dev shell:
+Script [CheckEnvMSVC.bat][] checks the MSVC environment and logs the results. Alternatively, to do a quick manual check, run the following commands from your dev shell:
 
 ```batch
 rem IF ANY OF THESE COMMANDS FAIL, CHECK YOUR SETTINGS
@@ -85,7 +85,7 @@ displays at least these two *dword* values set to 1 (not set by default):
 
 ```
     EnableExtensions    REG_DWORD    0x1
-    DelayedExpansion    REG_DWORD    0x1`
+    DelayedExpansion    REG_DWORD    0x1
 ```
 
 If missing, either use *regedit.exe* or run these commands from an admin shell:
@@ -122,6 +122,7 @@ I have also used [ShellCheck] to check shell scripts.
 [MSVC]: https://go.microsoft.com/fwlink/?LinkId=691126
 [Visual Studio]: https://visualstudio.microsoft.com/downloads
 [ICU4C]: https://github.com/unicode-org/icu/releases/
+[CheckEnvMSVC.bat]: https://github.com/pchemguy/SQLite-ICU-MinGW/blob/master/Current/CheckEnvMSVC.bat
 
 [Dependency Walker]: https://dependencywalker.com
 [Dependencies]: https://github.com/lucasg/Dependencies
