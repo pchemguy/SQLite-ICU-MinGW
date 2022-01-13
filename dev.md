@@ -52,7 +52,7 @@ C:\Program Files\icu4c\lib
 C:\Program Files\icu4c\lib64  
 ICU_HOME environment variable should point to the icu4c folder, and if not set, *%ProgramFiles%\icu4c* is checked as the default location.
 
-**Checking environment**
+**Checking environment**  
 Script [CheckEnvMSVC.bat][] checks the MSVC environment and logs the results. Alternatively, to do a quick manual check, run the following commands from your dev shell:
 
 ```batch
