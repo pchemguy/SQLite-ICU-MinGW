@@ -23,7 +23,7 @@ exit /b 0
 
 :: ================================ BEGIN MAIN ================================
 :MAIN
-SetLocal
+SetLocal EnableExtensions EnableDelayedExpansion
 
 set ERROR_STATUS=0
 
