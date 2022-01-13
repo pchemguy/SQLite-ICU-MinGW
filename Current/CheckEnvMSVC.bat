@@ -18,6 +18,11 @@ del "%STDERRLOG%" 2>nul
 
   echo ======================= SHELL SETTINGS ======================
   echo =============================================================
+  echo  DESIRED VALUES:
+  echo     EnableExtensions    REG_DWORD    0x1
+  echo     DelayedExpansion    REG_DWORD    0x1
+  echo.
+  echo  ACTUAL  VALUES:
   reg query "HKLM\Software\Microsoft\Command Processor" /s /f nsion
   echo -------------------------------------------------------------
   echo.
@@ -66,6 +71,18 @@ del "%STDERRLOG%" 2>nul
   echo -------------------------------------------------------------
   echo.
 
+  echo ============== CHECKING WINDOWS RESOURCE KITS ===============
+  echo =============================================================
+  set ErrorStatus=0
+  call :CHECKSUBSTRING "INCLUDE" "%INCLUDE%" "Windows Kits"
+  call :CHECKSUBSTRING "LIB"     "%LIB%"     "Windows Kits"
+  call :CHECKSUBSTRING "LIBPATH" "%LIBPATH%" "Windows Kits"
+  call :CHECKSUBSTRING "Path"    "%Path%"    "Windows Kits"
+  echo -------------------------------------------------------------
+  call :CHECKERRORSTATUS "WINDOWS RESOURCE KITS"
+  echo -------------------------------------------------------------
+  echo.
+
   echo ==================== CURRENT ENVIRONMENT ====================
   echo =============================================================
   set
@@ -82,7 +99,7 @@ exit /b 0
 
 :: ============================================================================
 :CHECKVAR
-:: Call this sub with two arguments:
+:: Call this sub with argument(s):
 ::   - %1 - Variable name
 ::   - %2 - Variable value
 ::
@@ -100,7 +117,7 @@ exit /b 0
 
 :: ============================================================================
 :CHECKTOOL
-:: Call this sub with two arguments:
+:: Call this sub with argument(s):
 ::   - %1 - Tool executable name
 ::
 set CommandText=where "%~1"
@@ -122,8 +139,30 @@ exit /b 0
 
 
 :: ============================================================================
+:CHECKSUBSTRING
+:: Call this sub with argument(s):
+::   - %1 - Variable name
+::   - %2 - Variable value
+::   - %3 - Substring
+::
+set VarName=%~1
+set VarValue=_%~2_
+set Substring=%~3
+
+set TestString=!VarValue:%Substring%=!
+if "/%TestString%/"=="/%VarValue%/" (
+  set ErrorStatus=1
+  echo "%VarName%" does not contain %Substring%.
+) else (
+  echo "%VarName%" - match found.
+)
+
+exit /b 0
+
+
+:: ============================================================================
 :CHECKERRORSTATUS
-:: Call this sub with two arguments:
+:: Call this sub with argument(s):
 ::   - %1 - Test name
 ::
 if %ErrorStatus% NEQ 0 (
