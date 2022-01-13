@@ -56,7 +56,7 @@ del "%STDERRLOG%" 2>nul
   echo ======================= CHECKING TCL ========================
   echo =============================================================
   set ErrorStatus=0
-  call :CHECKTOOL tclsh
+  call :CHECKTOOL tclsh "%TCL_HOME%\bin"
   echo -------------------------------------------------------------
   call :CHECKERRORSTATUS "TCL"
   echo -------------------------------------------------------------
@@ -65,7 +65,7 @@ del "%STDERRLOG%" 2>nul
   echo ======================= CHECKING ICU ========================
   echo =============================================================
   set ErrorStatus=0
-  call :CHECKTOOL uconv
+  call :CHECKTOOL uconv "%ICU_HOME%\bin"
   echo -------------------------------------------------------------
   call :CHECKERRORSTATUS "ICU"
   echo -------------------------------------------------------------
@@ -119,7 +119,10 @@ exit /b 0
 :CHECKTOOL
 :: Call this sub with argument(s):
 ::   - %1 - Tool executable name
+::   - %2 - CD before check
 ::
+set CurDir=%CD%
+if exist "%~2" cd /d "%~2"
 set CommandText=where "%~1"
 set Output=
 for /f "Usebackq delims=" %%i in (`%CommandText%`) do (
@@ -127,6 +130,7 @@ for /f "Usebackq delims=" %%i in (`%CommandText%`) do (
     set Output=%%i
   )
 )
+cd /d "%CurDir%"
 
 if "/%Output%/"=="//" (
   set ErrorStatus=1
