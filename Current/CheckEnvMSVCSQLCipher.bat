@@ -14,7 +14,7 @@ del "%STDERRLOG%" 2>nul
 
 if "%PROCESSOR_ARCHITECTURE%" == "AMD64" (set ARCHX=x64)
 if "%PROCESSOR_ARCHITECTURE%" == "x86"   (set ARCHX=x32)
-set DEFDEV=C:\dev
+if not defined DEVDIR (set DEVDIR=C:\dev)
 
 (
   call :TIMESTAMP
@@ -71,7 +71,7 @@ set DEFDEV=C:\dev
   echo ======================= CHECKING TCL ========================
   echo =============================================================
   set ErrorStatus=0
-  if not defined TCL_HOME (set TCL_HOME=%DEFDEV%\TCL)
+  if not defined TCL_HOME (set TCL_HOME=%DEVDIR%\TCL)
   call :CHECKTOOL tclsh "!TCL_HOME!\bin"
   echo -------------------------------------------------------------
   call :CHECKERRORSTATUS "TCL"
@@ -81,7 +81,7 @@ set DEFDEV=C:\dev
   echo ======================= CHECKING ICU ========================
   echo =============================================================
   set ErrorStatus=0
-  if not defined ICU_HOME (set ICU_HOME=%DEFDEV%\icu4c)
+  if not defined ICU_HOME (set ICU_HOME=%DEVDIR%\icu4c)
   call :CHECKTOOL uconv "!ICU_HOME!\bin"
   echo -------------------------------------------------------------
   call :CHECKERRORSTATUS "ICU"
@@ -91,7 +91,7 @@ set DEFDEV=C:\dev
   echo ====================== CHECKING NASM ========================
   echo =============================================================
   set ErrorStatus=0
-  if not defined NASM_HOME (set NASM_HOME=%DEFDEV%\nasm\%ARCHX%)
+  if not defined NASM_HOME (set NASM_HOME=%DEVDIR%\nasm\%ARCHX%)
   call :CHECKTOOL nasm "!NASM_HOME!"
   echo -------------------------------------------------------------
   call :CHECKERRORSTATUS "NASM"
@@ -101,7 +101,7 @@ set DEFDEV=C:\dev
   echo ====================== CHECKING PERL ========================
   echo =============================================================
   set ErrorStatus=0
-  if not defined PERL_HOME (set PERL_HOME=%DEFDEV%\StrawberryPerl)
+  if not defined PERL_HOME (set PERL_HOME=%DEVDIR%\StrawberryPerl)
   call :CHECKTOOL perl "!PERL_HOME!\perl\bin"
   echo -------------------------------------------------------------
   call :CHECKERRORSTATUS "PERL"
