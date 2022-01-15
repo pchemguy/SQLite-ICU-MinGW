@@ -193,14 +193,14 @@ exit /b 0
 
 :: ============================================================================
 :ZLIB_OPTIONS
-if not "/%WITH_EXTRA_EXT%/"=="/1/" (exit /b 0)
+if not defined USE_SQLAR (set USE_SQLAR=1)
 if not defined USE_ZLIB set USE_ZLIB=1
+if not "/%WITH_EXTRA_EXT%/"=="/1/" (exit /b 0)
 if not %USE_ZLIB% EQU 1 (exit /b 0)
 :: Could not get static linking to work
 set ZLIBLIB=zdll.lib
 set ZLIBDIR=%DISTRODIR%\compat\zlib
-set ZLIBLOC="-DZLIB_WINAPI -DZLIB_DLL"
-if not defined USE_SQLAR (set USE_SQLAR=1)
+if %USE_STDCALL% EQU 1 (set ZLIBLOC="-DZLIB_WINAPI -DZLIB_DLL")
 
 exit /b 0
 
