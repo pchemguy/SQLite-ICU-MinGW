@@ -167,7 +167,8 @@ exit /b 0
 if not defined USE_ICU (set USE_ICU=1)
 if not %USE_ICU% EQU 1 (exit /b 0)
 
-if "/%VSCMD_ARG_TGT_ARCH%/"=="/x86/" (set "ARCH=") else (set ARCH=64)
+if "/%VSCMD_ARG_TGT_ARCH%/" == "/x64/" (set ARCHX=x64)
+if "/%VSCMD_ARG_TGT_ARCH%/" == "/x86/" (set ARCHX=x32)
 for /f "usebackq" %%I in (`where uconv 2^>nul`) do (set UCONV=%%I)
 if not "/%UCONV%/"=="//" (
   if not defined ICU_HOME (set ICU_HOME=%UCONV:\bin!ARCH!\uconv.exe=%)
@@ -193,9 +194,13 @@ exit /b 0
 
 :: ============================================================================
 :ZLIB_OPTIONS
-if not defined USE_SQLAR (set USE_SQLAR=1)
+if not "/%WITH_EXTRA_EXT%/"=="/1/" (
+  set USE_ZLIB=0
+  set USE_SQLAR=0
+  exit /b 0
+)
 if not defined USE_ZLIB set USE_ZLIB=1
-if not "/%WITH_EXTRA_EXT%/"=="/1/" (exit /b 0)
+if not defined USE_SQLAR (set USE_SQLAR=1)
 if not %USE_ZLIB% EQU 1 (exit /b 0)
 :: Could not get static linking to work
 set ZLIBLIB=zdll.lib
