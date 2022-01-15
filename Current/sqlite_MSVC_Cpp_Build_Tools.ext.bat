@@ -193,7 +193,9 @@ exit /b 0
 
 :: ============================================================================
 :ZLIB_OPTIONS
+if not "/%WITH_EXTRA_EXT%/"=="/1/" (exit /b 0)
 if not defined USE_ZLIB set USE_ZLIB=1
+if not %USE_ZLIB% EQU 1 (exit /b 0)
 :: Could not get static linking to work
 set ZLIBLIB=zdll.lib
 set ZLIBDIR=%DISTRODIR%\compat\zlib
