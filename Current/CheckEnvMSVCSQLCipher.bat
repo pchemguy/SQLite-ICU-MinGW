@@ -63,8 +63,30 @@ if not defined DEVDIR (set DEVDIR=C:\dev)
   call :CHECKSUBSTRING "LIB"     "%LIB%"     "Windows Kits"
   call :CHECKSUBSTRING "LIBPATH" "%LIBPATH%" "Windows Kits"
   call :CHECKSUBSTRING "Path"    "%Path%"    "Windows Kits"
+
+  call :CHECKVAR "WindowsSdkDir"        "%WindowsSdkDir%"
+  call :CHECKVAR "WindowsSdkBinPath"    "%WindowsSdkBinPath%"
+  call :CHECKVAR "WindowsSDKVersion"    "%WindowsSDKVersion%"
+  call :CHECKVAR "WindowsSDKLibVersion" "%WindowsSDKLibVersion%"
+  call :CHECKVAR "WindowsSdkVerBinPath" "%WindowsSdkVerBinPath%"
+  call :CHECKVAR "WindowsSDK_ExecutablePath_x64" ^
+                 "%WindowsSDK_ExecutablePath_x64%"
+  call :CHECKVAR "WindowsSDK_ExecutablePath_x86" ^
+                 "%WindowsSDK_ExecutablePath_x86%"
   echo -------------------------------------------------------------
   call :CHECKERRORSTATUS "WINDOWS RESOURCE KITS"
+  echo -------------------------------------------------------------
+  echo.
+
+  echo ====================== CHECKING DOTNET ======================
+  echo =============================================================
+  set ErrorStatus=0
+  call :CHECKVAR "FrameworkDir"       "%FrameworkDir%"
+  call :CHECKVAR "FrameworkDir32"     "%FrameworkDir32%"
+  call :CHECKVAR "FrameworkVersion"   "%FrameworkVersion%"
+  call :CHECKVAR "FrameworkVersion32" "%FrameworkVersion32%"
+  echo -------------------------------------------------------------
+  call :CHECKERRORSTATUS "DOTNET"
   echo -------------------------------------------------------------
   echo.
 
@@ -101,8 +123,8 @@ if not defined DEVDIR (set DEVDIR=C:\dev)
   echo ====================== CHECKING PERL ========================
   echo =============================================================
   set ErrorStatus=0
-  if not defined PERL_HOME (set PERL_HOME=%DEVDIR%\StrawberryPerl)
-  call :CHECKTOOL perl "!PERL_HOME!\perl\bin"
+  if not defined PERL_HOME (set PERL_HOME=%DEVDIR%\Perl)
+  call :CHECKTOOL perl "!PERL_HOME!\bin"
   echo -------------------------------------------------------------
   call :CHECKERRORSTATUS "PERL"
   echo -------------------------------------------------------------
@@ -129,12 +151,12 @@ exit /b 0
 ::   - %2 - Variable value
 ::
 set VarName=%~1
-set VarValue=%~2
+set "VarValue=%~2"
 if "/%VarValue%/"=="//" (
   set ErrorStatus=1
   echo %%%VarName%%% not set.
 ) else (
-  echo %VarName%=%VarValue%
+  echo %VarName%=!VarValue!
 )
 
 exit /b 0
@@ -148,7 +170,7 @@ exit /b 0
 ::
 set CurDir=%CD%
 if exist "%~2" cd /d "%~2"
-set CommandText=where "%~1"
+set CommandText=where "%~1" 2^^^>nul
 set Output=
 for /f "Usebackq delims=" %%i in (`%CommandText%`) do (
   if "/!Output!/"=="//" (
