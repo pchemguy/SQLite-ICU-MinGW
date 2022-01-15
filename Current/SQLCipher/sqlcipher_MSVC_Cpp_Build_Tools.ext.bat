@@ -41,34 +41,11 @@ del "%STDOUTLOG%" 2>nul
 del "%STDERRLOG%" 2>nul
 
 call :SET_TARGETS %*
+call :SETENV 1>"%STDOUTLOG%" 2>"%STDERRLOG%"
 
 call :DOWNLOAD_SQLCIPHER
 if %ERROR_STATUS% NEQ 0 exit /b 1
 call :EXTRACT_SQLCIPHER
-if %ERROR_STATUS% NEQ 0 exit /b 1
-
-call :DOWNLOAD_OPENSSL
-if %ERROR_STATUS% NEQ 0 exit /b 1
-call :EXTRACT_OPENSSL
-if %ERROR_STATUS% NEQ 0 exit /b 1
-
-call :SETENV
-
-exit /b 0
-
-
-
-call :SET_TARGETS %*
-(
-  call :ICU_OPTIONS
-  call :TCL_OPTIONS
-  call :ZLIB_OPTIONS
-  call :BUILD_OPTIONS
-) 1>"%STDOUTLOG%" 2>"%STDERRLOG%"
-
-call :DOWNLOAD_SQLITE
-if %ERROR_STATUS% NEQ 0 exit /b 1
-call :EXTRACT_SQLITE
 if %ERROR_STATUS% NEQ 0 exit /b 1
 if not exist "%DISTRODIR%" (
   echo Distro directory does not exists. Exiting
@@ -83,6 +60,16 @@ if %WITH_EXTRA_EXT% EQU 1 (
     if %ERROR_STATUS% NEQ 0 exit /b 1
   )
 )
+
+call :DOWNLOAD_OPENSSL
+if %ERROR_STATUS% NEQ 0 exit /b 1
+call :EXTRACT_OPENSSL
+if %ERROR_STATUS% NEQ 0 exit /b 1
+
+call :BUILD_OPENSSL
+
+exit /b 0
+
 
 set BUILDDIR=%BASEDIR%\build
 if not exist "%BUILDDIR%" mkdir "%BUILDDIR%"
@@ -184,7 +171,7 @@ call :ZLIB_OPTIONS
 call :NASM_OPTIONS
 call :PERL_OPTIONS
 call :OPENSSL_OPTIONS
-call :BUILD_OPENSSL
+
 exit /b 0
 
 
