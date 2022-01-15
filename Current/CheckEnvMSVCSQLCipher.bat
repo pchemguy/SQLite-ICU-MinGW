@@ -12,8 +12,8 @@ set STDERRLOG=stderr.log
 del "%STDOUTLOG%" 2>nul
 del "%STDERRLOG%" 2>nul
 
-if "%PROCESSOR_ARCHITECTURE%" == "AMD64" (set ARCHX=x64)
-if "%PROCESSOR_ARCHITECTURE%" == "x86"   (set ARCHX=x32)
+if "/%VSCMD_ARG_HOST_ARCH%/" == "/x64/" (set ARCH=x64)
+if "/%VSCMD_ARG_HOST_ARCH%/" == "/x86/" (set ARCH=x32)
 if not defined DEVDIR (set DEVDIR=C:\dev)
 
 (
@@ -91,7 +91,7 @@ if not defined DEVDIR (set DEVDIR=C:\dev)
   echo ====================== CHECKING NASM ========================
   echo =============================================================
   set ErrorStatus=0
-  if not defined NASM_HOME (set NASM_HOME=%DEVDIR%\nasm\%ARCHX%)
+  if not defined NASM_HOME (set NASM_HOME=%DEVDIR%\nasm\%ARCH%)
   call :CHECKTOOL nasm "!NASM_HOME!"
   echo -------------------------------------------------------------
   call :CHECKERRORSTATUS "NASM"
