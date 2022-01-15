@@ -12,8 +12,8 @@ set STDERRLOG=stderr.log
 del "%STDOUTLOG%" 2>nul
 del "%STDERRLOG%" 2>nul
 
-if "/%VSCMD_ARG_HOST_ARCH%/" == "/x64/" (set ARCH=x64)
-if "/%VSCMD_ARG_HOST_ARCH%/" == "/x86/" (set ARCH=x32)
+if "/%VSCMD_ARG_TGT_ARCH%/" == "/x64/" (set ARCH=x64)
+if "/%VSCMD_ARG_TGT_ARCH%/" == "/x86/" (set ARCH=x32)
 if not defined DEVDIR (set DEVDIR=C:\dev)
 
 (
@@ -183,10 +183,11 @@ if "/%TestString%/"=="/%VarValue%/" (
   set ErrorStatus=1
   echo "%VarName%" does not contain %Substring%.
 ) else (
+  set ErrorStatus=0
   echo "%VarName%" - match found.
 )
 
-exit /b 0
+exit /b %ErrorStatus%
 
 
 :: ============================================================================
