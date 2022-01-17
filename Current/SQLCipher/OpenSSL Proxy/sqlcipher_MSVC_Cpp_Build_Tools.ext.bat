@@ -130,6 +130,7 @@ if %WITH_EXTRA_EXT% EQU 1 (
 if %USE_LIBSHELL% EQU 1 (
   nmake /nologo /f Makefile.msc %LIBSHELLOBJ%
 ) 1>>"%STDOUTLOG%" 2>>"%STDERRLOG%"
+
 nmake /nologo /f Makefile.msc %TARGETS% 1>>"%STDOUTLOG%" 2>>"%STDERRLOG%"
 cd ..
 rem Leave BUILDDIR
@@ -634,10 +635,13 @@ set FILENAME=Makefile.msc
 echo ========== Patching "%FILENAME%" ===========
 tclsh "%BASEDIR%\addlines.tcl" "%FILENAME%" "%FILENAME%.crypt" "%BUILDDIR%"
 
-set OLDTEXT=LIBOBJS1 = sqlite3.lo
-set NEWTEXT=LIBOBJS1 = sqlite3.lo crypto_openssl_p.lo
-tclsh "%BASEDIR%\replace.tcl" "%OLDTEXT%" "%NEWTEXT%" "%FILENAME%"
-ren "%FILENAME%" "%FILENAME%" 
+set MAPLIST=^
+`LIBOBJS1 = sqlite3.lo` `LIBOBJS1 = sqlite3.lo crypto_openssl_p.lo` ^
+`$(LTLIBOPTS) /OUT:$@ $(LIBOBJ)` `$(LTLIBOPTS) /OUT:$@ $(LIBOBJ: crypto_openssl_p.lo=)`
+
+set MAPLIST=%MAPLIST:`="%
+tclsh "%BASEDIR%\replace_multi.tcl" "%FILENAME%" %MAPLIST%
+ren "%FILENAME%" "%FILENAME%"
 
 set TARGETDIR=%DISTRODIR%\tool
 set FILENAME=mksqlite3c.tcl
