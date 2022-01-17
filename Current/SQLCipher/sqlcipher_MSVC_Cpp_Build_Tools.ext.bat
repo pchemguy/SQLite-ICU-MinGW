@@ -12,7 +12,6 @@
 :: ===========================================================================
 
 
-
 :: ============================= BEGIN DISPATCHER =============================
 call :MAIN %*
 
@@ -34,7 +33,8 @@ if not defined USE_STDCALL (
 
 set BASEDIR=%~dp0
 set BASEDIR=%BASEDIR:~0,-1%
-set DISTRODIR=%BASEDIR%\sqlitecipher
+set MAINDISTRO=sqlcipher
+set DISTRODIR=%BASEDIR%\%MAINDISTRO%
 set STDOUTLOG=%BASEDIR%\stdout.log
 set STDERRLOG=%BASEDIR%\stderr.log
 del "%STDOUTLOG%" 2>nul
@@ -65,32 +65,34 @@ call :DOWNLOAD_OPENSSL
 if %ERROR_STATUS% NEQ 0 exit /b 1
 call :EXTRACT_OPENSSL
 if %ERROR_STATUS% NEQ 0 exit /b 1
-
-call :BUILD_OPENSSL
-
-exit /b 0
-
+call :BUILD_OPENSSL 1>"%STDOUTLOG%" 2>"%STDERRLOG%"
 
 set BUILDDIR=%BASEDIR%\build
 if not exist "%BUILDDIR%" mkdir "%BUILDDIR%"
 (
   copy /Y "%BASEDIR%\extra\build\*" "%BUILDDIR%"
   copy /Y "%BASEDIR%\extra\*.tcl" "%BASEDIR%"
-  xcopy /H /Y /B /E /Q "%BASEDIR%\extra\sqlite" "%BASEDIR%\sqlite"
+  xcopy /H /Y /B /E /Q "%BASEDIR%\extra\%MAINDISTRO%" "%BASEDIR%\%MAINDISTRO%"
   cd /d "%BUILDDIR%"
   
   pushd .
   call :MAKEFILE_MSC_TOP_AND_DEBUG_ZLIB_STDCALL
+  call :RESET_BAK
 )  1>>"%STDOUTLOG%" 2>>"%STDERRLOG%"
 
 if %WITH_EXTRA_EXT% EQU 1 (
   call :EXT_ADD_SOURCES_TO_MAKEFILE_MSC
   call :EXT_ADD_SOURCES_TO_MKSQLITE3C_TCL
-  popd
+) 1>>"%STDOUTLOG%" 2>>"%STDERRLOG%"
 
-  ::TSRC
-  nmake /nologo /f Makefile.msc .target_source
+(call :CRYPT_MAKEFILE_MSC_MKSQLITE3C_TCL) 1>>"%STDOUTLOG%" 2>>"%STDERRLOG%"
+::TSRC
+popd
+nmake /nologo /f Makefile.msc .target_source 1>>"%STDOUTLOG%" 2>>"%STDERRLOG%"
 
+(call :CRYPT_CRYPTO_OPENSSL) 1>>"%STDOUTLOG%" 2>>"%STDERRLOG%"
+
+if %WITH_EXTRA_EXT% EQU 1 (
   set TARGETDIR=%BUILDDIR%\tsrc
   pushd "%BUILDDIR%\tsrc"
   xcopy /H /Y /B /E /Q "%BASEDIR%\extra\*" "%BASEDIR%"
@@ -171,6 +173,8 @@ call :ZLIB_OPTIONS
 call :NASM_OPTIONS
 call :PERL_OPTIONS
 call :OPENSSL_OPTIONS
+call :BUILD_OPTIONS
+call :SQLCIPHER_OPTIONS
 
 exit /b 0
 
@@ -181,8 +185,8 @@ exit /b 0
 :: correct order (dependencies must be loaded before the depending libraries.
 if not defined USE_ICU (set USE_ICU=1)
 if not %USE_ICU% EQU 1 (exit /b 0)
-
-if "/%VSCMD_ARG_TGT_ARCHX%/"=="/x86/" (set "ARCHX=") else (set ARCHX=64)
+if "/%VSCMD_ARG_TGT_ARCH%/" == "/x64/" (set ARCHX=x64)
+if "/%VSCMD_ARG_TGT_ARCH%/" == "/x86/" (set ARCHX=x32)
 if not defined ICU_HOME (set ICU_HOME=%DEVDIR%\icu4c)
 call :CHECKTOOL uconv "%ICU_HOME%\bin%ARCHX%"
 
@@ -211,13 +215,18 @@ exit /b 0
 
 :: ============================================================================
 :ZLIB_OPTIONS
+if not "/%WITH_EXTRA_EXT%/"=="/1/" (
+  set USE_ZLIB=0
+  set USE_SQLAR=0
+  exit /b 0
+)
 if not defined USE_ZLIB set USE_ZLIB=1
+if not defined USE_SQLAR (set USE_SQLAR=1)
 if not %USE_ZLIB% EQU 1 (exit /b 0)
 :: Could not get static linking to work
 set ZLIBLIB=zdll.lib
 set ZLIBDIR=%DISTRODIR%\compat\zlib
 if %USE_STDCALL% EQU 1 (set ZLIBLOC="-DZLIB_WINAPI -DZLIB_DLL")
-if not defined USE_SQLAR (set USE_SQLAR=1)
 
 exit /b 0
 
@@ -370,6 +379,20 @@ if %WITH_EXTRA_EXT% EQU 1 (
   )
   popd
 )
+
+exit /b 0
+
+
+:: ============================================================================
+:SQLCIPHER_OPTIONS
+set EXT_FEATURE_FLAGS=^
+-DSQLITE_HAS_CODEC ^
+-DSQLITE_TEMP_STORE=2 ^
+-I%OPENSSL_PREFIX%\include ^
+%EXT_FEATURE_FLAGS%
+
+set LTLIBS=libcrypto.lib %LTLIBS%
+set LTLIBPATHS=/LIBPATH:%OPENSSL_PREFIX%\lib %LTLIBPATHS%
 
 exit /b 0
 
@@ -562,6 +585,7 @@ popd
 
 exit /b %ERROR_STATUS%
 
+
 :: ============================================================================
 :MAKEFILE_MSC_TOP_AND_DEBUG_ZLIB_STDCALL
 set FILENAME=Makefile.msc
@@ -569,19 +593,73 @@ if exist "%FILENAME%" (
   nmake /nologo /f "%FILENAME%" clean
   del "%FILENAME%" 2>nul
 )
-echo ========== Patching "%FILENAME%" ===========
-copy /Y "%DISTRODIR%\%FILENAME%" "%BUILDDIR%"
-set OLDTEXT=TOP = .
-set NEWTEXT=TOP = %DISTRODIR%
-tclsh "%BASEDIR%\replace.tcl" "%OLDTEXT%" "%NEWTEXT%" "%FILENAME%"
-set OLDTEXT=win32\Makefile.msc clean
-set NEWTEXT=win32\Makefile.msc LOC=$(ZLIBLOC) clean
-tclsh "%BASEDIR%\replace.tcl" "%OLDTEXT%" "%NEWTEXT%" "%FILENAME%"
+copy /Y "%DISTRODIR%\%FILENAME%" .
+
+set MAPLIST=^
+`TOP = .` `TOP = %DISTRODIR%` ^
+`win32\Makefile.msc clean` `win32\Makefile.msc LOC=$(ZLIBLOC) clean`
+
+set MAPLIST=%MAPLIST:`="%
+tclsh "%BASEDIR%\replace_multi.tcl" "%FILENAME%" %MAPLIST%
+
 if %USE_LIBSHELL% EQU 1 call (
   tclsh "%BASEDIR%\addlines.tcl" "%FILENAME%" "%FILENAME%.libshell" %BUILDDIR%
 )
+
 type "%FILENAME%.debug" >>"%FILENAME%"
+
+exit /b 0
+
+
+:RESET_BAK
+:: ============================================================================
+set TARGETDIR=%DISTRODIR%\tool
+set FILENAME=mksqlite3c.tcl
+pushd "%TARGETDIR%"
+if not exist "%FILENAME%.bak" (
+  copy /Y "%FILENAME%" "%FILENAME%.bak"
+) else (
+  copy /Y "%FILENAME%.bak" "%FILENAME%"
+)
+popd
+
+exit /b 0
+
+
+:CRYPT_MAKEFILE_MSC_MKSQLITE3C_TCL
+:: ============================================================================
+set FILENAME=Makefile.msc
+echo ========== Patching "%FILENAME%" ===========
+tclsh "%BASEDIR%\addlines.tcl" "%FILENAME%" "%FILENAME%.crypt" "%BUILDDIR%"
+
+set OLDTEXT=LIBOBJS1 = sqlite3.lo
+set NEWTEXT=LIBOBJS1 = sqlite3.lo crypto_openssl_p.lo
+tclsh "%BASEDIR%\replace.tcl" "%OLDTEXT%" "%NEWTEXT%" "%FILENAME%"
 ren "%FILENAME%" "%FILENAME%" 
+
+set TARGETDIR=%DISTRODIR%\tool
+set FILENAME=mksqlite3c.tcl
+echo ========== Patching "%FILENAME%" ===========
+
+tclsh "%BASEDIR%\addlines.tcl" "%FILENAME%" "%FILENAME%.crypt" "%TARGETDIR%"
+
+exit /b 0
+
+
+:CRYPT_CRYPTO_OPENSSL
+:: ============================================================================
+copy /Y "%BASEDIR%\extra\build\tsrc\crypto_openssl_p.*" "%BUILDDIR%\tsrc"
+tclsh "%BUILDDIR%\tsrc\crypto_openssl_p.tcl"
+
+exit /b 0
+
+
+:: ============================================================================
+:EXT_ADD_SOURCES_TO_MKSQLITE3C_TCL
+set TARGETDIR=%DISTRODIR%\tool
+set FILENAME=mksqlite3c.tcl
+echo ========== Patching "%FILENAME%" ===========
+tclsh "%BASEDIR%\addlines.tcl" "%FILENAME%" "%FILENAME%.ext" "%TARGETDIR%"
 
 exit /b 0
 
@@ -640,17 +718,22 @@ exit /b 0
 :EXT_NORMALIZE
 set FILENAME=normalize.c
 echo ========== Patching "%FILENAME%" ===========
-tclsh "%BASEDIR%\replace.tcl" "int main" "int sqlite3_normalize_main" "%FILENAME%"
-tclsh "%BASEDIR%\replace.tcl" "CC_" "CCN_" "%FILENAME%"
-tclsh "%BASEDIR%\replace.tcl" "TK_" "TKN_" "%FILENAME%"
-tclsh "%BASEDIR%\replace.tcl" "aiClass" "aiClassN" "%FILENAME%"
-tclsh "%BASEDIR%\replace.tcl" "sqlite3UpperToLower" "sqlite3UpperToLowerN" "%FILENAME%"
-tclsh "%BASEDIR%\replace.tcl" "sqlite3CtypeMap" "sqlite3CtypeMapN" "%FILENAME%"
-tclsh "%BASEDIR%\replace.tcl" "sqlite3GetToken" "sqlite3GetTokenN" "%FILENAME%"
-tclsh "%BASEDIR%\replace.tcl" "IdChar(" "IdCharN(" "%FILENAME%"
-tclsh "%BASEDIR%\replace.tcl" "sqlite3I" "sqlite3NI" "%FILENAME%"
-tclsh "%BASEDIR%\replace.tcl" "sqlite3T" "sqlite3NT" "%FILENAME%"
-tclsh "%BASEDIR%\replace.tcl" "CCN__" "CC__" "%FILENAME%"
+
+set MAPLIST=^
+`int main` `int sqlite3_normalize_main` ^
+`CC_` `CCN_` ^
+`TK_` `TKN_` ^
+`aiClass` `aiClassN` ^
+`sqlite3UpperToLower` `sqlite3UpperToLowerN` ^
+`sqlite3CtypeMap` `sqlite3CtypeMapN` ^
+`sqlite3GetToken` `sqlite3GetTokenN` ^
+`IdChar(` `IdCharN(` ^
+`sqlite3I` `sqlite3NI` ^
+`sqlite3T` `sqlite3NT` ^
+`CCN__` `CC__`
+
+set MAPLIST=%MAPLIST:`="%
+tclsh "%BASEDIR%\replace_multi.tcl" "%FILENAME%" %MAPLIST%
 
 exit /b 0
 
@@ -753,13 +836,12 @@ echo #if ^^!defined^^(LIBSHELL_C^^) ^&^& defined^^(%FLAG%^^) >%FILENAME%
 echo #define LIBSHELL_C >>%FILENAME%
 type shell.c >>%FILENAME%
 
-set OLDTEXT=int SQLITE_CDECL main
-set NEWTEXT=int SQLITE_CDECL libshell_main
-tclsh "%BASEDIR%\replace.tcl" "%OLDTEXT%" "%NEWTEXT%" "%FILENAME%"
+set MAPLIST=^
+`int SQLITE_CDECL main` `int SQLITE_CDECL libshell_main` ^
+`appendText` `shAppendText`
 
-set OLDTEXT=appendText
-set NEWTEXT=shAppendText
-tclsh "%BASEDIR%\replace.tcl" "%OLDTEXT%" "%NEWTEXT%" "%FILENAME%"
+set MAPLIST=%MAPLIST:`="%
+tclsh "%BASEDIR%\replace_multi.tcl" "%FILENAME%" %MAPLIST%
 
 echo. >>%FILENAME%
 echo. >>%FILENAME%

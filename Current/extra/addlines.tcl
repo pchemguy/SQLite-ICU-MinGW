@@ -14,14 +14,14 @@ set NewLinesName [lindex $argv 1]
 cd [lindex $argv 2]
  
 set fd [open $SourceName rb]
-set Source [read -nonewline $fd]
+set Source [string map {"\r" ""} [read -nonewline $fd]]
 close $fd
  
 set fd [open $NewLinesName rb]
-set NewLines [split [read -nonewline $fd] "\n"]
+set NewLines [split [string map {"\r" ""} [read -nonewline $fd]] "\n"]
 close $fd
  
-set AddLinesAfter [string map {"\r" ""} [lindex $NewLines 0]]
+set AddLinesAfter [lindex $NewLines 0]
 set Patched [string map -nocase [list $AddLinesAfter [join $NewLines "\n"]] $Source]
  
 set from "#ifdef _WIN32\r?\n#endif\r?\n"
