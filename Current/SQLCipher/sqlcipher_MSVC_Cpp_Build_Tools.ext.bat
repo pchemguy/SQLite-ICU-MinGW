@@ -41,7 +41,7 @@ del "%STDOUTLOG%" 2>nul
 del "%STDERRLOG%" 2>nul
 
 call :SET_TARGETS %*
-call :SETENV 1>"%STDOUTLOG%" 2>"%STDERRLOG%"
+call :SETENV 1>>"%STDOUTLOG%" 2>>"%STDERRLOG%"
 
 call :DOWNLOAD_SQLCIPHER
 if %ERROR_STATUS% NEQ 0 exit /b 1
@@ -65,7 +65,7 @@ call :DOWNLOAD_OPENSSL
 if %ERROR_STATUS% NEQ 0 exit /b 1
 call :EXTRACT_OPENSSL
 if %ERROR_STATUS% NEQ 0 exit /b 1
-call :BUILD_OPENSSL 1>"%STDOUTLOG%" 2>"%STDERRLOG%"
+call :BUILD_OPENSSL 1>>"%STDOUTLOG%" 2>>"%STDERRLOG%"
 
 set BUILDDIR=%BASEDIR%\build
 if not exist "%BUILDDIR%" mkdir "%BUILDDIR%"
@@ -109,7 +109,10 @@ if %WITH_EXTRA_EXT% EQU 1 (
   if %USE_SQLAR% EQU 1 (call :EXT_BASE_PATCH SQLAR)
 ) 1>>"%STDOUTLOG%" 2>>"%STDERRLOG%"
 
-if %USE_LIBSHELL% EQU 1 (call :LIBSHELL)
+if %USE_LIBSHELL% EQU 1 (
+  echo WARNING: Use libshell or shelldll as the target instead of dll!
+  call :LIBSHELL
+)
 
 popd
 if %USE_ZLIB% EQU 1 (
@@ -166,6 +169,7 @@ exit /b 0
 
 :: ============================================================================
 :SETENV
+echo ===== Setting options =====
 call :ICU_OPTIONS
 call :TCL_OPTIONS
 call :ZLIB_OPTIONS
@@ -182,10 +186,11 @@ exit /b 0
 :ICU_OPTIONS
 :: In VBA6, it might be necessary to load individual libraries explicitly in the
 :: correct order (dependencies must be loaded before the depending libraries.
+echo ===== Setting ICU options =====
 if not defined USE_ICU (set USE_ICU=1)
 if not %USE_ICU% EQU 1 (exit /b 0)
-if "/%VSCMD_ARG_TGT_ARCH%/" == "/x64/" (set ARCHX=x64)
-if "/%VSCMD_ARG_TGT_ARCH%/" == "/x86/" (set ARCHX=x32)
+if "/%VSCMD_ARG_TGT_ARCH%/" == "/x64/" (set ARCHX=64)
+if "/%VSCMD_ARG_TGT_ARCH%/" == "/x86/" (set ARCHX=)
 if not defined ICU_HOME (set ICU_HOME=%DEVDIR%\icu4c)
 call :CHECKTOOL uconv "%ICU_HOME%\bin%ARCHX%"
 
@@ -205,7 +210,6 @@ if "/%LIB%/"=="/!LIB:%ICULIB%=!/" (set "LIB=%ICULIB%;%LIB%")
 if "/%Path%/"=="/!Path:%ICUBIN%=!/" (set "Path=%ICUBIN%;%Path%")
 if "/%INCLUDE%/"=="/!INCLUDE:%ICUINC%=!/" (set "INCLUDE=%ICUINC%;%INCLUDE%")
 
-set ICUBIN=
 set ICUINC=
 set ICULIB=
 
@@ -214,6 +218,7 @@ exit /b 0
 
 :: ============================================================================
 :ZLIB_OPTIONS
+echo ===== Setting ZLIB options =====
 if not "/%WITH_EXTRA_EXT%/"=="/1/" (
   set USE_ZLIB=0
   set USE_SQLAR=0
@@ -232,6 +237,7 @@ exit /b 0
 
 :: ============================================================================
 :TCL_OPTIONS
+echo ===== Setting TCL options =====
 if not defined TCL_HOME (set TCL_HOME=%DEVDIR%\TCL)
 call :CHECKTOOL tclsh "%TCL_HOME%\bin"
 
@@ -251,6 +257,7 @@ exit /b 0
 :: ============================================================================
 :NASM_OPTIONS
 :: https://nasm.us
+echo ===== Setting NASM options =====
 if not defined NASM_HOME (set NASM_HOME=%DEVDIR%\NASM)
 call :CHECKTOOL nasm "%NASM_HOME%\%ARCH%"
 
@@ -270,6 +277,7 @@ exit /b 0
 :: ============================================================================
 :PERL_OPTIONS
 :: E.g., https://strawberryperl.com
+echo ===== Setting PERL options =====
 if not defined PERL_HOME (set PERL_HOME=%DEVDIR%\PERL)
 call :CHECKTOOL perl "%PERL_HOME%\bin
 
@@ -288,6 +296,7 @@ exit /b 0
 
 :: ============================================================================
 :OPENSSL_OPTIONS
+echo ===== Setting OpenSSL options =====
 set OPENSSL_DISTRO=%BASEDIR%\openssl
 set OPENSSL_BUILD=%BASEDIR%\tools\build\openssl\%ARCH%
 set OPENSSL_PREFIX=%BASEDIR%\tools\OpenSSL\%ARCH%
@@ -300,6 +309,7 @@ exit /b 0
 
 :: ============================================================================
 :BUILD_OPTIONS
+echo ===== Setting BUILD options =====
 set SESSION=1
 set RBU=1
 set API_ARMOR=1
@@ -384,6 +394,7 @@ exit /b 0
 
 :: ============================================================================
 :SQLCIPHER_OPTIONS
+echo ===== Setting SQLCIPHER options =====
 set EXT_FEATURE_FLAGS=^
 -DSQLITE_HAS_CODEC ^
 -DSQLITE_TEMP_STORE=2 ^
@@ -908,9 +919,9 @@ cd /d "%BINDIR%"
 if exist "%BUILDDIR%\sqlite3.dll" move "%BUILDDIR%\sqlite3.dll" .
 if exist "%BUILDDIR%\sqlite3.exe" move "%BUILDDIR%\sqlite3.exe" .
 if exist "%BUILDDIR%\sqlite3.def" move "%BUILDDIR%\sqlite3.def" .
-if %USE_ICU%  EQU 1 copy /Y "%ICUBINDIR%\icu*.dll" .
+if %USE_ICU%  EQU 1 copy /Y "%ICUBIN%\icu*.dll" .
 if %USE_ZLIB% EQU 1 copy /Y "%ZLIBDIR%\zlib1.dll" .
-copy /Y "%OPENSSL_PREFIX%\bin\libcrypto-3.dll" .
+copy /Y "%OPENSSL_PREFIX%\bin\libcrypto*.dll" .
 echo ---------- Copied  binaries -----------
 
 exit /b 0
