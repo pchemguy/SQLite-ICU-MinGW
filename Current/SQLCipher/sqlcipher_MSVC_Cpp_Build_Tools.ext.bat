@@ -290,9 +290,9 @@ exit /b 0
 :: ============================================================================
 :OPENSSL_OPTIONS
 set OPENSSL_DISTRO=%BASEDIR%\openssl
-set OPENSSL_BUILD=%BASEDIR%\tools\build\openssl
-set OPENSSL_PREFIX=%BASEDIR%\tools\OpenSSL
-set OPENSSL_DIR=%BASEDIR%\tools\SSL
+set OPENSSL_BUILD=%BASEDIR%\tools\build\openssl\%ARCH%
+set OPENSSL_PREFIX=%BASEDIR%\tools\OpenSSL\%ARCH%
+set OPENSSL_DIR=%BASEDIR%\tools\SSL\%ARCH%
 if "/%ARCH%/"=="/x32/" (set OPENSSLARCH=VC-WIN32)
 if "/%ARCH%/"=="/x64/" (set OPENSSLARCH=VC-WIN64A)
 
@@ -388,11 +388,13 @@ exit /b 0
 set EXT_FEATURE_FLAGS=^
 -DSQLITE_HAS_CODEC ^
 -DSQLITE_TEMP_STORE=2 ^
--I%OPENSSL_PREFIX%\include ^
+`-I%OPENSSL_PREFIX%\include` ^
 %EXT_FEATURE_FLAGS%
 
+set EXT_FEATURE_FLAGS=%EXT_FEATURE_FLAGS:`="%
+
 set LTLIBS=libcrypto.lib %LTLIBS%
-set LTLIBPATHS=/LIBPATH:%OPENSSL_PREFIX%\lib %LTLIBPATHS%
+set LTLIBPATHS="/LIBPATH:%OPENSSL_PREFIX%\lib" %LTLIBPATHS%
 
 exit /b 0
 
