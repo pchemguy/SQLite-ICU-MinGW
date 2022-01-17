@@ -1,0 +1,20 @@
+#endif /* SQLITE_OMIT_VIRTUALTABLE */
+
+
+int sqlite3SeriesInit(sqlite3 *db){
+  int rc = SQLITE_OK;
+  unsigned int i;
+#if !defined(SQLITE_OMIT_VIRTUALTABLE) && SQLITE_VERSION_NUMBER >= 3008012
+  static const struct {
+     const char *zName;
+     sqlite3_module *pModule;
+  } aMod[] = {
+    { "generate_series",      &seriesModule                 },
+  };
+  for(i=0; i<sizeof(aMod)/sizeof(aMod[0]) && rc==SQLITE_OK; i++){
+    rc = sqlite3_create_module(db, aMod[i].zName, aMod[i].pModule, 0);
+  }
+#endif
+  return rc;
+}
+

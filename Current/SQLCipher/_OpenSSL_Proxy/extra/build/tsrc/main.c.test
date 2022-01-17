@@ -1,0 +1,22 @@
+int sqlite3_libversion_number(void){ return SQLITE_VERSION_NUMBER; }
+
+/*
+** Verifies handling of 64-bit integers
+**
+** Add the following test function, returning libversion as a 64-bit int to
+** be used for testing purposes, especially in the 32-bit VBA environment.
+*/
+sqlite3_int64 sqlite3_libversion_number_i64(void){ return SQLITE_VERSION_NUMBER; }
+
+/*
+** Verifies handling of strings
+**
+** Add two functions returning UTF8-encoded strings for verification of the VBA code.
+*/
+#define LATIN_UTF8 "ABCDEFGHIJKLMNOQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
+const char *sqlite3_latin_utf8(void);
+const char *sqlite3_latin_utf8(void){ return LATIN_UTF8; }
+
+#define CYRILLIC_UTF8 "АБВГДЕЁЖЗИИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯабвгеёжзийклмнопрстуфхцчшщъэюя"
+const char *sqlite3_cyrillic_utf8(void);
+const char *sqlite3_cyrillic_utf8(void){ return CYRILLIC_UTF8; }

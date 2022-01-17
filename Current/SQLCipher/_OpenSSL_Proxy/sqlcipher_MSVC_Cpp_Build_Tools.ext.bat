@@ -85,12 +85,12 @@ if %WITH_EXTRA_EXT% EQU 1 (
   call :EXT_ADD_SOURCES_TO_MKSQLITE3C_TCL
 ) 1>>"%STDOUTLOG%" 2>>"%STDERRLOG%"
 
-(call :CRYPT_MAKEFILE_MSC_MKSQLITE3C_TCL) 1>>"%STDOUTLOG%" 2>>"%STDERRLOG%"
+if %USE_STDCALL% EQU 1 (call :CRYPT_MAKEFILE_MSC_MKSQLITE3C_TCL) 1>>"%STDOUTLOG%" 2>>"%STDERRLOG%"
 ::TSRC
 popd
 nmake /nologo /f Makefile.msc .target_source 1>>"%STDOUTLOG%" 2>>"%STDERRLOG%"
 
-(call :CRYPT_CRYPTO_OPENSSL) 1>>"%STDOUTLOG%" 2>>"%STDERRLOG%"
+if %USE_STDCALL% EQU 1 (call :CRYPT_CRYPTO_OPENSSL) 1>>"%STDOUTLOG%" 2>>"%STDERRLOG%"
 
 if %WITH_EXTRA_EXT% EQU 1 (
   set TARGETDIR=%BUILDDIR%\tsrc
@@ -605,8 +605,8 @@ set MAPLIST=^
 set MAPLIST=%MAPLIST:`="%
 tclsh "%BASEDIR%\replace_multi.tcl" "%FILENAME%" %MAPLIST%
 
-if %USE_LIBSHELL% EQU 1 call (
-  tclsh "%BASEDIR%\addlines.tcl" "%FILENAME%" "%FILENAME%.libshell" %BUILDDIR%
+if %USE_LIBSHELL% EQU 1 (
+  tclsh "%BASEDIR%\addlines.tcl" "%FILENAME%" "%FILENAME%.libshell" "%BUILDDIR%"
 )
 
 type "%FILENAME%.debug" >>"%FILENAME%"
@@ -866,12 +866,14 @@ exit /b 0
 echo ========== Collecting binaries ===========
 set BINDIR=%~dp0bin
 if not exist "%BINDIR%" mkdir "%BINDIR%"
-del /Q bin\* 2>nul
-if exist "%BUILDDIR%\sqlite3.dll" move "%BUILDDIR%\sqlite3.dll" "%BINDIR%"
-if exist "%BUILDDIR%\sqlite3.exe" move "%BUILDDIR%\sqlite3.exe" "%BINDIR%"
-if exist "%BUILDDIR%\sqlite3.def" move "%BUILDDIR%\sqlite3.def" "%BINDIR%"
-if %USE_ICU%  EQU 1 copy /Y "%ICUBINDIR%\icu*.dll" "%BINDIR%"
-if %USE_ZLIB% EQU 1 copy /Y "%ZLIBDIR%\zlib1.dll"  "%BINDIR%"
+del /Q "%BINDIR%\*" 2>nul
+cd /d "%BINDIR%"
+if exist "%BUILDDIR%\sqlite3.dll" move "%BUILDDIR%\sqlite3.dll" .
+if exist "%BUILDDIR%\sqlite3.exe" move "%BUILDDIR%\sqlite3.exe" .
+if exist "%BUILDDIR%\sqlite3.def" move "%BUILDDIR%\sqlite3.def" .
+if %USE_ICU%  EQU 1 copy /Y "%ICUBINDIR%\icu*.dll" .
+if %USE_ZLIB% EQU 1 copy /Y "%ZLIBDIR%\zlib1.dll" .
+copy /Y "%OPENSSL_PREFIX%\bin\libcrypto-3.dll" .
 echo ---------- Copied  binaries -----------
 
 exit /b 0

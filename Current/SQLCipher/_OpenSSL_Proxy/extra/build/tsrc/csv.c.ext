@@ -1,0 +1,19 @@
+#endif /* !defined(SQLITE_OMIT_VIRTUALTABLE) */
+
+
+int sqlite3CsvInit(sqlite3 *db){
+  int rc = SQLITE_OK;
+  unsigned int i;
+#ifndef SQLITE_OMIT_VIRTUALTABLE
+  static const struct {
+     const char *zName;
+     sqlite3_module *pModule;
+  } aMod[] = {
+    { "csv",                  &CsvModule                    },
+  };
+  for(i=0; i<sizeof(aMod)/sizeof(aMod[0]) && rc==SQLITE_OK; i++){
+    rc = sqlite3_create_module(db, aMod[i].zName, aMod[i].pModule, 0);
+  }
+#endif
+  return rc;
+}

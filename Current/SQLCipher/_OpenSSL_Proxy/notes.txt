@@ -1,0 +1,10 @@
+To make an STDCALL version of SQLCipher and solve the problem of missing
+explicit calling convention in OpenSSL headers, this setup uses a proxy
+crypto_openssl_p.c/h. This way, the OpenSSL header files do not need to
+be patched. However, this approach a fairly laborious. Labeling 24 called
+OpenSSL functions with explicit __cdecl is a much simpler approach.
+
+N.B.: crypto_openssl_p.c/h are actually incomplete. 9 routines or so are
+missing (if build process is exectuted, their names will be in stdout.log
+at the end of the file following the error message:
+sqlite3.lo : error LNK2019: unresolved external symbol).
