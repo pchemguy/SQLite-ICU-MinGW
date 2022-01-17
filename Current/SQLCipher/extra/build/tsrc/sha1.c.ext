@@ -1,0 +1,19 @@
+#ifdef _WIN32
+#endif
+
+
+int sqlite3ShaInit(sqlite3 *db){
+  int rc = SQLITE_OK;
+  rc = sqlite3_create_function(db, "sha1", 1, 
+                       SQLITE_UTF8 | SQLITE_INNOCUOUS | SQLITE_DETERMINISTIC,
+                               0, sha1Func, 0, 0);
+  if( rc==SQLITE_OK ){
+    rc = sqlite3_create_function(db, "sha1_query", 1, 
+                                 SQLITE_UTF8|SQLITE_DIRECTONLY, 0,
+                                 sha1QueryFunc, 0, 0);
+  }
+  return rc;
+}
+
+
+#ifdef _WIN32
