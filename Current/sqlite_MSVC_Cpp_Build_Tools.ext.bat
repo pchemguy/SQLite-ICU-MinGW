@@ -45,7 +45,7 @@ call :SET_TARGETS %*
   call :TCL_OPTIONS
   call :ZLIB_OPTIONS
   call :BUILD_OPTIONS
-) 1>"%STDOUTLOG%" 2>"%STDERRLOG%"
+) 1>>"%STDOUTLOG%" 2>>"%STDERRLOG%"
 
 call :CHECK_PREREQUISITES
 if %ERROR_STATUS% NEQ 0 exit /b 1
@@ -106,7 +106,10 @@ if %WITH_EXTRA_EXT% EQU 1 (
   if %USE_SQLAR% EQU 1 (call :EXT_BASE_PATCH SQLAR)
 ) 1>>"%STDOUTLOG%" 2>>"%STDERRLOG%"
 
-if %USE_LIBSHELL% EQU 1 call :LIBSHELL
+if %USE_LIBSHELL% EQU 1 (
+  echo WARNING: Use libshell or shelldll as the target instead of dll!
+  call :LIBSHELL
+)
 
 popd
 if %USE_ZLIB% EQU 1 (
@@ -167,8 +170,8 @@ exit /b 0
 if not defined USE_ICU (set USE_ICU=1)
 if not %USE_ICU% EQU 1 (exit /b 0)
 
-if "/%VSCMD_ARG_TGT_ARCH%/" == "/x64/" (set ARCHX=x64)
-if "/%VSCMD_ARG_TGT_ARCH%/" == "/x86/" (set ARCHX=x32)
+if "/%VSCMD_ARG_TGT_ARCH%/" == "/x64/" (set ARCHX=64)
+if "/%VSCMD_ARG_TGT_ARCH%/" == "/x86/" (set ARCHX=)
 for /f "usebackq" %%I in (`where uconv 2^>nul`) do (set UCONV=%%I)
 if not "/%UCONV%/"=="//" (
   if not defined ICU_HOME (set ICU_HOME=%UCONV:\bin!ARCH!\uconv.exe=%)
