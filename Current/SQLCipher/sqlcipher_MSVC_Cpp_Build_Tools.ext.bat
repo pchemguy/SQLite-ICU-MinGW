@@ -395,9 +395,9 @@ exit /b 0
 :: ============================================================================
 :SQLCIPHER_OPTIONS
 echo ===== Setting SQLCIPHER options =====
+set DSQLITE_TEMP_STORE=2
 set EXT_FEATURE_FLAGS=^
 -DSQLITE_HAS_CODEC ^
--DSQLITE_TEMP_STORE=2 ^
 `-I%OPENSSL_PREFIX%\include` ^
 %EXT_FEATURE_FLAGS%
 
@@ -607,8 +607,11 @@ if exist "%FILENAME%" (
 )
 copy /Y "%DISTRODIR%\%FILENAME%" .
 
+if not defined DSQLITE_TEMP_STORE (set DSQLITE_TEMP_STORE=1)
+
 set MAPLIST=^
 `TOP = .` `TOP = %DISTRODIR%` ^
+`DSQLITE_TEMP_STORE=1` `DSQLITE_TEMP_STORE=%DSQLITE_TEMP_STORE%` ^
 `win32\Makefile.msc clean` `win32\Makefile.msc LOC=$(ZLIBLOC) clean`
 
 set MAPLIST=%MAPLIST:`="%
