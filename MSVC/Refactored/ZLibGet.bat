@@ -44,7 +44,7 @@ set DistroName=zlib-%ZLibVersion%.tar.gz
 set ReleaseURL=https://zlib.net/%DistroName%
 call "%~dp0DownloadFile.bat" %ReleaseURL%
 if not exist "%ZLIB_BUILD%\Makefile" (
-  rmdir /S /Q "%ZLIB_BUILD%\zlib" 2>nul
+  rmdir /S /Q "%ZLIB_BUILD%" 2>nul
   call "%~dp0ExtractArchive.bat" %DistroName% "%BASEDIR%\build"
   cd /d "%BASEDIR%\build"
   move "zlib-%ZLibVersion%" "zlib"
