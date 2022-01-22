@@ -32,17 +32,54 @@ if not %ResultCode% EQU 0 (
 set FileName=%~2
 if "/%FileName%/"=="//" (call :EXTRACT_FILENAME %FileURL%)
 
-if not exist "%FileName%" (
-  echo ===== Downloading %FileName% =====
-  curl -L %FileURL% --output "%FileName%"
+if not exist "%FileName%.size" (
+  call "%~dp0URLInfo.bat" %FileURL%
   set ResultCode=%ErrorLevel%
-  if %ResultCode% EQU 0 (
-    echo ----- Downloaded %FileName%  -----
-  ) else (
-    echo Error downloading %FileName%.
+  if not !ResultCode! EQU 0 (
+    echo ----- URL error -----
+    exit /b !ResultCode!
   )
+  echo !FileLen!>"%FileName%.size"
+)
+
+for /f "Usebackq delims=" %%G in ("%FileName%.size") do (
+  set FileLen=%%G
+)
+
+if exist "%FileName%" (
+  call :SET_FILEZIE "%FileName%"
+  if "/!FileSize!/"=="/%FileLen%/" (
+    echo ========= Using previously downloaded %FileName% =========
+    echo ----------------------------------------------------------
+    exit /b 0
+  ) else (
+    echo ----- File size saved in file "%FileName%.size" does not match the size of cached copy: -----
+    echo Saved file size:     ==%FileLen%==
+    echo Size of cached copy: ==%FileSize%==
+    echo Dowloading again.
+    echo.
+    del /Q "%FileName%"
+  )
+)
+
+echo ===== Downloading %FileName% =====
+curl -L %FileURL% --output "%FileName%"
+set ResultCode=%ErrorLevel%
+if %ResultCode% NEQ 0 (
+  echo Error downloading %FileName%.
+  exit /b !ResultCode!
+)
+
+call :SET_FILEZIE "%FileName%"
+if "/!FileSize!/"=="/%FileLen%/" (
+  echo ----- Downloaded %FileName%  -----
 ) else (
-  echo ========= Using previously downloaded %FileName% =========
+  echo Error downloading %FileName% - file size mismatch. Run the processes again.
+  echo File renamed to %FileName%.$$$.
+  echo.
+  move "%FileName%" "%FileName%.$$$" 1>nul
+  move "%FileName%.size" "%FileName%.size.$$$" 1>nul
+  set ResultCode=1
 )
 echo ----------------------------------------------------------
 echo.
@@ -61,4 +98,8 @@ exit /b 0
 
 :SET_FILENAME
 set FileName=%~nx1
+exit /b 0
+
+:SET_FILEZIE
+set FileSize=%~z1
 exit /b 0
