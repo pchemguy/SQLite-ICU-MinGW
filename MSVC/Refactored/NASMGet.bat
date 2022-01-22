@@ -64,8 +64,8 @@ if not exist "%HOMNASM%\x32\nasm.exe" (
   move "%HOMNASM%\nasm-%NASM_VERSION%" "%HOMNASM%\x64"
 )
 
-if "/%VSCMD_ARG_TGT_ARCH%/" == "/x64/" (set ARCH=x64)
-if "/%VSCMD_ARG_TGT_ARCH%/" == "/x86/" (set ARCH=x32)
+if "/%VSCMD_ARG_TGT_ARCH%/"=="/x64/" (set ARCH=x64)
+if "/%VSCMD_ARG_TGT_ARCH%/"=="/x86/" (set ARCH=x32)
 if not defined ARCH set ARCH=x32
 
 set Path=%HOMNASM%\%ARCH%;%Path%

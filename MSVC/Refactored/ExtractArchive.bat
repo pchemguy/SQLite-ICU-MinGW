@@ -2,7 +2,8 @@
 ::
 :: Extracts distro archive via tar.
 ::
-:: Set current directory to the distro download directory before calling.
+:: Set TARPATTERN before calling for partial extraction. The script reset this
+:: variable at exit.
 ::
 :: Arguments:
 ::   %1 - Archive name
@@ -38,7 +39,7 @@ if "/%Flag%/"=="//" (set Flag=$$$$$$.$$$)
 if not exist "%Folder%\%Flag%" (
   echo ===== Extracting %ArchiveName% =====
   if not exist "%Folder%" mkdir "%Folder%"
-  tar -C "%Folder%" -xf "%ArchiveName%"
+  tar -C "%Folder%" -xf "%ArchiveName%" %TARPATTERN%
 
   set ResultCode=%ErrorLevel%
   if %ResultCode% EQU 0 (
@@ -51,5 +52,7 @@ if not exist "%Folder%\%Flag%" (
 )
 echo ------------------------------------------------------------
 echo.
+
+set TARPATTERN=
 
 exit /b %ResultCode%

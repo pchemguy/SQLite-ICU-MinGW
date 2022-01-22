@@ -2,8 +2,6 @@
 ::
 :: Determines current GitHub binary release URL and sets source URLs.
 ::
-:: Set current directory to the distro download directory before calling.
-::
 :: Arguments:
 ::   %1 - Repo owner
 ::   %2 - Repo name

@@ -1,4 +1,8 @@
 @echo off
+::
+:: Downloads select GNU utilities for Windows. For now, uses GNUWin32 distro.
+:: Consider using MSYS2 packages instead.
+::
 set BASEDIR=%~dp0
 set BASEDIR=%BASEDIR:~0,-1%
 set PKGDIR=%BASEDIR%\pkg
