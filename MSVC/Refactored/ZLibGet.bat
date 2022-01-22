@@ -24,12 +24,19 @@ set ZLIB_HOME=%BASEDIR%\dev\zlib
 set ZLIB_DISTRO=%BASEDIR%\distro\zlib
 set ZLIB_BUILD=%BASEDIR%\build\zlib
 
+set STDOUTLOG=%BASEDIR%\stdoutzlib.log
+set STDERRLOG=%BASEDIR%\stderrzlib.log
+del "%STDOUTLOG%" 2>nul
+del "%STDERRLOG%" 2>nul
+set ResultCode=0
+
 if not exist "%BASEDIR%\distro" mkdir "%BASEDIR%\distro"
 pushd "%BASEDIR%\distro"
 
 :: Retrieve ChangeLog.txt and extract the latest release version (at the top).
 set ChangeLogURL=https://zlib.net/ChangeLog.txt
 call "%~dp0DownloadFile.bat" %ChangeLogURL%
+if not "/%ErrorLevel%/"=="/0/" (set ResultCode=%ErrorLevel%)
 set CommandText=type %FileName%
 for /f "Usebackq tokens=1,3 skip=2 delims= " %%G in (`%CommandText%`) do (
   if "/%%G/"=="/Changes/" (
@@ -43,17 +50,19 @@ for /f "Usebackq tokens=1,3 skip=2 delims= " %%G in (`%CommandText%`) do (
 set DistroName=zlib-%ZLibVersion%.tar.gz
 set ReleaseURL=https://zlib.net/%DistroName%
 call "%~dp0DownloadFile.bat" %ReleaseURL%
+if not "/%ErrorLevel%/"=="/0/" (set ResultCode=%ErrorLevel%)
 if not exist "%ZLIB_BUILD%\Makefile" (
   rmdir /S /Q "%ZLIB_BUILD%" 2>nul
   call "%~dp0ExtractArchive.bat" %DistroName% "%BASEDIR%\build"
+  if not "/%ErrorLevel%/"=="/0/" (set ResultCode=%ErrorLevel%)
   cd /d "%BASEDIR%\build"
   move "zlib-%ZLibVersion%" "zlib"
-)
+) 1>>"%STDOUTLOG%" 2>>"%STDERRLOG%"
 
 :: Build
 cd /d "%ZLIB_BUILD%"
 if "/%USE_STDCALL%/"=="/1/" (set ZLIB_LOC=-DZLIB_WINAPI)
-nmake -f win32/Makefile.msc LOC="%ZLIB_LOC%" clean all
+nmake -f win32/Makefile.msc LOC="%ZLIB_LOC%" clean all 1>>"%STDOUTLOG%" 2>>"%STDERRLOG%"
 set ResultCode=%ErrorLevel%
 if not "/%ResultCode%/"=="/0/" (
   echo Error making ZLIB.
@@ -107,6 +116,11 @@ echo ZLIB_INCLUDE=%ZLIB_INCLUDE%
 echo ZLIB_LIBPATH=%ZLIB_LIBPATH%
 echo ZLIB_LIB=%ZLIB_LIB%
 echo ----------------------------------------
+echo.
+
+echo.
+echo ============= zlib building is complete. ============
+echo ResultCode: %ResultCode% (^>0 - errors occured) . Check the log files for errors. 
 echo.
 
 :: Cleanup

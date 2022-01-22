@@ -14,6 +14,8 @@ set GNUArcDep=%FileName%
 
 
 :: Expand archive
+if not exist "%BASEDIR%\dev\gnu" mkdir "%BASEDIR%\dev\gnu"
+
 if not exist "%BASEDIR%\dev\gnu\sed.exe" (
   if exist "%BASEDIR%\dev\tmp" rmdir /S /Q "%BASEDIR%\dev\tmp" 2>nul
   mkdir "%BASEDIR%\dev\tmp"
@@ -23,7 +25,6 @@ if not exist "%BASEDIR%\dev\gnu\sed.exe" (
   move "%BASEDIR%\dev\tmp\gnu\*" "%BASEDIR%\dev\gnu"
   rmdir /S /Q "%BASEDIR%\dev\tmp" 2>nul
 )
-
 
 set GNUURLMain=https://downloads.sourceforge.net/project/gnuwin32/grep/2.5.4/grep-2.5.4-bin.zip
 call "%~dp0DownloadFile.bat" %GNUURLMain%

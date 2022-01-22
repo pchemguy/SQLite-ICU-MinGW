@@ -63,7 +63,6 @@ if not exist "%TMPDIR%\tclConfig.sh" (
   nmake -f makefile.vc release
   if not "/%ErrorLevel%/"=="/0/" (set ResultCode=%ErrorLevel%)
 ) 1>>"%STDOUTLOG%" 2>>"%STDERRLOG%"
-::if exist "%BASEDIR%\build\tcl\win\Release*\"
 
 echo ============= Installing TCL ============
 if not exist "%INSTALLDIR%\bin\tclsh.exe" (
@@ -115,5 +114,7 @@ set DISTRODIR=
 set BUILDDIR=
 set INSTALLDIR=
 set ResultCode=
+set STDOUTLOG=
+set STDERRLOG=
 
 exit /b 0
