@@ -1,51 +1,75 @@
 @echo off
 set BASEDIR=%~dp0
 set BASEDIR=%BASEDIR:~0,-1%
+set PKGDIR=%BASEDIR%\pkg
+set BLDDIR=%BASEDIR%\bld
+set DEVDIR=%BASEDIR%\dev
+set TMPDIR=%DEVDIR%\tmp
 
-if not exist "%BASEDIR%\distro" mkdir "%BASEDIR%\distro"
-pushd "%BASEDIR%\distro"
+if not exist "%PKGDIR%" mkdir "%PKGDIR%"
+pushd "%PKGDIR%"
 
-set GNUURLMain=https://downloads.sourceforge.net/project/gnuwin32/sed/4.2.1/sed-4.2.1-bin.zip
+set GNU32URL=https://downloads.sourceforge.net/project/gnuwin32/{PKG}.zip
+
+set PKGNAM=sed
+set PKGVER=4.2.1
+set PKGBAS=%PKGNAM%/%PKGVER%/%PKGNAM%-%PKGVER%-
+
+set GNUURLMain=!GNU32URL:{PKG}=%PKGBAS%bin!
 call "%~dp0DownloadFile.bat" %GNUURLMain%
 set GNUArcMain=%FileName%
-set GNUURLDep=https://downloads.sourceforge.net/project/gnuwin32/sed/4.2.1/sed-4.2.1-dep.zip
+set GNUURLDep=!GNU32URL:{PKG}=%PKGBAS%dep!
 call "%~dp0DownloadFile.bat" %GNUURLDep%
 set GNUArcDep=%FileName%
 
 
 :: Expand archive
-if not exist "%BASEDIR%\dev\gnu" mkdir "%BASEDIR%\dev\gnu"
+if not exist "%DEVDIR%\gnu" mkdir "%DEVDIR%\gnu"
 
-if not exist "%BASEDIR%\dev\gnu\sed.exe" (
-  if exist "%BASEDIR%\dev\tmp" rmdir /S /Q "%BASEDIR%\dev\tmp" 2>nul
-  mkdir "%BASEDIR%\dev\tmp"
-  call "%~dp0ExtractArchive.bat" %GNUArcMain% "%BASEDIR%\dev\tmp"
-  call "%~dp0ExtractArchive.bat" %GNUArcDep% "%BASEDIR%\dev\tmp"
-  move "%BASEDIR%\dev\tmp\bin" "%BASEDIR%\dev\tmp\gnu"
-  move "%BASEDIR%\dev\tmp\gnu\*" "%BASEDIR%\dev\gnu"
-  rmdir /S /Q "%BASEDIR%\dev\tmp" 2>nul
+if not exist "%DEVDIR%\gnu\sed.exe" (
+  if exist "%TMPDIR%" rmdir /S /Q "%TMPDIR%" 2>nul
+  mkdir "%TMPDIR%"
+  call "%~dp0ExtractArchive.bat" %GNUArcMain% "%TMPDIR%"
+  call "%~dp0ExtractArchive.bat" %GNUArcDep% "%TMPDIR%"
+  move "%TMPDIR%\bin" "%TMPDIR%\gnu"
+  move "%TMPDIR%\gnu\*" "%DEVDIR%\gnu"
+  rmdir /S /Q "%TMPDIR%" 2>nul
 )
 
-set GNUURLMain=https://downloads.sourceforge.net/project/gnuwin32/grep/2.5.4/grep-2.5.4-bin.zip
+set PKGNAM=grep
+set PKGVER=2.5.4
+set PKGBAS=%PKGNAM%/%PKGVER%/%PKGNAM%-%PKGVER%-
+
+set GNUURLMain=!GNU32URL:{PKG}=%PKGBAS%bin!
 call "%~dp0DownloadFile.bat" %GNUURLMain%
 set GNUArcMain=%FileName%
-set GNUURLDep=https://downloads.sourceforge.net/project/gnuwin32/grep/2.5.4/grep-2.5.4-dep.zip
+set GNUURLDep=!GNU32URL:{PKG}=%PKGBAS%dep!
 call "%~dp0DownloadFile.bat" %GNUURLDep%
 set GNUArcDep=%FileName%
 
 
 :: Expand archive
-if not exist "%BASEDIR%\dev\gnu\grep.exe" (
-  if exist "%BASEDIR%\dev\tmp" rmdir /S /Q "%BASEDIR%\dev\tmp" 2>nul
-  mkdir "%BASEDIR%\dev\tmp"
-  call "%~dp0ExtractArchive.bat" %GNUArcMain% "%BASEDIR%\dev\tmp"
-  call "%~dp0ExtractArchive.bat" %GNUArcDep% "%BASEDIR%\dev\tmp"
-  move "%BASEDIR%\dev\tmp\bin" "%BASEDIR%\dev\tmp\gnu"
-  move "%BASEDIR%\dev\tmp\gnu\*" "%BASEDIR%\dev\gnu"
-  rmdir /S /Q "%BASEDIR%\dev\tmp" 2>nul
+if not exist "%DEVDIR%\gnu\grep.exe" (
+  if exist "%TMPDIR%" rmdir /S /Q "%TMPDIR%" 2>nul
+  mkdir "%TMPDIR%"
+  call "%~dp0ExtractArchive.bat" %GNUArcMain% "%TMPDIR%"
+  call "%~dp0ExtractArchive.bat" %GNUArcDep% "%TMPDIR%"
+  move "%TMPDIR%\bin" "%TMPDIR%\gnu"
+  move "%TMPDIR%\gnu\*" "%DEVDIR%\gnu"
+  rmdir /S /Q "%TMPDIR%" 2>nul
 )
 
-set Path=%BASEDIR%\dev\gnu;%Path%
+set Path=%DEVDIR%\gnu;%Path%
+
+:: Cleanup
+set GNU32URL=
+set GNUURLMain=
+set GNUArcMain=
+set GNUURLDep=
+set GNUArcDep=
+set PKGNAM=
+set PKGVER=
+set PKGBAS=
 
 popd
 

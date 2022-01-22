@@ -20,18 +20,20 @@ set ZLIB_LIB=
 
 set BASEDIR=%~dp0
 set BASEDIR=%BASEDIR:~0,-1%
-set ZLIB_HOME=%BASEDIR%\dev\zlib
-set ZLIB_DISTRO=%BASEDIR%\distro\zlib
-set ZLIB_BUILD=%BASEDIR%\build\zlib
+set PKGDIR=%BASEDIR%\pkg
+set BLDDIR=%BASEDIR%\bld
+set DEVDIR=%BASEDIR%\dev
+set BLDZLIB=%BASEDIR%\bld\zlib
+set HOMZLIB=%BASEDIR%\dev\zlib
 
-set STDOUTLOG=%BASEDIR%\stdoutzlib.log
-set STDERRLOG=%BASEDIR%\stderrzlib.log
-del "%STDOUTLOG%" 2>nul
-del "%STDERRLOG%" 2>nul
+set OUTZLIB="%BASEDIR%\zlibout.log"
+set ERRZLIB="%BASEDIR%\zliberr.log"
+del %OUTZLIB% 2>nul
+del %ERRZLIB% 2>nul
 set ResultCode=0
 
-if not exist "%BASEDIR%\distro" mkdir "%BASEDIR%\distro"
-pushd "%BASEDIR%\distro"
+if not exist "%PKGDIR%" mkdir "%PKGDIR%"
+pushd "%PKGDIR%"
 
 :: Retrieve ChangeLog.txt and extract the latest release version (at the top).
 set ChangeLogURL=https://zlib.net/ChangeLog.txt
@@ -40,29 +42,32 @@ if not "/%ErrorLevel%/"=="/0/" (set ResultCode=%ErrorLevel%)
 set CommandText=type %FileName%
 for /f "Usebackq tokens=1,3 skip=2 delims= " %%G in (`%CommandText%`) do (
   if "/%%G/"=="/Changes/" (
-    set ZLibVersion=%%H
+    set PKGVER=%%H
     goto :VERSION_SET
   )
 )
 :VERSION_SET
 
-:: Expand archive
-set DistroName=zlib-%ZLibVersion%.tar.gz
-set ReleaseURL=https://zlib.net/%DistroName%
+:: Download
+cd /d "%PKGDIR%"
+set PKGNAM=zlib-%PKGVER%.tar.gz
+set ReleaseURL=https://zlib.net/%PKGNAM%
 call "%~dp0DownloadFile.bat" %ReleaseURL%
 if not "/%ErrorLevel%/"=="/0/" (set ResultCode=%ErrorLevel%)
-if not exist "%ZLIB_BUILD%\Makefile" (
-  rmdir /S /Q "%ZLIB_BUILD%" 2>nul
-  call "%~dp0ExtractArchive.bat" %DistroName% "%BASEDIR%\build"
+
+:: Expand
+if not exist "%BLDZLIB%\Makefile" (
+  rmdir /S /Q "%BLDZLIB%" 2>nul
+  call "%~dp0ExtractArchive.bat" %PKGNAM% "%BLDDIR%"
   if not "/%ErrorLevel%/"=="/0/" (set ResultCode=%ErrorLevel%)
-  cd /d "%BASEDIR%\build"
-  move "zlib-%ZLibVersion%" "zlib"
-) 1>>"%STDOUTLOG%" 2>>"%STDERRLOG%"
+  cd /d "%BLDDIR%"
+  move "zlib-%PKGVER%" "zlib"
+)
 
 :: Build
-cd /d "%ZLIB_BUILD%"
+cd /d "%BLDZLIB%"
 if "/%USE_STDCALL%/"=="/1/" (set ZLIB_LOC=-DZLIB_WINAPI)
-nmake -f win32/Makefile.msc LOC="%ZLIB_LOC%" clean all 1>>"%STDOUTLOG%" 2>>"%STDERRLOG%"
+nmake -f win32/Makefile.msc LOC="%ZLIB_LOC%" clean all 1>>%OUTZLIB% 2>>%ERRZLIB%
 set ResultCode=%ErrorLevel%
 if not "/%ResultCode%/"=="/0/" (
   echo Error making ZLIB.
@@ -70,21 +75,21 @@ if not "/%ResultCode%/"=="/0/" (
 )
 
 :: Collect binaries
-rmdir /S /Q "%ZLIB_HOME%" 2>nul
-mkdir "%ZLIB_HOME%\lib"
+rmdir /S /Q "%HOMZLIB%" 2>nul
+mkdir "%HOMZLIB%\lib"
 set ZLIB_LIBStatic=zlib.lib
-copy /Y "%ZLIB_BUILD%\%ZLIB_LIBStatic%" "%ZLIB_HOME%\lib"
+copy /Y "%BLDZLIB%\%ZLIB_LIBStatic%" "%HOMZLIB%\lib"
 set ZLIB_LIBImpLib=zdll.lib
-copy /Y "%ZLIB_BUILD%\%ZLIB_LIBImpLib%" "%ZLIB_HOME%\lib"
+copy /Y "%BLDZLIB%\%ZLIB_LIBImpLib%" "%HOMZLIB%\lib"
 set ZLIB_LIBShared=zlib1.dll
-copy /Y "%ZLIB_BUILD%\%ZLIB_LIBShared%" "%ZLIB_HOME%\lib"
-mkdir "%ZLIB_HOME%\include"
-copy /Y "%ZLIB_BUILD%\zlib.h" "%ZLIB_HOME%\include"
-copy /Y "%ZLIB_BUILD%\zconf.h" "%ZLIB_HOME%\include"
+copy /Y "%BLDZLIB%\%ZLIB_LIBShared%" "%HOMZLIB%\lib"
+mkdir "%HOMZLIB%\include"
+copy /Y "%BLDZLIB%\zlib.h" "%HOMZLIB%\include"
+copy /Y "%BLDZLIB%\zconf.h" "%HOMZLIB%\include"
 
 :: Set building flags
-set ZLIB_LIBPATH=/LIBPATH:"%ZLIB_HOME%\lib" %ZLIB_LIBPATH%
-set ZLIB_INCLUDE=-I"%ZLIB_HOME%\include" %ZLIB_INCLUDE%
+set ZLIB_LIBPATH=/LIBPATH:"%HOMZLIB%\lib" %ZLIB_LIBPATH%
+set ZLIB_INCLUDE=-I"%HOMZLIB%\include" %ZLIB_INCLUDE%
 echo.
 if "/%ZLIB_STDCALL%/"=="/1/" (
   echo Building WINAPI
@@ -129,11 +134,10 @@ set URL=
 set ZLIB_LIBStatic=
 set ZLIB_LIBShared=
 set ZLIB_LIBImpLib=
-set ZLibVersion=
+set PKGVER=
 set BASEDIR=
-set ZLIB_HOME=
-set ZLIB_DISTRO=
-set ZLIB_BUILD=
+set HOMZLIB=
+set BLDZLIB=
 
 popd
 
