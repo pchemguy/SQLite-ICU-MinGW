@@ -27,6 +27,10 @@ pushd "%PKGDIR%"
 set NASMURLPrefix=https://www.nasm.us/pub/nasm/stable
 if not exist "nasm-win32-info.txt" (
   call "%~dp0DownloadFile.bat" "%NASMURLPrefix%/win32" "nasm-win32-info.txt"
+  ::
+  :: These two commands are necessary, because DownloadFile.bat is focused
+  :: on downloading files and invalidates saved web pages due to size mismatch.
+  ::
   if exist nasm-win32-info.txt.size.$$$ del /Q nasm-win32-info.txt.size.$$$
   if exist nasm-win32-info.txt.$$$ move nasm-win32-info.txt.$$$ nasm-win32-info.txt
 )

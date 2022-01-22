@@ -1,5 +1,24 @@
 @echo off
-
+::
+:: Verifies URL.
+::
+:: The script uses cURL to verify that the given URL returns "HTTP/1.1 200 OK"
+:: (follows any redirects). The script also attempts to determine the file size
+:: and final URL (if redirected). Presently, the final URL is not returned.
+::
+:: Sets:
+::   "FileLen" - file size (this value, if set, is likely meaningless for a web
+::               page).
+::
+:: Arguments:
+::   %1 - URL
+::
+:: On failure:
+::   ResultCode <> 0
+::
+:: Examples:
+::   URLInfo.bat https://github.com/unicode-org/icu/releases/download/release-70-1/icu4c-70_1-Win32-MSVC2019.zip
+::
 setlocal EnableDelayedExpansion
 
 

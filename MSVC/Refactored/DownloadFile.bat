@@ -2,7 +2,7 @@
 ::
 :: Downloads file via cURL.
 ::
-:: Set current directory to the distro download directory before calling.
+:: The script uses cURL to download a file and verifies file size (via URLInfo.bat).
 ::
 :: Arguments:
 ::   %1 - URL
@@ -32,6 +32,9 @@ if not %ResultCode% EQU 0 (
 set FileName=%~2
 if "/%FileName%/"=="//" (call :EXTRACT_FILENAME %FileURL%)
 
+:: Before downloading %FileName% file, check if %FileName%.size file exists.
+:: If not, get file size via URLInfo.bat and save it to %FileName%.size.
+::
 if not exist "%FileName%.size" (
   call "%~dp0URLInfo.bat" %FileURL%
   set ResultCode=%ErrorLevel%
@@ -46,6 +49,10 @@ for /f "Usebackq delims=" %%G in ("%FileName%.size") do (
   set FileLen=%%G
 )
 
+:: If the %FileName% file has been downloaded and saved previously, its size
+:: should be in the %FileName%.size file. If the actual file size does not
+:: match the associated meta value, tha cached copy is deleted.
+::
 if exist "%FileName%" (
   call :SET_FILEZIE "%FileName%"
   if "/!FileSize!/"=="/%FileLen%/" (
@@ -62,6 +69,8 @@ if exist "%FileName%" (
   )
 )
 
+:: Download the file
+::
 echo ===== Downloading %FileName% =====
 curl -L %FileURL% --output "%FileName%"
 set ResultCode=%ErrorLevel%
@@ -70,6 +79,9 @@ if %ResultCode% NEQ 0 (
   exit /b !ResultCode!
 )
 
+:: Verify that the size of the downloaded file matches the saved value. If not,
+:: both the target file and its companion holding the size are renamed as invalid.
+::
 call :SET_FILEZIE "%FileName%"
 if "/!FileSize!/"=="/%FileLen%/" (
   echo ----- Downloaded %FileName%  -----
@@ -88,16 +100,22 @@ exit /b %ResultCode%
 
 
 :: ============================================================================
+:: Extracts file name from a URL [the last part of the URL].
+:: This routine expects a full URL including protocol. The "://" is replaced
+:: with the space, so that when the resulting string is passed as a paramter
+:: via "call" to :SET_FILENAME, the latter recieves the part without protocol
+:: as a second parameter. If the URL contains GET parameters [?...], this part
+:: is also separated from the URL [? is replaced with space].
+::
 :EXTRACT_FILENAME
 set URL=%~1
-set URL=%URL:http://=%
-set URL=%URL:https://=%
+set URL=%URL:://= %
 set URL=%URL:?= %
 call :SET_FILENAME %URL%
 exit /b 0
 
 :SET_FILENAME
-set FileName=%~nx1
+set FileName=%~nx2
 exit /b 0
 
 :SET_FILEZIE
