@@ -47,7 +47,7 @@ if not exist "%HOMPERL%\bin\perl.exe" (
   if not "/%ErrorLevel%/"=="/0/" exit /b %ErrorLevel%
 )
 
-set Path=%HOMPERL%\bin;%Path%
+if "/!Path!/"=="/!Path:%HOMPERL%\bin=!/" set Path=%HOMPERL%\bin;%Path%
 
 echo.
 echo ============= Perl installation is complete. ============

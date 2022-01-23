@@ -93,7 +93,7 @@ if not exist "%HOMTCL%\bin\wish.exe" (
   (echo.>>_wish.exe) & xcopy /Y wish*.exe _wish.exe & move _wish.exe wish.exe
 ) 1>>%OUTTCL% 2>>%ERRTCL%
 
-set Path=%HOMTCL%\bin;%Path%
+if "/!Path!/"=="/!Path:%HOMTCL%\bin=!/" set Path=%HOMTCL%\bin;%Path%
 cd /d "%BASEDIR%"
 
 echo.

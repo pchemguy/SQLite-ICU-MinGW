@@ -129,8 +129,8 @@ echo ResultCode: %ResultCode% (^>0 - errors occured) . Check the log files for e
 echo.
 
 :: Cleanup
-set ZLIB_SHARED=
 set URL=
+set ZLIB_SHARED=
 set ZLIB_LIBStatic=
 set ZLIB_LIBShared=
 set ZLIB_LIBImpLib=
