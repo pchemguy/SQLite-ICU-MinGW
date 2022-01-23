@@ -88,9 +88,13 @@ copy /Y "%BLDZLIB%\zlib.h" "%HOMZLIB%\include"
 copy /Y "%BLDZLIB%\zconf.h" "%HOMZLIB%\include"
 
 :: Set building flags
-set ZLIB_LIBPATH=/LIBPATH:"%HOMZLIB%\lib" %ZLIB_LIBPATH%
-set ZLIB_INCLUDE=-I"%HOMZLIB%\include" %ZLIB_INCLUDE%
-echo.
+::   /LIBPATH:"%HOMZLIB%\lib"
+set ZLIB_LIBPATH=%HOMZLIB%\lib
+if "/!LIBPATH!/"=="/!LIBPATH:%ZLIB_LIBPATH%=!/" set LIBPATH=%ZLIB_LIBPATH%;%LIBPATH%
+::   -I"%HOMZLIB%\include"
+set ZLIB_INCLUDE=%HOMZLIB%\include
+if "/!INCLUDE!/"=="/!INCLUDE:%ZLIB_INCLUDE%=!/" set INCLUDE=%ZLIB_INCLUDE%;%INCLUDE%
+
 if "/%ZLIB_STDCALL%/"=="/1/" (
   echo Building WINAPI
   set ZLIB_CFLAGS=-DZLIB_WINAPI !ZLIB_CFLAGS!
@@ -107,7 +111,6 @@ if not "/%ZLIB_SHARED%/"=="/0/" (
   echo STATIC ZLib setting requested.
   set ZLIB_LIB=!ZLIB_LIBStatic! !ZLIB_LIB!
 )
-echo.
 
 echo.
 echo ============= ZLIB settings ============
@@ -138,7 +141,24 @@ set PKGVER=
 set BASEDIR=
 set HOMZLIB=
 set BLDZLIB=
+set ChangeLogURL=
+set FileLen=
+set FileName=
+set FileSize=
+set FileURL=
+set Flag=
+set Folder=
+set ReleaseURL=
+set OUTZLIB=
+set ERRZLIB=
+set CommandPromptType=
+set CommandText=
+set ArchiveName=
 
 popd
 
 exit /b 0
+
+
+
+
