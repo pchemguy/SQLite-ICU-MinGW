@@ -42,18 +42,26 @@ if not exist "%FileName%.size" (
     echo ----- URL error -----
     exit /b !ResultCode!
   )
-  echo !FileLen!>"%FileName%.size"
+  if not "/!FileLen!/"=="//" echo !FileLen!>"%FileName%.size"
 )
 
-for /f "Usebackq delims=" %%G in ("%FileName%.size") do (
-  set FileLen=%%G
+if exist "%FileName%.size" (
+  for /f "Usebackq delims=" %%G in ("%FileName%.size") do (
+    set FileLen=%%G
+  )
 )
 
 :: If the %FileName% file has been downloaded and saved previously, its size
 :: should be in the %FileName%.size file. If the actual file size does not
-:: match the associated meta value, tha cached copy is deleted.
+:: match the associated meta value, the cached copy is deleted.
 ::
 if exist "%FileName%" (
+  if "/%FileLen%/"=="//" (
+    echo ========= Using previously downloaded %FileName% =========
+    echo Warning: file size information is not available.
+    echo ----------------------------------------------------------
+    exit /b 0
+  )
   call :SET_FILEZIE "%FileName%"
   if "/!FileSize!/"=="/%FileLen%/" (
     echo ========= Using previously downloaded %FileName% =========
@@ -81,8 +89,15 @@ if %ResultCode% NEQ 0 (
 
 :: Verify that the size of the downloaded file matches the saved value. If not,
 :: both the target file and its companion holding the size are renamed as invalid.
+:: Skip check if size information is not available.
 ::
-call :SET_FILEZIE "%FileName%"
+if "/%FileLen%/"=="//" (
+  echo Warning: file size information is not available.
+  set FileSize=
+) else (
+  call :SET_FILEZIE "%FileName%"
+)
+
 if "/!FileSize!/"=="/%FileLen%/" (
   echo ----- Downloaded %FileName%  -----
 ) else (
