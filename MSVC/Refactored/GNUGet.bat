@@ -74,6 +74,14 @@ set GNUArcDep=
 set PKGNAM=
 set PKGVER=
 set PKGBAS=
+set URL=
+set FileLen=
+set FileName=
+set FileSize=
+set FileURL=
+set Flag=
+set Folder=
+set ArchiveName=
 
 popd
 

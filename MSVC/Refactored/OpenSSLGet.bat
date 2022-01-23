@@ -110,26 +110,39 @@ set HOMHOM=%HOMSSL%\%ARCH%
   )
 ) 1>>%OUTSSL% 2>>%ERRSSL%
 
-cd /d "%BASEDIR%"
-exit /b 0
-
-
-exit /b 0
-
-set Path=%HOMNASM%\%ARCH%;%Path%
 
 echo.
-echo ============= NASM installation is complete. ============
+echo ============= OpenSSL installation is complete. ============
 echo ResultCode: %ResultCode% (^>0 - errors occured). Check the log files for errors. 
 echo.
 
+
+:: Set building flags
+:: /LIBPATH:"%HOMHOM%\core\lib"
+set OpenSSL_LIBPATH=%HOMHOM%\core\lib
+if "/!LIBPATH!/"=="/!LIBPATH:%OpenSSL_LIBPATH%=!/" set LIBPATH=%OpenSSL_LIBPATH%;%LIBPATH%
+:: -I"%HOMHOM%\core\include"
+set OpenSSL_INCLUDE=%HOMHOM%\core\include
+if "/!INCLUDE!/"=="/!INCLUDE:%OpenSSL_INCLUDE%=!/" set INCLUDE=%OpenSSL_INCLUDE%;%INCLUDE%
+set OpenSSL_LIB_IMPORT=libcrypto.lib libssl.lib
+set OpenSSL_LIB_STATIC=libcrypto_static.lib libssl_static.lib
+
+echo ========== OpenSSL linking flags ==========
+echo OpenSSL_INCLUDE=%OpenSSL_INCLUDE%
+echo OpenSSL_LIBPATH=%OpenSSL_LIBPATH%
+echo OpenSSL_LIB_STATIC=%OpenSSL_LIB_STATIC%
+echo OpenSSL_LIB_IMPORT=%OpenSSL_LIB_IMPORT%
+echo ----------------------------------------
+
+
 :: Cleanup
-set HOMNASM=
-set NASMURLPrefix=
-set URLx32=
-set NASMx32File=
-set URLx64=
-set NASMx64File=
+set HOMSSL=
+set BLDSSL=
+set OUTSSL=
+set ERRSSL=
+set InfoURL=
+set BLDBLD=
+set HOMHOM=
 
 popd
 

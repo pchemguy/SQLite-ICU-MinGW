@@ -48,8 +48,14 @@ if "/%VSCMD_ARG_TGT_ARCH%/"=="/x86/" set "ARCH="
 if not defined ARCH set "ARCH="
 
 set Path=%HOMICU%\bin%ARCH%;%Path%
-set ICU_LIBPATH=/LIBPATH:"%HOMICU%\lib%ARCH%"
-set ICU_INCLUDE=-I"%HOMICU%\include"
+if "/!Path!/"=="/!Path:%HOMICU%\bin%ARCH%=!/" set Path=%HOMICU%\bin%ARCH%;%Path%
+
+::/LIBPATH:"%HOMICU%\lib%ARCH%"
+set ICU_LIBPATH=%HOMICU%\lib%ARCH%
+if "/!LIBPATH!/"=="/!LIBPATH:%ICU_LIBPATH%=!/" set LIBPATH=%ICU_LIBPATH%;%LIBPATH%
+:: -I"%HOMICU%\include"
+set ICU_INCLUDE=%HOMICU%\include
+if "/!INCLUDE!/"=="/!INCLUDE:%ICU_INCLUDE%=!/" set INCLUDE=%ICU_INCLUDE%;%INCLUDE%
 set ICU_LIBImpLib=icudt70.lib icuuc70.lib icuin70.lib icutu70.lib icuio70.lib
 set ICU_LIB=%ICU_LIBImpLib%
 
@@ -75,6 +81,10 @@ set ZipSrcURL=
 set TarSrcURL=
 set ICUx32File=
 set ICUx64File=
+set ReleaseAPI=
+set RepoName=
+set RepoOwner=
+set ICU_LIBImpLib=
 
 popd
 
