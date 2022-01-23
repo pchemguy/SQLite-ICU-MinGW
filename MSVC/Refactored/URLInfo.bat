@@ -41,9 +41,9 @@ if not %ResultCode% EQU 0 (
 
 set CommandText=URLInfo.txt
 for /f "Usebackq tokens=1,2 delims= " %%G in (%CommandText%) do (
-  if "%%G"=="HTTP/1.1"        (set ResCod=%%H) else (
-  if "%%G"=="Location:"       (set ResURL=%%H) else (
-  if "%%G"=="Content-Length:" (set ResLen=%%H) ))
+  if /I "%%G"=="HTTP/1.1"        (set ResCod=%%H) else (
+  if /I "%%G"=="Location:"       (set ResURL=%%H) else (
+  if /I "%%G"=="Content-Length:" (set ResLen=%%H) ))
 )
 
 if "/%ResCod%/"=="/404/" (
