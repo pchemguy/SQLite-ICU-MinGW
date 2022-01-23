@@ -108,5 +108,18 @@ set TCLURL=
 set TCLARC=
 set TKURL=
 set TKARC=
+set HOMTCL=
+set OUTTCL=
+set ERRTCL=
+set URL=
+set FileLen=
+set FileName=
+set FileSize=
+set FileURL=
+set Flag=
+set Folder=
+set ArchiveName=
+set CommandText=
+set TMPDIR=
 
 exit /b 0

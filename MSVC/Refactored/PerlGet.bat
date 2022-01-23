@@ -59,6 +59,15 @@ set HOMPERL=
 set PERLURLPrefix=
 set URLx32=
 set Perlx32File=
+set URL=
+set FileLen=
+set FileName=
+set FileSize=
+set FileURL=
+set Flag=
+set Folder=
+set ArchiveName=
+set CommandText=
 
 popd
 

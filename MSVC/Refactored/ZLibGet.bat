@@ -151,7 +151,6 @@ set Folder=
 set ReleaseURL=
 set OUTZLIB=
 set ERRZLIB=
-set CommandPromptType=
 set CommandText=
 set ArchiveName=
 

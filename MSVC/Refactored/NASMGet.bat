@@ -76,6 +76,16 @@ set URLx32=
 set NASMx32File=
 set URLx64=
 set NASMx64File=
+set URL=
+set FileLen=
+set FileName=
+set FileSize=
+set FileURL=
+set Flag=
+set Folder=
+set ArchiveName=
+set CommandText=
+set NASM_VERSION=
 
 popd
 

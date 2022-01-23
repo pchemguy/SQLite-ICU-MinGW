@@ -85,6 +85,16 @@ set ReleaseAPI=
 set RepoName=
 set RepoOwner=
 set ICU_LIBImpLib=
+set PatternURL=
+set FileLen=
+set FileName=
+set FileSize=
+set FileURL=
+set Flag=
+set Folder=
+set ArchiveName=
+set CommandText=
+set InfoFile=
 
 popd
 

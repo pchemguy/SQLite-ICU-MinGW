@@ -91,4 +91,8 @@ for /f "Usebackq tokens=1,2 delims= " %%G in (`%CommandText%`) do (
 echo ----------------------------------------------------------------------------------
 echo.
 
+:: Cleanup
+set AttrName=
+set AttrValue=
+
 exit /b %ResultCode%
