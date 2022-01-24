@@ -31,7 +31,9 @@ set BASEDIR=%BASEDIR:~0,-1%
 set PKGDIR=%BASEDIR%\pkg
 set BLDDIR=%BASEDIR%\bld
 set DEVDIR=%BASEDIR%\dev
-if /I "/%~1/"=="/SQLCipher/" (set DBENG=sqlcipher) else (set DBENG=sqlite)
+if not defined DBENG (
+  set DBENG=sqlite
+) else (if /I not "/%DBENG:~0,3%/"=="/sql/" set DBENG=sqlite)
 set BLDSQL=%BASEDIR%\bld\%DBENG%
 set BLDBLD=%BASEDIR%\bld\%DBENG%-bld\%ARCH%
 set HOMSQL=%BASEDIR%\dev\%DBENG%
@@ -49,11 +51,14 @@ if not defined USE_STDCALL (
 
 call :SET_TARGETS %*
 call :SETENV 1>>%OUTSQL% 2>>%ERRSQL%
+echo Building %DBENG% ...
+echo WITH_EXTRA_EXT=%WITH_EXTRA_EXT%
+echo USE_STDCALL=%USE_STDCALL%
+echo USE_ZLIB=%USE_ZLIB%
+echo USE_SQLAR=%USE_SQLAR%
+echo USE_LIBSHELL=%USE_LIBSHELL%
 
-:: call :DOWNLOAD_SQLCIPHER
-:: if %ERROR_STATUS% NEQ 0 exit /b 1
-:: call :EXTRACT_SQLCIPHER
-call SQLiteCipherSourceGet.bat %DBENG%
+call "%~dp0SQLiteCipherSourceGet.bat" %DBENG%
 if %ERROR_STATUS% NEQ 0 exit /b 1
 if not exist "%BLDSQL%" (
   echo Distro directory does not exists. Exiting
@@ -78,7 +83,7 @@ call :BUILD_OPENSSL 1>>%OUTSQL% 2>>%ERRSQL%
 if not exist "%BLDBLD%" mkdir "%BLDBLD%"
 (
   copy /Y "%BASEDIR%\scripts\build\*" "%BLDBLD%"
-  xcopy /H /Y /B /E /Q "%BASEDIR%\scripts\%DBENG%" "%BLDSQL%"
+  xcopy /H /Y /B /E /Q "%BASEDIR%\scripts\distro" "%BLDSQL%"
   cd /d "%BLDBLD%"
   
   pushd .
@@ -385,13 +390,6 @@ if %WITH_EXTRA_EXT% EQU 1 (
 ) else (
   echo ========== EXTRA EXTENSIONS ARE DISABLED =========
   echo ============ TEST FUNCTIONS ARE DISABLED =========
-  set TARGETDIR=%BLDSQL%\tool
-  set FILENAME=mksqlite3c.tcl
-  pushd "!TARGETDIR!"
-  if exist "!FILENAME!.bak" (
-    echo Resetting !FILENAME!
-    copy /Y "!FILENAME!.bak" "!FILENAME!"
-  )
   popd
 )
 
@@ -413,61 +411,6 @@ set LTLIBS=libcrypto.lib %LTLIBS%
 set LTLIBPATHS=/LIBPATH:"%OPENSSL_PREFIX%\lib" %LTLIBPATHS%
 
 exit /b 0
-
-
-:: ============================================================================
-:DOWNLOAD_SQLCIPHER
-set DISTRO=sqlcipher.zip
-set PKGNAME=SQLCipher
-set REPO=sqlcipher/sqlcipher
-set URL=https://github.com/%REPO%/archive/refs/heads/master.zip
-
-if not exist "%DISTRO%" (
-  echo ===== Downloading current %PKGNAME% release =====
-  curl -L %URL% --output "%DISTRO%"
-  if %ErrorLevel% EQU 0 (
-    echo ----- Downloaded  current %PKGNAME% release -----
-  ) else (
-    set ERROR_STATUS=%ErrorLevel%
-    echo Error downloading %PKGNAME% distro.
-    echo Errod code: !ERROR_STATUS!
-  )
-) else (
-  echo ===== Using previously downloaded %PKGNAME% distro =====
-)
-
-exit /b %ERROR_STATUS%
-
-
-:: ============================================================================
-:EXTRACT_SQLCIPHER
-set DISTROFILE=sqlcipher.zip
-set SRCDIR=%DISTROFILE:.zip=%
-set PKGNAME=SQLCipher
-set PROBEFILE=Makefile.msc
-
-if not exist "%SRCDIR%\%PROBEFILE%" (
-  echo ===== Extracting %PKGNAME% distro =====
-  tar -xf "%DISTROFILE%"
-  if %ErrorLevel% EQU 0 (
-    echo ----- Extracted  %PKGNAME% distro -----
-  ) else (
-    set ERROR_STATUS=%ErrorLevel%
-    echo Error extracting %PKGNAME% distro.
-    echo Errod code: !ERROR_STATUS!
-  )
-  rmdir /S /Q "%SRCDIR%" 2>nul
-  move "%SRCDIR%-master" "%SRCDIR%"
-) else (
-  echo ===== Using previously extracted %PKGNAME% distro =====
-)
-
-if not exist "%SRCDIR%" (
-  echo Distro directory does not exists. Exiting
-  exit /b 1
-)
-
-exit /b %ERROR_STATUS%
 
 
 :: ============================================================================
