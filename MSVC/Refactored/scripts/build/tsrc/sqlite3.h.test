@@ -1,0 +1,9 @@
+typedef sqlite_uint64 sqlite3_uint64;
+
+/*
+** Verifies handling of 64-bit integers
+**
+** Add the following test function, returning libversion as a 64-bit int to
+** be used for testing purposes, especially in the 32-bit VBA environment.
+*/
+SQLITE_API sqlite3_int64 SQLITE_APICALL sqlite3_libversion_number_i64(void);
