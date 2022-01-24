@@ -79,16 +79,16 @@ if not "/%ResultCode%/"=="/0/" (
 )
 
 :: Collect binaries
-if exist "%HOMZLIB%" rmdir /S /Q "%HOMZLIB%" 2>nul
+if exist "%HOMZLIB%" rmdir /S /Q "%HOMZLIB%" 1>nul
 mkdir "%HOMZLIB%"
-set ZLIB_LIBStatic=zlib.lib
-copy /Y "%BLDZLIB%\%ZLIB_LIBStatic%" "%HOMZLIB%"
-set ZLIB_LIBImpLib=zdll.lib
-copy /Y "%BLDZLIB%\%ZLIB_LIBImpLib%" "%HOMZLIB%"
-set ZLIB_LIBShared=zlib1.dll
-copy /Y "%BLDZLIB%\%ZLIB_LIBShared%" "%HOMZLIB%"
-copy /Y "%BLDZLIB%\zlib.h" "%HOMZLIB%"
-copy /Y "%BLDZLIB%\zconf.h" "%HOMZLIB%"
+set ZLIB_LIBSTATIC=zlib.lib
+copy /Y "%BLDZLIB%\%ZLIB_LIBSTATIC%" "%HOMZLIB%" 1>nul
+set ZLIB_LIBIMPORT=zdll.lib
+copy /Y "%BLDZLIB%\%ZLIB_LIBIMPORT%" "%HOMZLIB%" 1>nul
+set ZLIB_LIBSHARED=zlib1.dll
+copy /Y "%BLDZLIB%\%ZLIB_LIBSHARED%" "%HOMZLIB%" 1>nul
+copy /Y "%BLDZLIB%\zlib.h" "%HOMZLIB%" 1>nul
+copy /Y "%BLDZLIB%\zconf.h" "%HOMZLIB%" 1>nul
 
 :: Set building flags
 ::   /LIBPATH:"%HOMZLIB%\lib"
@@ -110,25 +110,29 @@ if "/%ZLIB_STDCALL%/"=="/1/" (
 if not "/%ZLIB_SHARED%/"=="/0/" (
   echo SHARED ZLib setting requested.
   set ZLIB_CFLAGS=-DZLIB_DLL !ZLIB_CFLAGS!
-  set ZLIB_LIB=!ZLIB_LIBImpLib! !ZLIB_LIB!
+  set ZLIB_LIB=!ZLIB_LIBIMPORT! !ZLIB_LIB!
 ) else (
   echo STATIC ZLib setting requested.
-  set ZLIB_LIB=!ZLIB_LIBStatic! !ZLIB_LIB!
+  set ZLIB_LIB=!ZLIB_LIBSTATIC! !ZLIB_LIB!
 )
 
 echo.
 echo ============= ZLIB settings ============
-echo ZLIB_STDCALL=%ZLIB_STDCALL%
-echo ZLIB_SHARED=%ZLIB_SHARED%
+echo ZLIB_STDCALL   = %ZLIB_STDCALL%
+echo ZLIB_SHARED    = %ZLIB_SHARED%
 echo ----------------------------------------
 echo.
 echo ========== ZLIB linking flags ==========
-echo ZLIB_CFLAGS=%ZLIB_CFLAGS%
-echo ZLIB_INCLUDE=%ZLIB_INCLUDE%
-echo ZLIB_LIBPATH=%ZLIB_LIBPATH%
-echo ZLIB_LIB=%ZLIB_LIB%
+echo ZLIB_CFLAGS    = %ZLIB_CFLAGS%
+echo ZLIB_INCLUDE   = %ZLIB_INCLUDE%
+echo ZLIB_LIBPATH   = %ZLIB_LIBPATH%
+echo ZLIB_LIB       = %ZLIB_LIB%
+echo ZLIB_LIBSTATIC = %ZLIB_LIBSTATIC%
+echo ZLIB_LIBIMPORT = %ZLIB_LIBIMPORT%
+echo ZLIB_LIBSHARED = %ZLIB_LIBSHARED%
 echo ----------------------------------------
 echo.
+
 
 echo.
 echo ============= zlib building is complete. ============
@@ -138,9 +142,6 @@ echo.
 :: Cleanup
 set URL=
 set ZLIB_SHARED=
-set ZLIB_LIBStatic=
-set ZLIB_LIBShared=
-set ZLIB_LIBImpLib=
 set PKGVER=
 set BASEDIR=
 set HOMZLIB=
@@ -161,7 +162,3 @@ set ArchiveName=
 popd
 
 exit /b 0
-
-
-
-

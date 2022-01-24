@@ -43,21 +43,22 @@ if not exist "%HOMICU%\bin64\uconv.exe" (
 )
 
 :: Set building flags
-if "/%VSCMD_ARG_TGT_ARCH%/"=="/x64/" set "ARCH=64"
-if "/%VSCMD_ARG_TGT_ARCH%/"=="/x86/" set "ARCH="
-if not defined ARCH set "ARCH="
+if "/%VSCMD_ARG_TGT_ARCH%/"=="/x64/" set "ARCHX=64"
+if "/%VSCMD_ARG_TGT_ARCH%/"=="/x86/" set "ARCHX="
+if not defined ARCHX set "ARCHX="
 
-set Path=%HOMICU%\bin%ARCH%;%Path%
-if "/!Path!/"=="/!Path:%HOMICU%\bin%ARCH%=!/" set Path=%HOMICU%\bin%ARCH%;%Path%
+set ICU_BINPATH=%HOMICU%\bin%ARCHX%
+if "/!Path!/"=="/!Path:%ICU_BINPATH%=!/" set Path=%ICU_BINPATH%;%Path%
 
-::/LIBPATH:"%HOMICU%\lib%ARCH%"
-set ICU_LIBPATH=%HOMICU%\lib%ARCH%
+::/LIBPATH:"%HOMICU%\lib%ARCHX%"
+set ICU_LIBPATH=%HOMICU%\lib%ARCHX%
 if "/!LIBPATH!/"=="/!LIBPATH:%ICU_LIBPATH%=!/" set LIBPATH=%ICU_LIBPATH%;%LIBPATH%
 :: -I"%HOMICU%\include"
 set ICU_INCLUDE=%HOMICU%\include
 if "/!INCLUDE!/"=="/!INCLUDE:%ICU_INCLUDE%=!/" set INCLUDE=%ICU_INCLUDE%;%INCLUDE%
-set ICU_LIBImpLib=icudt70.lib icuuc70.lib icuin70.lib icutu70.lib icuio70.lib
-set ICU_LIB=%ICU_LIBImpLib%
+set ICU_LIBIMPORT=icudt70.lib icuuc70.lib icuin70.lib icutu70.lib icuio70.lib
+set ICU_LIBSHARED=icudt70.dll icuuc70.dll icuin70.dll icutu70.dll icuio70.dll
+set ICU_LIB=%ICU_LIBIMPORT%
 
 echo.
 echo ============= ICU installation is complete. ============
@@ -65,9 +66,12 @@ echo ResultCode: %ResultCode% (^>0 - errors occured). Check the log files for er
 echo.
 
 echo ========== ICU core linking flags ==========
-echo ICU_INCLUDE=%ICU_INCLUDE%
-echo ICU_LIBPATH=%ICU_LIBPATH%
-echo ICU_LIB=%ICU_LIB%
+echo ICU_INCLUDE   = %ICU_INCLUDE%
+echo ICU_LIBPATH   = %ICU_LIBPATH%
+echo ICU_BINPATH   = %ICU_BINPATH%
+echo ICU_LIB       = %ICU_LIB%
+echo ICU_LIBIMPORT = %ICU_LIBIMPORT%
+echo ICU_LIBSHARED = %ICU_LIBSHARED%
 echo --------------------------------------------
 
 
@@ -84,7 +88,6 @@ set ICUx64File=
 set ReleaseAPI=
 set RepoName=
 set RepoOwner=
-set ICU_LIBImpLib=
 set PatternURL=
 set FileLen=
 set FileName=

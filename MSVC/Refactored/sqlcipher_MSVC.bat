@@ -59,26 +59,11 @@ echo USE_SQLAR=%USE_SQLAR%
 echo USE_LIBSHELL=%USE_LIBSHELL%
 
 call "%~dp0SQLiteCipherSourceGet.bat" %DBENG%
-if %ERROR_STATUS% NEQ 0 exit /b 1
+if %ErrorLevel% NEQ 0 exit /b 1
 if not exist "%BLDSQL%" (
   echo Distro directory does not exists. Exiting
   exit /b 1
 )
-
-if %WITH_EXTRA_EXT% EQU 1 (
-  if %USE_ZLIB% EQU 1 (
-    call :DOWNLOAD_ZLIB
-    if %ERROR_STATUS% NEQ 0 exit /b 1
-    call :EXTRACT_ZLIB
-    if %ERROR_STATUS% NEQ 0 exit /b 1
-  )
-)
-
-call :DOWNLOAD_OPENSSL
-if %ERROR_STATUS% NEQ 0 exit /b 1
-call :EXTRACT_OPENSSL
-if %ERROR_STATUS% NEQ 0 exit /b 1
-call :BUILD_OPENSSL 1>>%OUTSQL% 2>>%ERRSQL%
 
 if not exist "%BLDBLD%" mkdir "%BLDBLD%"
 (
@@ -97,7 +82,12 @@ if %WITH_EXTRA_EXT% EQU 1 (
 ) 1>>%OUTSQL% 2>>%ERRSQL%
 
 popd
-nmake /nologo /f Makefile.msc .target_source 1>>%OUTSQL% 2>>%ERRSQL%
+(
+  echo ==================== MAKING .target_source ====================
+  nmake /nologo /f Makefile.msc .target_source
+  echo ~~~~~~~~~~~~~~~~~~~~ MADE  .target_source ~~~~~~~~~~~~~~~~~~~~~
+  echo ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+) 1>>%OUTSQL% 2>>%ERRSQL%
 
 if %USE_STDCALL% EQU 1 (call :CRYPT_OPENSSL) 1>>%OUTSQL% 2>>%ERRSQL%
 
@@ -126,9 +116,6 @@ if %USE_LIBSHELL% EQU 1 (
 )
 
 popd
-if %USE_ZLIB% EQU 1 (
-  nmake /nologo /f Makefile.msc zlib
-) 1>>%OUTSQL% 2>>%ERRSQL%
 echo ===== Making TARGETS ----- %TARGETS% -----
 nmake /nologo /f Makefile.msc sqlite3.c 1>>%OUTSQL% 2>>%ERRSQL%
 
@@ -181,14 +168,38 @@ exit /b 0
 :: ============================================================================
 :SETENV
 echo ===== Setting options =====
+:: TCL/Tk
+call "%~dp0TCLTkGet.bat"
+if not "/%ErrorLevel%/"=="/0/" exit /b %ErrorLevel%
+
 call :ICU_OPTIONS
-call :TCL_OPTIONS
 call :ZLIB_OPTIONS
-call :NASM_OPTIONS
-call :PERL_OPTIONS
-call :OPENSSL_OPTIONS
 call :BUILD_OPTIONS
-call :SQLCIPHER_OPTIONS
+
+if /I "/%DBENG%/"=="/sqlcipher/" call :SQLCIPHER_OPTIONS
+
+exit /b 0
+
+
+:: ============================================================================
+:SQLCIPHER_OPTIONS
+:: NASM
+call "%~dp0NASMGet.bat"
+if not "/%ErrorLevel%/"=="/0/" exit /b %ErrorLevel%
+:: PERL
+call "%~dp0OpenSSLGet.bat"
+if not "/%ErrorLevel%/"=="/0/" exit /b %ErrorLevel%
+
+::OPENSSL_OPTIONS
+echo ===== Setting OpenSSL options =====
+call "%~dp0OpenSSLGet.bat"
+if not "/%ErrorLevel%/"=="/0/" exit /b %ErrorLevel%
+set TCCOPTS=-I"%OSSL_INCLUDE%" %TCCOPTS%
+set TLIBS=/LIBPATH:"%OSSL_LIBPATH%" %OSSL_LIBIMPORT% %TLIBS%
+
+echo ===== Setting SQLCIPHER options =====
+set DSQLITE_TEMP_STORE=2
+set EXT_FEATURE_FLAGS=-DSQLITE_HAS_CODEC %EXT_FEATURE_FLAGS%
 
 exit /b 0
 
@@ -233,87 +244,12 @@ echo ===== Setting ZLIB options =====
 if not "/%WITH_EXTRA_EXT%/"=="/1/" (
   set USE_ZLIB=0
   set USE_SQLAR=0
-  exit /b 0
+) else (
+  if not defined USE_ZLIB set USE_ZLIB=1
+  if not defined USE_SQLAR (set USE_SQLAR=1)
+  if "/!USE_ZLIB!/"=="/1/" (set "BUILD_ZLIB=0" & call "%~dp0ZLibGet.bat")
+  set ZLIBLIB=zdll.lib
 )
-if not defined USE_ZLIB set USE_ZLIB=1
-if not defined USE_SQLAR (set USE_SQLAR=1)
-if not %USE_ZLIB% EQU 1 (exit /b 0)
-:: Could not get static linking to work
-set ZLIBLIB=zdll.lib
-set ZLIBDIR=%BLDSQL%\compat\zlib
-if %USE_STDCALL% EQU 1 (set ZLIBLOC="-DZLIB_WINAPI -DZLIB_DLL")
-
-exit /b 0
-
-
-:: ============================================================================
-:TCL_OPTIONS
-echo ===== Setting TCL options =====
-if not defined TCL_HOME (set TCL_HOME=%DEVDIR%\TCL)
-call :CHECKTOOL tclsh "%TCL_HOME%\bin"
-
-if "/%TOOLPATH%/"=="//" (
-  echo TCL not found.
-  exit /b 1
-)
-
-echo TCL found.
-set TCLBIN=%TOOLPATH:\tclsh.exe=%
-if "/%Path%/"=="/!Path:%TCLBIN%=!/" (set "Path=%TCLBIN%;%Path%")
-set TCLBIN=
-
-exit /b 0
-
-
-:: ============================================================================
-:NASM_OPTIONS
-:: https://nasm.us
-echo ===== Setting NASM options =====
-if not defined NASM_HOME (set NASM_HOME=%DEVDIR%\NASM)
-call :CHECKTOOL nasm "%NASM_HOME%\%ARCH%"
-
-if "/%TOOLPATH%/"=="//" (
-  echo NASM not found.
-  exit /b 1
-)
-
-echo NASM found.
-set NASMBIN=!TOOLPATH:\nasm.exe=!
-if "/%Path%/"=="/!Path:%NASMBIN%=!/" (set "Path=%NASMBIN%;%Path%")
-set NASMBIN=
-
-exit /b 0
-
-
-:: ============================================================================
-:PERL_OPTIONS
-:: E.g., https://strawberryperl.com
-echo ===== Setting PERL options =====
-if not defined PERL_HOME (set PERL_HOME=%DEVDIR%\PERL)
-call :CHECKTOOL perl "%PERL_HOME%\bin
-
-if "/%TOOLPATH%/"=="//" (
-  echo PERL not found.
-  exit /b 1
-)
-
-echo PERL found.
-set PERLBIN=!TOOLPATH:\perl.exe=!
-if "/%Path%/"=="/!Path:%PERLBIN%=!/" (set "Path=%PERLBIN%;%Path%")
-set PERLBIN=
-
-exit /b 0
-
-
-:: ============================================================================
-:OPENSSL_OPTIONS
-echo ===== Setting OpenSSL options =====
-set OPENSSL_DISTRO=%BASEDIR%\openssl
-set OPENSSL_BUILD=%BASEDIR%\tools\build\openssl\%ARCH%
-set OPENSSL_PREFIX=%BASEDIR%\tools\OpenSSL\%ARCH%
-set OPENSSL_DIR=%BASEDIR%\tools\SSL\%ARCH%
-if "/%ARCH%/"=="/x32/" (set OPENSSLARCH=VC-WIN32)
-if "/%ARCH%/"=="/x64/" (set OPENSSLARCH=VC-WIN64A)
 
 exit /b 0
 
@@ -394,157 +330,6 @@ if %WITH_EXTRA_EXT% EQU 1 (
 )
 
 exit /b 0
-
-
-:: ============================================================================
-:SQLCIPHER_OPTIONS
-echo ===== Setting SQLCIPHER options =====
-set DSQLITE_TEMP_STORE=2
-set EXT_FEATURE_FLAGS=^
--DSQLITE_HAS_CODEC ^
--I`%OPENSSL_PREFIX%\include` ^
-%EXT_FEATURE_FLAGS%
-
-set EXT_FEATURE_FLAGS=%EXT_FEATURE_FLAGS:`="%
-
-set LTLIBS=libcrypto.lib %LTLIBS%
-set LTLIBPATHS=/LIBPATH:"%OPENSSL_PREFIX%\lib" %LTLIBPATHS%
-
-exit /b 0
-
-
-:: ============================================================================
-:DOWNLOAD_OPENSSL
-set DISTRO=openssl.zip
-set PKGNAME=OpenSSL
-set REPO=openssl/openssl
-set URL=https://github.com/%REPO%/archive/refs/heads/master.zip
-
-if not exist "%DISTRO%" (
-  echo ===== Downloading current %PKGNAME% release =====
-  curl -L %URL% --output "%DISTRO%"
-  if %ErrorLevel% EQU 0 (
-    echo ----- Downloaded  current %PKGNAME% release -----
-  ) else (
-    set ERROR_STATUS=%ErrorLevel%
-    echo Error downloading %PKGNAME% distro.
-    echo Errod code: !ERROR_STATUS!
-  )
-) else (
-  echo ===== Using previously downloaded %PKGNAME% distro =====
-)
-
-exit /b %ERROR_STATUS%
-
-
-:: ============================================================================
-:EXTRACT_OPENSSL
-set DISTROFILE=openssl.zip
-set SRCDIR=%DISTROFILE:.zip=%
-set PKGNAME=OpenSSL
-set PROBEFILE=Configure
-
-if not exist "%SRCDIR%\%PROBEFILE%" (
-  echo ===== Extracting %PKGNAME% distro =====
-  tar -xf "%DISTROFILE%"
-  if %ErrorLevel% EQU 0 (
-    echo ----- Extracted  %PKGNAME% distro -----
-  ) else (
-    set ERROR_STATUS=%ErrorLevel%
-    echo Error extracting %PKGNAME% distro.
-    echo Errod code: !ERROR_STATUS!
-  )
-  rmdir /S /Q "%SRCDIR%" 2>nul
-  move "%SRCDIR%-master" "%SRCDIR%"
-) else (
-  echo ===== Using previously extracted %PKGNAME% distro =====
-)
-
-if not exist "%SRCDIR%" (
-  echo Distro directory does not exists. Exiting
-  exit /b 1
-)
-
-exit /b %ERROR_STATUS%
-
-
-:: ============================================================================
-:DOWNLOAD_ZLIB
-set DISTRO=zlib.zip
-set URL=https://zlib.net/zlib1211.zip
-
-if not exist "%DISTRO%" (
-  echo ===== Downloading zlib =====
-  curl %URL% --output "%DISTRO%"
-  if %ErrorLevel% EQU 0 (
-    echo ----- Downloaded  ZLIB -----
-  ) else (
-    set ERROR_STATUS=%ErrorLevel%
-    echo Error downloading zlib distro.
-    echo Errod code: !ERROR_STATUS!
-  )
-) else (
-  echo ===== Using previously downloaded zlib =====
-)
-
-exit /b %ERROR_STATUS%
-
-
-:: ============================================================================
-:EXTRACT_ZLIB
-set DISTROFILE=zlib.zip
-set ZLIBDIR=%BLDSQL%\compat\zlib
-
-if not exist "%ZLIBDIR%\win32\Makefile.msc" (
-  echo ===== Extracting zlib distro =====
-  rmdir /S /Q "%ZLIBDIR%" 1>>%OUTSQL% 2>>%ERRSQL%
-  tar -xf "%DISTROFILE%"
-  if %ErrorLevel% EQU 0 (
-    echo ----- Extracted  zlib distro -----
-    mkdir "%BLDSQL%\compat" 2>nul
-    move /Y zlib-* zlib 1>>%OUTSQL% 2>>%ERRSQL%
-    move /Y zlib "%BLDSQL%\compat" 1>>%OUTSQL% 2>>%ERRSQL%
-  ) else (
-    set ERROR_STATUS=%ErrorLevel%
-    echo Error extracting zlib distro.
-    echo Errod code: !ERROR_STATUS!
-  )
-) else (echo ===== Using previously  extracted zlib =====)
-
-exit /b %ERROR_STATUS%
-
-
-:: ============================================================================
-:BUILD_OPENSSL
-set ERROR_STATUS=0
-mkdir "%OPENSSL_BUILD%" 2>nul
-pushd "%OPENSSL_BUILD%"
-
-if not exist "makefile" (
-  echo ===== Configuring OpenSSL =====
-  perl "%OPENSSL_DISTRO%\Configure" %OPENSSLARCH% ^
-    --prefix="%OPENSSL_PREFIX%" --openssldir="%OPENSSL_DIR%" 
-  if %ErrorLevel% EQU 0 (
-    echo ----- Configured OpenSSL -----
-  ) else (
-    set ERROR_STATUS=%ErrorLevel%
-    echo Error configuring OpenSSL
-    echo Errod code: !ERROR_STATUS!
-  )
-) else (
-  echo ===== Using previously configured OpenSSL setup =====
-)
-if not exist "%OPENSSL_PREFIX%\lib\libcrypto.lib" (
-  echo ===== Making OpenSSL =====
-  nmake
-  nmake install
-  echo ----- Made OpenSSL -----
-) else (
-  echo ===== Using previously made OpenSSL =====
-)
-popd
-
-exit /b %ERROR_STATUS%
 
 
 :: ============================================================================
