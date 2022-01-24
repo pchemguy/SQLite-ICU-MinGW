@@ -46,10 +46,15 @@ if not exist "%BLDSQL%\Makefile.msc" (
   if exist "%BLDSQL%" rmdir /S /Q "%BLDSQL%" 2>nul
   call "%~dp0ExtractArchive.bat" %PKGNAM% "%BLDDIR%"
   if not "/!ErrorLevel!/"=="/0/" exit /b !ErrorLevel!
+  if /I "/%DBENG%/"=="/sqlcipher/" (
+    cd /d "%BLDDIR%"
+    move "sqlcipher-!PKGVER!" "sqlcipher"
+  )
 )
-if /I "/%DBENG%/"=="/sqlcipher/" (
-  cd /d "%BLDDIR%"
-  move "sqlcipher-!PKGVER!" "sqlcipher"
+:: ext\misc\json1.c => src\json.c refactoring fix for SQLCipher. Remove it when
+:: SQLCipher upgrades its base SQLite distro (to 3.37 or 3.38 - check above)
+if exist "%BLDSQL%\ext\misc\json1.c" if not exist "%BLDSQL%\src\json.c" (
+  copy /Y "%BLDSQL%\ext\misc\json1.c" "%BLDSQL%\src\json.c"
 )
 
 popd
