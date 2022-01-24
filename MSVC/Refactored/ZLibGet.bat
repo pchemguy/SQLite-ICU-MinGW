@@ -18,16 +18,19 @@ set ZLIB_INCLUDE=
 set ZLIB_LIBPATH=
 set ZLIB_LIB=
 
+if "/%VSCMD_ARG_TGT_ARCH%/"=="/x64/" set "ARCH=x64"
+if "/%VSCMD_ARG_TGT_ARCH%/"=="/x86/" set "ARCH=x32"
+
 set BASEDIR=%~dp0
 set BASEDIR=%BASEDIR:~0,-1%
 set PKGDIR=%BASEDIR%\pkg
 set BLDDIR=%BASEDIR%\bld
 set DEVDIR=%BASEDIR%\dev
-set BLDZLIB=%BASEDIR%\bld\zlib
-set HOMZLIB=%BASEDIR%\dev\zlib
+set BLDZLIB=%BASEDIR%\bld\zlib\%ARCH%
+set HOMZLIB=%BASEDIR%\dev\zlib\%ARCH%
 
-set OUTZLIB="%BASEDIR%\zlibout.log"
-set ERRZLIB="%BASEDIR%\zliberr.log"
+set OUTZLIB="%BLDZLIB%\stdout.log"
+set ERRZLIB="%BLDZLIB%\stderr.log"
 del %OUTZLIB% 2>nul
 del %ERRZLIB% 2>nul
 set ResultCode=0
@@ -38,7 +41,7 @@ pushd "%PKGDIR%"
 :: Retrieve ChangeLog.txt and extract the latest release version (at the top).
 set ChangeLogURL=https://zlib.net/ChangeLog.txt
 call "%~dp0DownloadFile.bat" %ChangeLogURL%
-if not "/%ErrorLevel%/"=="/0/" (set ResultCode=%ErrorLevel%)
+if not "/%ErrorLevel%/"=="/0/" exit /b %ErrorLevel%
 set CommandText=type %FileName%
 for /f "Usebackq tokens=1,3 skip=2 delims= " %%G in (`%CommandText%`) do (
   if "/%%G/"=="/Changes/" (
@@ -53,15 +56,16 @@ cd /d "%PKGDIR%"
 set PKGNAM=zlib-%PKGVER%.tar.gz
 set ReleaseURL=https://zlib.net/%PKGNAM%
 call "%~dp0DownloadFile.bat" %ReleaseURL%
-if not "/%ErrorLevel%/"=="/0/" (set ResultCode=%ErrorLevel%)
+if not "/%ErrorLevel%/"=="/0/" exit /b %ErrorLevel%
 
 :: Expand
 if not exist "%BLDZLIB%\Makefile" (
-  rmdir /S /Q "%BLDZLIB%" 2>nul
-  call "%~dp0ExtractArchive.bat" %PKGNAM% "%BLDDIR%"
-  if not "/%ErrorLevel%/"=="/0/" (set ResultCode=%ErrorLevel%)
-  cd /d "%BLDDIR%"
-  move "zlib-%PKGVER%" "zlib"
+  if exist "%BLDZLIB%" rmdir /S /Q "%BLDZLIB%" 1>nul
+  if not exist "!BLDZLIB:~0,-4!" mkdir "!BLDZLIB:~0,-4!" 1>nul
+  call "%~dp0ExtractArchive.bat" %PKGNAM% "!BLDZLIB:~0,-4!"
+  if not "/%ErrorLevel%/"=="/0/" exit /b %ErrorLevel%
+  cd /d "%BLDZLIB%\.."
+  move "zlib-%PKGVER%" "%ARCH%" 1>nul
 )
 
 :: Build
@@ -75,24 +79,24 @@ if not "/%ResultCode%/"=="/0/" (
 )
 
 :: Collect binaries
-rmdir /S /Q "%HOMZLIB%" 2>nul
-mkdir "%HOMZLIB%\lib"
+if exist "%HOMZLIB%" rmdir /S /Q "%HOMZLIB%" 2>nul
+mkdir "%HOMZLIB%"
 set ZLIB_LIBStatic=zlib.lib
-copy /Y "%BLDZLIB%\%ZLIB_LIBStatic%" "%HOMZLIB%\lib"
+copy /Y "%BLDZLIB%\%ZLIB_LIBStatic%" "%HOMZLIB%"
 set ZLIB_LIBImpLib=zdll.lib
-copy /Y "%BLDZLIB%\%ZLIB_LIBImpLib%" "%HOMZLIB%\lib"
+copy /Y "%BLDZLIB%\%ZLIB_LIBImpLib%" "%HOMZLIB%"
 set ZLIB_LIBShared=zlib1.dll
-copy /Y "%BLDZLIB%\%ZLIB_LIBShared%" "%HOMZLIB%\lib"
-mkdir "%HOMZLIB%\include"
-copy /Y "%BLDZLIB%\zlib.h" "%HOMZLIB%\include"
-copy /Y "%BLDZLIB%\zconf.h" "%HOMZLIB%\include"
+copy /Y "%BLDZLIB%\%ZLIB_LIBShared%" "%HOMZLIB%"
+copy /Y "%BLDZLIB%\zlib.h" "%HOMZLIB%"
+copy /Y "%BLDZLIB%\zconf.h" "%HOMZLIB%"
 
 :: Set building flags
 ::   /LIBPATH:"%HOMZLIB%\lib"
-set ZLIB_LIBPATH=%HOMZLIB%\lib
+set ZLIBDIR=%HOMZLIB%
+set ZLIB_LIBPATH=%HOMZLIB%
 if "/!LIBPATH!/"=="/!LIBPATH:%ZLIB_LIBPATH%=!/" set LIBPATH=%ZLIB_LIBPATH%;%LIBPATH%
 ::   -I"%HOMZLIB%\include"
-set ZLIB_INCLUDE=%HOMZLIB%\include
+set ZLIB_INCLUDE=%HOMZLIB%
 if "/!INCLUDE!/"=="/!INCLUDE:%ZLIB_INCLUDE%=!/" set INCLUDE=%ZLIB_INCLUDE%;%INCLUDE%
 
 if "/%ZLIB_STDCALL%/"=="/1/" (

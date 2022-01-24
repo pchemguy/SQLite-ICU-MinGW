@@ -13,8 +13,8 @@ set DEVDIR=%BASEDIR%\dev
 set HOMSSL=%BASEDIR%\dev\openssl\%ARCH%
 set SRCSSL=%BASEDIR%\bld\openssl\src
 set BLDSSL=%BASEDIR%\bld\openssl\%ARCH%
-set OUTSSL="%BLDSSL%\opensslout.log"
-set ERRSSL="%BLDSSL%\opensslerr.log"
+set OUTSSL="%BLDSSL%\stdout.log"
+set ERRSSL="%BLDSSL%\stderr.log"
 del %OUTSSL% 2>nul
 del %ERRSSL% 2>nul
 set ResultCode=0
@@ -79,7 +79,7 @@ if not exist "%BLDSSL%\makefile" (
 )
 
 :: Make
-if not exist "%BLDSSL%\libcrypto-3.dll" (
+if not exist "%BLDSSL%\libcrypto.lib" (
   cd /d "%BLDSSL%"
   echo ===== Making OpenSSL =====
   nmake 1>>%OUTSSL% 2>>%ERRSSL%
@@ -116,19 +116,23 @@ echo.
 
 :: Set building flags
 :: /LIBPATH:"%HOMSSL%\core\lib"
-set OpenSSL_LIBPATH=%HOMSSL%\core\lib
-if "/!LIBPATH!/"=="/!LIBPATH:%OpenSSL_LIBPATH%=!/" set LIBPATH=%OpenSSL_LIBPATH%;%LIBPATH%
+set OSSL_LIBPATH=%HOMSSL%\core\lib
+if "/!LIBPATH!/"=="/!LIBPATH:%OSSL_LIBPATH%=!/" set LIBPATH=%OSSL_LIBPATH%;%LIBPATH%
 :: -I"%HOMSSL%\core\include"
-set OpenSSL_INCLUDE=%HOMSSL%\core\include
-if "/!INCLUDE!/"=="/!INCLUDE:%OpenSSL_INCLUDE%=!/" set INCLUDE=%OpenSSL_INCLUDE%;%INCLUDE%
-set OpenSSL_LIB_IMPORT=libcrypto.lib libssl.lib
-set OpenSSL_LIB_STATIC=libcrypto_static.lib libssl_static.lib
+set OSSL_INCLUDE=%HOMSSL%\core\include
+if "/!INCLUDE!/"=="/!INCLUDE:%OSSL_INCLUDE%=!/" set INCLUDE=%OSSL_INCLUDE%;%INCLUDE%
+set OSSL_LIBIMPORT=libcrypto.lib libssl.lib
+set OSSL_LIBSTATIC=libcrypto_static.lib libssl_static.lib
+set ARCHX=-%ARCH%
+set ARCHX=%ARCHX:-x32=%
+set OSSL_LIBSHARED=libssl-3%ARCHX%.dll libcrypto-3%ARCHX%.dll
 
 echo ========== OpenSSL linking flags ==========
-echo OpenSSL_INCLUDE=%OpenSSL_INCLUDE%
-echo OpenSSL_LIBPATH=%OpenSSL_LIBPATH%
-echo OpenSSL_LIB_STATIC=%OpenSSL_LIB_STATIC%
-echo OpenSSL_LIB_IMPORT=%OpenSSL_LIB_IMPORT%
+echo OSSL_INCLUDE   = %OSSL_INCLUDE%
+echo OSSL_LIBPATH   = %OSSL_LIBPATH%
+echo OSSL_LIBSTATIC = %OSSL_LIBSTATIC%
+echo OSSL_LIBIMPORT = %OSSL_LIBIMPORT%
+echo OSSL_LIBSHARED = %OSSL_LIBSHARED%
 echo ----------------------------------------
 
 
@@ -139,6 +143,9 @@ set BLDSSL=
 set OUTSSL=
 set ERRSSL=
 set InfoURL=
+set URLSSL=
+set SYSCONF=
+set ARCHX=
 
 popd
 
