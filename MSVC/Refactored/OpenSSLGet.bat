@@ -79,6 +79,7 @@ set HOMHOM=%HOMSSL%\%ARCH%
   )
 ) 1>>%OUTSSL% 2>>%ERRSSL%
 
+:: Make
 ( 
   if not exist "%BLDBLD%\libcrypto-3.dll" (
     cd /d "%BLDBLD%"
@@ -96,6 +97,7 @@ set HOMHOM=%HOMSSL%\%ARCH%
   )
 ) 1>>%OUTSSL% 2>>%ERRSSL%
 
+:: Install
 ( 
   if not exist "%HOMHOM%\core\lib\libcrypto.lib" (
     echo ===== Installing OpenSSL =====
