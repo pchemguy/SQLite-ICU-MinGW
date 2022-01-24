@@ -65,7 +65,7 @@ set HOMHOM=%HOMSSL%\%ARCH%
     mkdir "%BLDBLD%" 2>nul
     cd /d "%BLDBLD%"
     echo ===== Configuring OpenSSL =====
-    perl "%BLDSSL%-src\Configure" %SYSCONF% ^
+    perl "%BLDSSL%-src\Configure" %SYSCONF% no-tests ^
       --prefix="%HOMHOM%\core" --openssldir="%HOMHOM%\SSL" 
     set ResultCode=!ErrorLevel!
     if !ResultCode! EQU 0 (
