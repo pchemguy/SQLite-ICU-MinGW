@@ -23,23 +23,20 @@ exit /b 0
 :MAIN
 SetLocal EnableExtensions EnableDelayedExpansion
 
-if "/%VSCMD_ARG_TGT_ARCH%/" == "/x64/" (set ARCH=x64)
-if "/%VSCMD_ARG_TGT_ARCH%/" == "/x86/" (set ARCH=x32)
+if "/%VSCMD_ARG_TGT_ARCH%/"=="/x64/" (set ARCH=x64)
+if "/%VSCMD_ARG_TGT_ARCH%/"=="/x86/" (set ARCH=x32)
+if /I not "/%DBENG:~0,3%/"=="/sql/" set DBENG=sqlite
 
 set BASEDIR=%~dp0
 set BASEDIR=%BASEDIR:~0,-1%
 set PKGDIR=%BASEDIR%\pkg
 set BLDDIR=%BASEDIR%\bld
 set DEVDIR=%BASEDIR%\dev
-if not defined DBENG (
-  set DBENG=sqlite
-) else (if /I not "/%DBENG:~0,3%/"=="/sql/" set DBENG=sqlite)
-set BLDSQL=%BASEDIR%\bld\%DBENG%
-set BLDBLD=%BASEDIR%\bld\%DBENG%-bld\%ARCH%
-set HOMSQL=%BASEDIR%\dev\%DBENG%
+set BLDSQL=%BASEDIR%\bld\%DBENG%\%ARCH%
+set SRCSQL=%BASEDIR%\bld\%DBENG%\src
 
-set OUTSQL="%BASEDIR%\sqlout.log"
-set ERRSQL="%BASEDIR%\sqlerr.log"
+set OUTSQL="%BLDSQL%\sqlout.log"
+set ERRSQL="%BLDSQL%\sqlerr.log"
 del %OUTSQL% 2>nul
 del %ERRSQL% 2>nul
 set ResultCode=0
@@ -49,6 +46,7 @@ if not defined USE_STDCALL (
   if "/%ARCH%/"=="/x32/" (set USE_STDCALL=1) else (set USE_STDCALL=0)
 )
 
+if not exist "%BLDSQL%" mkdir "%BLDSQL%"
 call :SET_TARGETS %*
 call :SETENV 1>>%OUTSQL% 2>>%ERRSQL%
 echo Building %DBENG% ...
@@ -65,36 +63,36 @@ if not exist "%BLDSQL%" (
   exit /b 1
 )
 
-if not exist "%BLDBLD%" mkdir "%BLDBLD%"
 (
-  copy /Y "%BASEDIR%\scripts\build\*" "%BLDBLD%"
-  xcopy /H /Y /B /E /Q "%BASEDIR%\scripts\distro" "%BLDSQL%"
-  cd /d "%BLDBLD%"
-  
-  pushd .
+  copy /Y "%BASEDIR%\scripts\build\*" "%BLDSQL%" 1>nul
+  xcopy /H /Y /B /E /Q "%BASEDIR%\scripts\distro" "%SRCSQL%" 1>nul
+
   call :MAKEFILE_MSC_TOP_AND_DEBUG_ZLIB_STDCALL
+
   call :RESET_BAK
-)  1>>%OUTSQL% 2>>%ERRSQL%
+) 1>>%OUTSQL% 2>>%ERRSQL%
 
 if %WITH_EXTRA_EXT% EQU 1 (
   call :EXT_ADD_SOURCES_TO_MAKEFILE_MSC
   call :EXT_ADD_SOURCES_TO_MKSQLITE3C_TCL
 ) 1>>%OUTSQL% 2>>%ERRSQL%
 
-popd
 (
   echo ==================== MAKING .target_source ====================
+  cd /d "%BLDSQL%"
   nmake /nologo /f Makefile.msc .target_source
   echo ~~~~~~~~~~~~~~~~~~~~ MADE  .target_source ~~~~~~~~~~~~~~~~~~~~~
   echo ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 ) 1>>%OUTSQL% 2>>%ERRSQL%
 
-if %USE_STDCALL% EQU 1 (call :CRYPT_OPENSSL) 1>>%OUTSQL% 2>>%ERRSQL%
+if /I "/%DBENG%/"=="/sqlcipher/" if %USE_STDCALL% EQU 1 (
+  call :CRYPT_OPENSSL
+) 1>>%OUTSQL% 2>>%ERRSQL%
 
 if %WITH_EXTRA_EXT% EQU 1 (
-  set TARGETDIR=%BLDBLD%\tsrc
-  pushd "%BLDBLD%\tsrc"
-  xcopy /H /Y /B /E /Q "%BASEDIR%\scripts\build\*" "%BLDBLD%"
+  set TARGETDIR=%BLDSQL%\tsrc
+  pushd "%TARGETDIR%"
+  xcopy /H /Y /B /E /Q "%BASEDIR%\scripts\build\*" "%BLDSQL%" 1>nul
   call :TEST_MAIN_C_SQLITE3_H
   call :EXT_MAIN
   call :EXT_NORMALIZE
@@ -117,6 +115,8 @@ if %USE_LIBSHELL% EQU 1 (
 
 popd
 echo ===== Making TARGETS ----- %TARGETS% -----
+echo ===== Making TARGETS ----- %TARGETS% ----- 1>>%OUTSQL% 2>>%ERRSQL%
+cd /d "%BLDSQL%"
 nmake /nologo /f Makefile.msc sqlite3.c 1>>%OUTSQL% 2>>%ERRSQL%
 
 :: There is a problem with integration of fileio properly resulting in
@@ -135,8 +135,8 @@ cd ..
 rem Leave BUILDDIR
 
 set COPY_BINARIES=0
-if exist "%BLDBLD%\sqlite3.dll" (set COPY_BINARIES=1)
-if exist "%BLDBLD%\sqlite3.exe" (set COPY_BINARIES=1)
+if exist "%BLDSQL%\sqlite3.dll" (set COPY_BINARIES=1)
+if exist "%BLDSQL%\sqlite3.exe" (set COPY_BINARIES=1)
 if %COPY_BINARIES% EQU 1 (call :COLLECT_BINARIES) 1>>%OUTSQL% 2>>%ERRSQL%
 
 EndLocal
@@ -171,11 +171,28 @@ echo ===== Setting options =====
 :: TCL/Tk
 call "%~dp0TCLTkGet.bat"
 if not "/%ErrorLevel%/"=="/0/" exit /b %ErrorLevel%
+:: ICU
+if not defined USE_ICU (set USE_ICU=1)
+call "%~dp0ICUGet.bat"
+if not "/%ErrorLevel%/"=="/0/" exit /b %ErrorLevel%
 
-call :ICU_OPTIONS
-call :ZLIB_OPTIONS
+::ZLIB_OPTIONS
+echo ===== Setting ZLIB options =====
+if not "/%WITH_EXTRA_EXT%/"=="/1/" (
+  set USE_ZLIB=0
+  set USE_SQLAR=0
+) else (
+  if not defined USE_ZLIB set USE_ZLIB=1
+  if not defined USE_SQLAR (set USE_SQLAR=1)
+  if "/!USE_ZLIB!/"=="/1/" (
+    set "BUILD_ZLIB=0"
+    call "%~dp0ZLibGet.bat"
+    if not "/!ErrorLevel!/"=="/0/" exit /b !ErrorLevel!
+  )
+  set ZLIBLIB=!ZLIB_LIBIMPORT!
+)
+
 call :BUILD_OPTIONS
-
 if /I "/%DBENG%/"=="/sqlcipher/" call :SQLCIPHER_OPTIONS
 
 exit /b 0
@@ -234,22 +251,6 @@ if "/%INCLUDE%/"=="/!INCLUDE:%ICUINC%=!/" (set "INCLUDE=%ICUINC%;%INCLUDE%")
 
 set ICUINC=
 set ICULIB=
-
-exit /b 0
-
-
-:: ============================================================================
-:ZLIB_OPTIONS
-echo ===== Setting ZLIB options =====
-if not "/%WITH_EXTRA_EXT%/"=="/1/" (
-  set USE_ZLIB=0
-  set USE_SQLAR=0
-) else (
-  if not defined USE_ZLIB set USE_ZLIB=1
-  if not defined USE_SQLAR (set USE_SQLAR=1)
-  if "/!USE_ZLIB!/"=="/1/" (set "BUILD_ZLIB=0" & call "%~dp0ZLibGet.bat")
-  set ZLIBLIB=zdll.lib
-)
 
 exit /b 0
 
@@ -335,16 +336,12 @@ exit /b 0
 :: ============================================================================
 :MAKEFILE_MSC_TOP_AND_DEBUG_ZLIB_STDCALL
 set FILENAME=Makefile.msc
-if exist "%FILENAME%" (
-  nmake /nologo /f "%FILENAME%" clean
-  del "%FILENAME%" 2>nul
-)
-copy /Y "%BLDSQL%\%FILENAME%" .
-
+cd /d "%BLDSQL%"
+copy /Y "%SRCSQL%\%FILENAME%" .
 if not defined DSQLITE_TEMP_STORE (set DSQLITE_TEMP_STORE=1)
 
 set MAPLIST=^
-`TOP = .` `TOP = %BLDSQL%` ^
+`TOP = .` `TOP = %SRCSQL%` ^
 `DSQLITE_TEMP_STORE=1` `DSQLITE_TEMP_STORE=%DSQLITE_TEMP_STORE%` ^
 `win32\Makefile.msc clean` `win32\Makefile.msc LOC=$(ZLIBLOC) clean`
 
@@ -352,7 +349,7 @@ set MAPLIST=%MAPLIST:`="%
 tclsh "%BASEDIR%\scripts\replace_multi.tcl" "%FILENAME%" %MAPLIST%
 
 if %USE_LIBSHELL% EQU 1 (
-  tclsh "%BASEDIR%\scripts\addlines.tcl" "%FILENAME%" "%FILENAME%.libshell" "%BLDBLD%"
+  tclsh "%BASEDIR%\scripts\addlines.tcl" "%FILENAME%" "%FILENAME%.libshell" "%BLDSQL%"
 )
 
 type "%FILENAME%.debug" >>"%FILENAME%"
@@ -362,22 +359,20 @@ exit /b 0
 
 :RESET_BAK
 :: ============================================================================
-set TARGETDIR=%BLDSQL%\tool
 set FILENAME=mksqlite3c.tcl
-pushd "%TARGETDIR%"
+cd /d "%SRCSQL%\tool"
 if not exist "%FILENAME%.bak" (
-  copy /Y "%FILENAME%" "%FILENAME%.bak"
+  copy /Y "%FILENAME%" "%FILENAME%.bak" 1>nul
 ) else (
-  copy /Y "%FILENAME%.bak" "%FILENAME%"
+  copy /Y "%FILENAME%.bak" "%FILENAME%" 1>nul
 )
-popd
 
 exit /b 0
 
 
 :CRYPT_OPENSSL
 :: ============================================================================
-pushd "%OPENSSL_PREFIX%\include\openssl"
+pushd "%OSSL_INCLUDE%\openssl"
 
 set HDRS=^
   "evp.h"^
@@ -447,20 +442,19 @@ exit /b 0
 
 :: ============================================================================
 :EXT_ADD_SOURCES_TO_MKSQLITE3C_TCL
-set TARGETDIR=%BLDSQL%\tool
 set FILENAME=mksqlite3c.tcl
 echo ========== Patching "%FILENAME%" ===========
-tclsh "%BASEDIR%\scripts\addlines.tcl" "%FILENAME%" "%FILENAME%.ext" "%TARGETDIR%"
+tclsh "%BASEDIR%\scripts\addlines.tcl" "%FILENAME%" "%FILENAME%.ext" "%SRCSQL%\tool"
 
 exit /b 0
 
 
 :: ============================================================================
 :EXT_ADD_SOURCES_TO_MAKEFILE_MSC
-set TARGETDIR=%BLDBLD%
 set FILENAME=Makefile.msc
+cd "%BLDSQL%"
 echo ========== Patching "%FILENAME%" ===========
-tclsh "%BASEDIR%\scripts\addlines.tcl" "%FILENAME%" "%FILENAME%.ext" "%TARGETDIR%"
+tclsh "%BASEDIR%\scripts\addlines.tcl" "%FILENAME%" "%FILENAME%.ext" "%BLDSQL%"
 ren "%FILENAME%" "%FILENAME%" 
 
 exit /b 0
@@ -468,16 +462,15 @@ exit /b 0
 
 :: ============================================================================
 :EXT_ADD_SOURCES_TO_MKSQLITE3C_TCL
-set TARGETDIR=%BLDSQL%\tool
 set FILENAME=mksqlite3c.tcl
 echo ========== Patching "%FILENAME%" ===========
-pushd "%TARGETDIR%"
+set TARGETDIR=%SRCSQL%\tool
+cd /d "%TARGETDIR%"
 if not exist "%FILENAME%.bak" (
   copy /Y "%FILENAME%" "%FILENAME%.bak"
 ) else (
   copy /Y "%FILENAME%.bak" "%FILENAME%"
 )
-popd
 tclsh "%BASEDIR%\scripts\addlines.tcl" "%FILENAME%" "%FILENAME%.ext" "%TARGETDIR%"
 
 exit /b 0
@@ -485,6 +478,7 @@ exit /b 0
 
 :: ============================================================================
 :TEST_MAIN_C_SQLITE3_H
+set TARGETDIR=%BLDSQL%\tsrc
 set FILENAME=main.c
 echo ========== Patching "%FILENAME%" ===========
 tclsh "%BASEDIR%\scripts\addlines.tcl" "%FILENAME%" "%FILENAME%.test" "%TARGETDIR%"
@@ -497,6 +491,7 @@ exit /b 0
 
 :: ============================================================================
 :EXT_MAIN
+set TARGETDIR=%BLDSQL%\tsrc
 set FILENAME=main.c
 echo ========== Patching "%FILENAME%" ===========
 tclsh "%BASEDIR%\scripts\addlines.tcl" "%FILENAME%" "%FILENAME%.1.ext" "%TARGETDIR%"
@@ -507,6 +502,7 @@ exit /b 0
 
 :: ============================================================================
 :EXT_NORMALIZE
+cd /d "%BLDSQL%\tsrc"
 set FILENAME=normalize.c
 echo ========== Patching "%FILENAME%" ===========
 
@@ -531,6 +527,7 @@ exit /b 0
 
 :: ============================================================================
 :EXT_SHA1
+cd /d "%BLDSQL%\tsrc"
 set FILENAME=sha1.c
 set OLDTEXT=hash_step_vformat
 set NEWTEXT=hash_step_vformat_sha1
@@ -542,6 +539,7 @@ exit /b 0
 
 :: ============================================================================
 :EXT_REGEXP
+cd /d "%BLDSQL%\tsrc"
 set FILENAME=regexp.c
 set OLDTEXT=#include ^<string.h^>
 set NEWTEXT=#include ^<sqlite3ext.h^>
@@ -556,6 +554,7 @@ exit /b 0
 
 :: ============================================================================
 :EXT_WINDIRENT
+cd /d "%BLDSQL%"
 if %USE_LIBSHELL% EQU 0 (
   copy tsrc\test_windirent.c .
   copy tsrc\test_windirent.h .
@@ -576,6 +575,7 @@ exit /b 0
 
 :: ============================================================================
 :EXT_ZIPFILE
+cd /d "%BLDSQL%\tsrc"
 set FLAG=SQLITE_ENABLE_ZIPFILE
 set FILENAME=zipfile.c
 echo ========== Patching "%FILENAME%" ===========
@@ -620,7 +620,7 @@ set FLAG=SQLITE_ENABLE_LIBSHELL
 set FILENAME=libshell.c
 echo ========== Patching "%FILENAME%" ===========
 
-pushd "%BLDBLD%"
+pushd "%BLDSQL%"
 nmake /nologo /f Makefile.msc shell.c
 
 echo #if ^^!defined^^(LIBSHELL_C^^) ^&^& defined^^(%FLAG%^^) >%FILENAME%
@@ -653,9 +653,9 @@ set BINDIR=%~dp0bin
 if not exist "%BINDIR%" mkdir "%BINDIR%"
 del /Q "%BINDIR%\*" 2>nul
 cd /d "%BINDIR%"
-if exist "%BLDBLD%\sqlite3.dll" move "%BLDBLD%\sqlite3.dll" .
-if exist "%BLDBLD%\sqlite3.exe" move "%BLDBLD%\sqlite3.exe" .
-if exist "%BLDBLD%\sqlite3.def" move "%BLDBLD%\sqlite3.def" .
+if exist "%BLDSQL%\sqlite3.dll" move "%BLDSQL%\sqlite3.dll" .
+if exist "%BLDSQL%\sqlite3.exe" move "%BLDSQL%\sqlite3.exe" .
+if exist "%BLDSQL%\sqlite3.def" move "%BLDSQL%\sqlite3.def" .
 if %USE_ICU%  EQU 1 copy /Y "%ICUBIN%\icu*.dll" .
 if %USE_ZLIB% EQU 1 copy /Y "%ZLIBDIR%\zlib1.dll" .
 copy /Y "%OPENSSL_PREFIX%\bin\libcrypto*.dll" .
