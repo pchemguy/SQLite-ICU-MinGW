@@ -130,6 +130,7 @@ echo ZLIB_LIB       = %ZLIB_LIB%
 echo ZLIB_LIBSTATIC = %ZLIB_LIBSTATIC%
 echo ZLIB_LIBIMPORT = %ZLIB_LIBIMPORT%
 echo ZLIB_LIBSHARED = %ZLIB_LIBSHARED%
+echo ZLIBDIR        = %ZLIBDIR%
 echo ----------------------------------------
 echo.
 

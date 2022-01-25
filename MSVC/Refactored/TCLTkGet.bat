@@ -8,8 +8,8 @@ set PKGDIR=%BASEDIR%\pkg
 set BLDDIR=%BASEDIR%\bld
 set DEVDIR=%BASEDIR%\dev
 set HOMTCL=%DEVDIR%\tcl
-set OUTTCL="%BASEDIR%\tclout.log"
-set ERRTCL="%BASEDIR%\tclerr.log"
+set OUTTCL="%BLDDIR%\stdout.log"
+set ERRTCL="%BLDDIR%\stderr.log"
 del %OUTTCL% 2>nul
 del %ERRTCL% 2>nul
 set ResultCode=0
@@ -100,6 +100,9 @@ echo.
 echo ============= TCL/TK building is complete. ============
 echo ResultCode: %ResultCode% (^>0 - errors occured) . Check the log files for errors. 
 echo.
+
+:: For SQLite\Makefile.msc
+set TCLDIR=%HOMTCL%
 
 :: Cleanup
 set TCLVER=
