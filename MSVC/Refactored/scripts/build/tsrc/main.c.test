@@ -1,4 +1,3 @@
-int sqlite3_libversion_number(void){ return SQLITE_VERSION_NUMBER; }
 
 /*
 ** Verifies handling of 64-bit integers

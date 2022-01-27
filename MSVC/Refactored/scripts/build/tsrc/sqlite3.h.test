@@ -1,4 +1,3 @@
-typedef sqlite_uint64 sqlite3_uint64;
 
 /*
 ** Verifies handling of 64-bit integers

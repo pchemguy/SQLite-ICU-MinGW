@@ -1,4 +1,3 @@
-   rtree.c
    csv.c
    regexp.c
    mmapwarm.c

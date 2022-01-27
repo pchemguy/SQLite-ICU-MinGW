@@ -50,7 +50,7 @@ if not defined USE_STDCALL (
 if not exist "%BLDSQL%" mkdir "%BLDSQL%"
 call :SET_TARGETS %*
 call :SETENV 1>>%OUTSQL% 2>>%ERRSQL%
-echo Building %DBENG% ...
+echo Building %DBENG%-%ARCH% ...
 echo WITH_EXTRA_EXT=%WITH_EXTRA_EXT%
 echo USE_STDCALL=%USE_STDCALL%
 echo USE_ZLIB=%USE_ZLIB%
@@ -387,60 +387,41 @@ exit /b 0
 
 :: ============================================================================
 :EXT_ADD_SOURCES_TO_MKSQLITE3C_TCL
-set FILENAME=mksqlite3c.tcl
+
+set FILENAME=%SRCSQL%\tool\mksqlite3c.tcl
 echo ========== Patching "%FILENAME%" ===========
-tclsh "%BASEDIR%\scripts\addlines.tcl" "%FILENAME%" "%FILENAME%.ext" "%SRCSQL%\tool"
+sed -i "%FILENAME%" -e "/^   rtree.c$/r %FILENAME%.ext"
 
 exit /b 0
 
 
 :: ============================================================================
 :EXT_ADD_SOURCES_TO_MAKEFILE_MSC
-set FILENAME=Makefile.msc
-cd "%BLDSQL%"
+set FILENAME=%BLDSQL%\Makefile.msc
 echo ========== Patching "%FILENAME%" ===========
-tclsh "%BASEDIR%\scripts\addlines.tcl" "%FILENAME%" "%FILENAME%.ext" "%BLDSQL%"
-ren "%FILENAME%" "%FILENAME%" 
-
-exit /b 0
-
-
-:: ============================================================================
-:EXT_ADD_SOURCES_TO_MKSQLITE3C_TCL
-set FILENAME=mksqlite3c.tcl
-echo ========== Patching "%FILENAME%" ===========
-set TARGETDIR=%SRCSQL%\tool
-cd /d "%TARGETDIR%"
-if not exist "%FILENAME%.bak" (
-  copy /Y "%FILENAME%" "%FILENAME%.bak"
-) else (
-  copy /Y "%FILENAME%.bak" "%FILENAME%"
-)
-tclsh "%BASEDIR%\scripts\addlines.tcl" "%FILENAME%" "%FILENAME%.ext" "%TARGETDIR%"
+sed -i "%FILENAME%" -e "/^  \$(TOP)\\ext\\rtree\\rtree.c \\$/r %FILENAME%.ext"
 
 exit /b 0
 
 
 :: ============================================================================
 :TEST_MAIN_C_SQLITE3_H
-set TARGETDIR=%BLDSQL%\tsrc
-set FILENAME=main.c
+set FILENAME=%BLDSQL%\tsrc\main.c
 echo ========== Patching "%FILENAME%" ===========
-tclsh "%BASEDIR%\scripts\addlines.tcl" "%FILENAME%" "%FILENAME%.test" "%TARGETDIR%"
-set FILENAME=sqlite3.h
+sed -i "%FILENAME%" -e "/^int sqlite3_libversion_number/r %FILENAME%.test"
+set FILENAME=%BLDSQL%\tsrc\sqlite3.h
 echo ========== Patching "%FILENAME%" ===========
-tclsh "%BASEDIR%\scripts\addlines.tcl" "%FILENAME%" "%FILENAME%.test" "%TARGETDIR%"
+sed -i "%FILENAME%" -e "/^typedef sqlite_uint64/r %FILENAME%.test"
 
 exit /b 0
 
 
 :: ============================================================================
 :EXT_MAIN
-set TARGETDIR=%BLDSQL%\tsrc
-set FILENAME=main.c
+set FILENAME=%BLDSQL%\tsrc\main.c
 echo ========== Patching "%FILENAME%" ===========
-tclsh "%BASEDIR%\scripts\addlines.tcl" "%FILENAME%" "%FILENAME%.1.ext" "%TARGETDIR%"
-tclsh "%BASEDIR%\scripts\addlines.tcl" "%FILENAME%" "%FILENAME%.2.ext" "%TARGETDIR%"
+sed -i "%FILENAME%" -e "/^int sqlite3Json1Init/r %FILENAME%.1.ext"
+sed -i "%FILENAME%" -e "/^  sqlite3RtreeInit,$/r %FILENAME%.2.ext"
 
 exit /b 0
 
@@ -466,6 +447,18 @@ set MAPLIST=^
 
 set MAPLIST=%MAPLIST:`="%
 tclsh "%BASEDIR%\scripts\replace_multi.tcl" "%FILENAME%" %MAPLIST%
+
+exit /b 0
+
+set FILENAME=%BLDSQL%\tsrc\normalize.c
+echo ========== Patching "%FILENAME%" ===========
+sed -e "s/^int main/int sqlite3_normalize_main/" ^
+    -e "s/\([^G]CC\)_/\1N_/g" ^
+    -e "s/TK_/TKN_/g" ^
+    -e "s/aiClass/aiClassN/g" ^
+    -e "s/IdChar(/IdCharN(/g" ^
+    -e "s/sqlite3\([A-Z]\)/sqlite3N\1/g" ^
+    -i "%FILENAME%"
 
 exit /b 0
 
