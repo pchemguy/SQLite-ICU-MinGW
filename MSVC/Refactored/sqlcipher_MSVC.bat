@@ -216,8 +216,9 @@ if not "/%ErrorLevel%/"=="/0/" exit /b %ErrorLevel%
 echo ===== Setting OpenSSL options =====
 call "%~dp0OpenSSLGet.bat"
 if not "/%ErrorLevel%/"=="/0/" exit /b %ErrorLevel%
-set TCCOPTS=-I"%OSSL_INCLUDE%" %TCCOPTS%
-set TLIBS=/LIBPATH:"%OSSL_LIBPATH%" %OSSL_LIBIMPORT% %TLIBS%
+set CCOPTS=%CCOPTS% -I"%OSSL_INCLUDE%"
+set LTLIBPATHS=%LTLIBPATHS% /LIBPATH:"%OSSL_LIBPATH%"
+set LTLIBS=%LTLIBS% %OSSL_LIBIMPORT%
 
 echo ===== Setting SQLCIPHER options =====
 set DSQLITE_TEMP_STORE=2
@@ -428,28 +429,6 @@ exit /b 0
 
 :: ============================================================================
 :EXT_NORMALIZE
-cd /d "%BLDSQL%\tsrc"
-set FILENAME=normalize.c
-echo ========== Patching "%FILENAME%" ===========
-
-set MAPLIST=^
-`int main` `int sqlite3_normalize_main` ^
-`CC_` `CCN_` ^
-`TK_` `TKN_` ^
-`aiClass` `aiClassN` ^
-`sqlite3UpperToLower` `sqlite3UpperToLowerN` ^
-`sqlite3CtypeMap` `sqlite3CtypeMapN` ^
-`sqlite3GetToken` `sqlite3GetTokenN` ^
-`IdChar(` `IdCharN(` ^
-`sqlite3I` `sqlite3NI` ^
-`sqlite3T` `sqlite3NT` ^
-`CCN__` `CC__`
-
-set MAPLIST=%MAPLIST:`="%
-tclsh "%BASEDIR%\scripts\replace_multi.tcl" "%FILENAME%" %MAPLIST%
-
-exit /b 0
-
 set FILENAME=%BLDSQL%\tsrc\normalize.c
 echo ========== Patching "%FILENAME%" ===========
 sed -e "s/^int main/int sqlite3_normalize_main/" ^
