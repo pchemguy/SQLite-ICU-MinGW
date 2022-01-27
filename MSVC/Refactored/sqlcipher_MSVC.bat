@@ -32,6 +32,7 @@ set BASEDIR=%BASEDIR:~0,-1%
 set PKGDIR=%BASEDIR%\pkg
 set BLDDIR=%BASEDIR%\bld
 set DEVDIR=%BASEDIR%\dev
+set BINSQL=%BASEDIR%\dev\%DBENG%\%ARCH%
 set BLDSQL=%BASEDIR%\bld\%DBENG%\%ARCH%
 set SRCSQL=%BASEDIR%\bld\%DBENG%\src
 
@@ -176,23 +177,27 @@ if not defined USE_ICU (set USE_ICU=1)
 call "%~dp0ICUGet.bat"
 if not "/%ErrorLevel%/"=="/0/" exit /b %ErrorLevel%
 
-::ZLIB_OPTIONS
-echo ===== Setting ZLIB options =====
-if not "/%WITH_EXTRA_EXT%/"=="/1/" (
-  set USE_ZLIB=0
-  set USE_SQLAR=0
-) else (
+if not defined WITH_EXTRA_EXT set WITH_EXTRA_EXT=1
+if %WITH_EXTRA_EXT% EQU 1 (
   if not defined USE_ZLIB set USE_ZLIB=1
   if not defined USE_SQLAR (set USE_SQLAR=1)
-  if "/!USE_ZLIB!/"=="/1/" (
-    set "BUILD_ZLIB=0"
-    call "%~dp0ZLibGet.bat"
-    if not "/!ErrorLevel!/"=="/0/" exit /b !ErrorLevel!
-  )
+) else (
+  set USE_ZLIB=0
+  set USE_SQLAR=0
+)
+if not defined USE_LIBSHELL set USE_LIBSHELL=0
+
+::ZLIB_OPTIONS
+echo ===== Setting ZLIB options =====
+if %USE_ZLIB% EQU 1 (
+  set BUILD_ZLIB=0
+  call "%~dp0ZLibGet.bat"
+  if not "/!ErrorLevel!/"=="/0/" exit /b !ErrorLevel!
   set ZLIBLIB=!ZLIB_LIBIMPORT!
 )
 
 call :BUILD_OPTIONS
+
 if /I "/%DBENG%/"=="/sqlcipher/" call :SQLCIPHER_OPTIONS
 
 exit /b 0
@@ -217,40 +222,6 @@ set TLIBS=/LIBPATH:"%OSSL_LIBPATH%" %OSSL_LIBIMPORT% %TLIBS%
 echo ===== Setting SQLCIPHER options =====
 set DSQLITE_TEMP_STORE=2
 set EXT_FEATURE_FLAGS=-DSQLITE_HAS_CODEC %EXT_FEATURE_FLAGS%
-
-exit /b 0
-
-
-:: ============================================================================
-:ICU_OPTIONS
-:: In VBA6, it might be necessary to load individual libraries explicitly in the
-:: correct order (dependencies must be loaded before the depending libraries.
-echo ===== Setting ICU options =====
-if not defined USE_ICU (set USE_ICU=1)
-if not %USE_ICU% EQU 1 (exit /b 0)
-if "/%VSCMD_ARG_TGT_ARCH%/" == "/x64/" (set ARCHX=64)
-if "/%VSCMD_ARG_TGT_ARCH%/" == "/x86/" (set ARCHX=)
-if not defined ICU_HOME (set ICU_HOME=%DEVDIR%\icu4c)
-call :CHECKTOOL uconv "%ICU_HOME%\bin%ARCHX%"
-
-if "/%TOOLPATH%/"=="//" (
-  echo ICU binaries not found, disabling the ICU extension.
-  set USE_ICU=0
-  exit /b 0
-)
-echo Found ICU binaries.
-
-set ICU_HOME=!TOOLPATH:\bin%ARCHX%\uconv.exe=!
-set ICUBIN=%ICU_HOME%\bin%ARCHX%
-set ICUINC=%ICU_HOME%\include
-set ICULIB=%ICU_HOME%\lib%ARCHX%
-
-if "/%LIB%/"=="/!LIB:%ICULIB%=!/" (set "LIB=%ICULIB%;%LIB%")
-if "/%Path%/"=="/!Path:%ICUBIN%=!/" (set "Path=%ICUBIN%;%Path%")
-if "/%INCLUDE%/"=="/!INCLUDE:%ICUINC%=!/" (set "INCLUDE=%ICUINC%;%INCLUDE%")
-
-set ICUINC=
-set ICULIB=
 
 exit /b 0
 
@@ -288,8 +259,6 @@ set EXT_FEATURE_FLAGS=^
 -DSQLITE_USE_URI=1 ^
 -DSQLITE_SOUNDEX
 
-if not defined USE_LIBSHELL set USE_LIBSHELL=0
-if not defined WITH_EXTRA_EXT set WITH_EXTRA_EXT=1
 if %WITH_EXTRA_EXT% EQU 1 (
   echo ========== EXTRA EXTENSIONS ARE ENABLED ==========
   echo ============ TEST FUNCTIONS ARE ENABLED ==========
@@ -335,22 +304,20 @@ exit /b 0
 
 :: ============================================================================
 :MAKEFILE_MSC_TOP_AND_DEBUG_ZLIB_STDCALL
-set FILENAME=Makefile.msc
-cd /d "%BLDSQL%"
-copy /Y "%SRCSQL%\%FILENAME%" .
 if not defined DSQLITE_TEMP_STORE (set DSQLITE_TEMP_STORE=1)
 
-set MAPLIST=^
-`TOP = .` `TOP = %SRCSQL%` ^
-`DSQLITE_TEMP_STORE=1` `DSQLITE_TEMP_STORE=%DSQLITE_TEMP_STORE%` ^
-`win32\Makefile.msc clean` `win32\Makefile.msc LOC=$(ZLIBLOC) clean`
-
-set MAPLIST=%MAPLIST:`="%
-tclsh "%BASEDIR%\scripts\replace_multi.tcl" "%FILENAME%" %MAPLIST%
-
+set FILENAME=%BLDSQL%\Makefile.msc
 if %USE_LIBSHELL% EQU 1 (
-  tclsh "%BASEDIR%\scripts\addlines.tcl" "%FILENAME%" "%FILENAME%.libshell" "%BLDSQL%"
-)
+  set LIBSHELLEXT="/shell:\s*\$.SQLITE3EXE.$/r %FILENAME%.libshell"
+) else (set LIBSHELLEXT=";")
+sed -e "s/^TOP = .$/TOP = %SRCSQL:\=\\%/" ^
+    -e "s/\(DSQLITE_TEMP_STORE=\)1/\1%DSQLITE_TEMP_STORE%/g" ^
+    -e "s/\(win32\\Makefile.msc\) clean/\1 LOC=$(ZLIBLOC) clean/" ^
+    -e %LIBSHELLEXT% ^
+    <"%SRCSQL%\Makefile.msc" ^
+    >"%FILENAME%"
+
+set LIBSHELLEXT=
 
 type "%FILENAME%.debug" >>"%FILENAME%"
 
@@ -390,50 +357,28 @@ for %%G in (%HDRS%) do (
 )
 
 set FILENAME=objects.h
-set OLDTEXT=OBJ_nid2sn(int
-set NEWTEXT=__cdecl %OLDTEXT%
-tclsh "%BASEDIR%\scripts\replace.tcl" "%OLDTEXT%" "%NEWTEXT%" "%FILENAME%"
+sed -e "s/\*\(OBJ_nid2sn(int\)/*__cdecl \1/" ^
+    -i "%FILENAME%"
 
 set FILENAME=rand.h
-set MAPLIST=^
-`void RAND_add(`  `void __cdecl RAND_add(` ^
-`int RAND_bytes(` `int __cdecl RAND_bytes(`
-
-set MAPLIST=%MAPLIST:`="%
-tclsh "%BASEDIR%\scripts\replace_multi.tcl" "%FILENAME%" %MAPLIST%
+sed -e "s/^void RAND_add(/void __cdecl RAND_add(/" ^
+    -e "s/^int RAND_bytes(/int __cdecl RAND_bytes(/" ^
+    -i "%FILENAME%"
 
 set FILENAME=hmac.h
-set MAPLIST=^
-`HMAC_CTX *HMAC_CTX_new(` `HMAC_CTX *__cdecl HMAC_CTX_new(` ^
-`void HMAC_CTX_free(`     `void __cdecl HMAC_CTX_free(`     ^
-`int HMAC_Init_ex(`       `int __cdecl HMAC_Init_ex(`       ^
-`int HMAC_Update(`        `int __cdecl HMAC_Update(`        ^
-`int HMAC_Final(`         `int __cdecl HMAC_Final(`
-
-set MAPLIST=%MAPLIST:`="%
-tclsh "%BASEDIR%\scripts\replace_multi.tcl" "%FILENAME%" %MAPLIST%
+sed -e "s/HMAC_CTX \*HMAC_CTX_new(/HMAC_CTX *__cdecl HMAC_CTX_new(/" ^
+    -e "s/void HMAC_CTX_free(/void __cdecl HMAC_CTX_free(/" ^
+    -e "s/int HMAC_/int __cdecl HMAC_/g" ^
+    -i "%FILENAME%"
 
 set FILENAME=evp.h
-set MAPLIST=^
-`int PKCS5_PBKDF2_HMAC(`              `int __cdecl PKCS5_PBKDF2_HMAC(`              ^
-`int EVP_MD_get_size(`                `int __cdecl EVP_MD_get_size(`                ^
-`int EVP_CIPHER_get_nid(`             `int __cdecl EVP_CIPHER_get_nid(`             ^
-`int EVP_CIPHER_get_block_size(`      `int __cdecl EVP_CIPHER_get_block_size(`      ^
-`int EVP_CIPHER_get_key_length(`      `int __cdecl EVP_CIPHER_get_key_length(`      ^
-`int EVP_CIPHER_get_iv_length(`       `int __cdecl EVP_CIPHER_get_iv_length(`       ^
-`int EVP_CipherInit_ex(`              `int __cdecl EVP_CipherInit_ex(`              ^
-`int EVP_CipherUpdate(`               `int __cdecl EVP_CipherUpdate(`               ^
-`int EVP_CipherFinal_ex(`             `int __cdecl EVP_CipherFinal_ex(`             ^
-`int EVP_CIPHER_CTX_set_padding(`     `int __cdecl EVP_CIPHER_CTX_set_padding(`     ^
-`void EVP_CIPHER_CTX_free(`           `void __cdecl EVP_CIPHER_CTX_free(`           ^
-`EVP_MD *EVP_sha1(`                   `EVP_MD *__cdecl EVP_sha1(`                   ^
-`EVP_MD *EVP_sha256(`                 `EVP_MD *__cdecl EVP_sha256(`                 ^
-`EVP_MD *EVP_sha512(`                 `EVP_MD *__cdecl EVP_sha512(`                 ^
-`EVP_CIPHER *EVP_aes_256_cbc(`        `EVP_CIPHER *__cdecl EVP_aes_256_cbc(`        ^
-`EVP_CIPHER_CTX *EVP_CIPHER_CTX_new(` `EVP_CIPHER_CTX *__cdecl EVP_CIPHER_CTX_new(` 
-
-set MAPLIST=%MAPLIST:`="%
-tclsh "%BASEDIR%\scripts\replace_multi.tcl" "%FILENAME%" %MAPLIST%
+sed -e "s/int PKCS5_PBKDF2_HMAC(/int __cdecl PKCS5_PBKDF2_HMAC(/" ^
+    -e "s/int EVP_/int __cdecl EVP_/g" ^
+    -e "s/void \(EVP_CIPHER_CTX_free(\)/void __cdecl \1/" ^
+    -e "s/^const EVP_MD \*EVP_sha/const EVP_MD *__cdecl EVP_sha/g" ^
+    -e "s/\(EVP_CIPHER \*\)\(EVP_aes_256_cbc(\)/\1__cdecl \2/" ^
+    -e "s/\(EVP_CIPHER_CTX \*\)\(EVP_CIPHER_CTX_new(\)/\1__cdecl \2/" ^
+    -i "%FILENAME%"
 
 popd
 
@@ -641,6 +586,9 @@ echo. >>%FILENAME%
 echo. >>%FILENAME%
 echo #endif /* ^^!defined^^(LIBSHELL_C^^) ^&^& defined^^(%FLAG%^^) */ >>%FILENAME%
 
+if /I "/%TARGETS%/"=="/dll/" (set TARGETS=shelldll) else (
+if /I "/%TARGETS:~0,4%/"=="/dll /" (set TARGETS=shell%TARGETS%) else (
+if /I not "/%TARGETS%/"=="/%TARGETS: dll=%/" (set TARGETS=%TARGETS: dll= shelldll%)))
 popd
 
 exit /b 0
@@ -649,10 +597,9 @@ exit /b 0
 :: ============================================================================
 :COLLECT_BINARIES
 echo ========== Collecting binaries ===========
-set BINDIR=%~dp0bin
-if not exist "%BINDIR%" mkdir "%BINDIR%"
-del /Q "%BINDIR%\*" 2>nul
-cd /d "%BINDIR%"
+if not exist "%BINSQL%" mkdir "%BINSQL%" 1>nul
+del /Q "%BINSQL%\*" 2>nul
+cd /d "%BINSQL%"
 if exist "%BLDSQL%\sqlite3.dll" move "%BLDSQL%\sqlite3.dll" .
 if exist "%BLDSQL%\sqlite3.exe" move "%BLDSQL%\sqlite3.exe" .
 if exist "%BLDSQL%\sqlite3.def" move "%BLDSQL%\sqlite3.def" .

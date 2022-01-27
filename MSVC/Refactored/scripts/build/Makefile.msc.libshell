@@ -1,4 +1,3 @@
-shell:	$(SQLITE3EXE)
 
 libshell.lo:	libshell.c
 	$(LTCOMPILE) $(CORE_COMPILE_OPTS) -c libshell.c
