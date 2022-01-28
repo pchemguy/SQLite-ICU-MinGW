@@ -9,7 +9,7 @@
 :: "%dp0dev\zlib\lib" and .h to "%dp0dev\zlib\include".
 :: 
 :: Set
-::   - ZLIB_STDCALL to 1 to build STDCALL; use CDECL otherwise.
+::   - USE_STDCALL to 1 to build STDCALL; use CDECL otherwise.
 ::   - ZLIB_SHARED to 1 to use dynamic linking via an import library (default);
 ::     to use static linking, set ZLIB_SHARED to 0.
 ::
@@ -99,7 +99,7 @@ if "/!LIBPATH!/"=="/!LIBPATH:%ZLIB_LIBPATH%=!/" set LIBPATH=%ZLIB_LIBPATH%;%LIBP
 set ZLIB_INCLUDE=%HOMZLIB%
 if "/!INCLUDE!/"=="/!INCLUDE:%ZLIB_INCLUDE%=!/" set INCLUDE=%ZLIB_INCLUDE%;%INCLUDE%
 
-if "/%ZLIB_STDCALL%/"=="/1/" (
+if "/%USE_STDCALL%/"=="/1/" (
   echo Building WINAPI
   set ZLIB_CFLAGS=-DZLIB_WINAPI !ZLIB_CFLAGS!
 ) else (
@@ -118,7 +118,7 @@ if not "/%ZLIB_SHARED%/"=="/0/" (
 
 echo.
 echo ============= ZLIB settings ============
-echo ZLIB_STDCALL   = %ZLIB_STDCALL%
+echo USE_STDCALL    = %USE_STDCALL%
 echo ZLIB_SHARED    = %ZLIB_SHARED%
 echo ----------------------------------------
 echo.
