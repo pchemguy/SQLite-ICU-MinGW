@@ -62,7 +62,7 @@ if not exist "%SRCZLIB%\Makefile" (
   if exist "%SRCZLIB%" rmdir /S /Q "%SRCZLIB%" 1>nul
   if not exist "!SRCZLIB:~0,-4!" mkdir "!SRCZLIB:~0,-4!" 1>nul
   call "%~dp0ExtractArchive.bat" %PKGNAM% "!SRCZLIB:~0,-4!"
-  if not "/%ErrorLevel%/"=="/0/" exit /b %ErrorLevel%
+  if not "/!ErrorLevel!/"=="/0/" exit /b !ErrorLevel!
   cd /d "%SRCZLIB:~0,-4%"
   move "zlib-%PKGVER%" "src" 1>nul
 )

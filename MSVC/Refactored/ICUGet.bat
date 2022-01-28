@@ -34,12 +34,12 @@ if not exist "%HOMICU%\bin\uconv.exe" (
   mkdir "%HOMICU%" 1>nul
   set TARPATTERN=bin* lib*
   call "%~dp0ExtractArchive.bat" %ICUx32File% "%HOMICU%"
-  if not "/%ErrorLevel%/"=="/0/" exit /b %ErrorLevel%
+  if not "/!ErrorLevel!/"=="/0/" exit /b !ErrorLevel!
 )
 
 if not exist "%HOMICU%\bin64\uconv.exe" (
   call "%~dp0ExtractArchive.bat" %ICUx64File% "%HOMICU%"
-  if not "/%ErrorLevel%/"=="/0/" exit /b %ErrorLevel%
+  if not "/!ErrorLevel!/"=="/0/" exit /b !ErrorLevel!
 )
 
 :: Set building flags

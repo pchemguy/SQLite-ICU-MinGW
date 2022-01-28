@@ -34,7 +34,7 @@ if not exist "%BLDDIR%\tcl\win\makefile.vc" (
   set PkgName=%TCLARC%
   rmdir /S /Q "%BLDDIR%\tcl" 2>nul
   call "%~dp0ExtractArchive.bat" !PkgName! "%BLDDIR%"
-  if not "/%ErrorLevel%/"=="/0/" (set ResultCode=%ErrorLevel%)
+  if not "/!ErrorLevel!/"=="/0/" (set ResultCode=!ErrorLevel!)
   cd /d "%BLDDIR%"
   move "%TCLARC:~0,-11%" "tcl"
 ) 1>>%OUTTCL% 2>>%ERRTCL%
@@ -44,7 +44,7 @@ if not exist "%BLDDIR%\tk\win\makefile.vc" (
   set PkgName=%TKARC%
   rmdir /S /Q "%BLDDIR%\tk%" 2>nul
   call "%~dp0ExtractArchive.bat" !PkgName! "%BLDDIR%"
-  if not "/%ErrorLevel%/"=="/0/" (set ResultCode=%ErrorLevel%)
+  if not "/!ErrorLevel!/"=="/0/" (set ResultCode=!ErrorLevel!)
   cd /d "%BLDDIR%"
   move "%TKARC:~0,-11%" "tk"
 ) 1>>%OUTTCL% 2>>%ERRTCL%
@@ -60,14 +60,14 @@ if not exist "%TMPDIR%\tclConfig.sh" (
   echo ============= Making TCL ============
   set TMPDIR=
   nmake -f makefile.vc release
-  if not "/%ErrorLevel%/"=="/0/" (set ResultCode=%ErrorLevel%)
+  if not "/!ErrorLevel!/"=="/0/" (set ResultCode=!ErrorLevel!)
 ) 1>>%OUTTCL% 2>>%ERRTCL%
 
 echo ============= Installing TCL ============
 if not exist "%HOMTCL%\bin\tclsh.exe" (
   echo ============= Installing TCL ============
   nmake -f makefile.vc install INSTALLDIR="%HOMTCL%"
-  if not "/%ErrorLevel%/"=="/0/" (set ResultCode=%ErrorLevel%)
+  if not "/!ErrorLevel!/"=="/0/" (set ResultCode=!ErrorLevel!)
   cd /d "%HOMTCL%\bin"
   (echo.>>_tclsh.exe) & xcopy /Y tclsh*.exe _tclsh.exe & move _tclsh.exe tclsh.exe
 ) 1>>%OUTTCL% 2>>%ERRTCL%
@@ -81,14 +81,14 @@ for /f "Usebackq delims=" %%G in (`%CommandText%`) do (
 if not exist "%TMPDIR%\pkgIndex.tcl" (
   echo ============= Making TK ============
   nmake -f makefile.vc release TCLDIR="%BLDDIR%\tcl"
-  if not "/%ErrorLevel%/"=="/0/" (set ResultCode=%ErrorLevel%)
+  if not "/!ErrorLevel!/"=="/0/" (set ResultCode=!ErrorLevel!)
 ) 1>>%OUTTCL% 2>>%ERRTCL%
 
 echo ============= Installing TK ============
 if not exist "%HOMTCL%\bin\wish.exe" (
   echo ============= Installing TK ============
   nmake -f makefile.vc install INSTALLDIR="%HOMTCL%" TCLDIR="%BLDDIR%\tcl"
-  if not "/%ErrorLevel%/"=="/0/" (set ResultCode=%ErrorLevel%)
+  if not "/!ErrorLevel!/"=="/0/" (set ResultCode=!ErrorLevel!)
   cd /d "%HOMTCL%\bin"
   (echo.>>_wish.exe) & xcopy /Y wish*.exe _wish.exe & move _wish.exe wish.exe
 ) 1>>%OUTTCL% 2>>%ERRTCL%

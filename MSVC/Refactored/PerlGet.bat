@@ -44,7 +44,7 @@ if not exist "%HOMPERL%\bin\perl.exe" (
   if exist "%HOMPERL%" rmdir /S /Q "%HOMPERL%" 2>nul
   set TARPATTERN=perl
   call "%~dp0ExtractArchive.bat" %Perlx32File% "%HOMPERL%\.."
-  if not "/%ErrorLevel%/"=="/0/" exit /b %ErrorLevel%
+  if not "/!ErrorLevel!/"=="/0/" exit /b !ErrorLevel!
 )
 
 if "/!Path!/"=="/!Path:%HOMPERL%\bin=!/" set Path=%HOMPERL%\bin;%Path%

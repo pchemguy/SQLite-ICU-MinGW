@@ -54,7 +54,7 @@ if not exist "%SRCSSL%\Configure" (
   mkdir "%SRCSSL:~0,-4%" 1>nul
   set TARPATTERN=openssl*
   call "%~dp0ExtractArchive.bat" %PKGNAM% "%SRCSSL%\.."
-  if not "/%ErrorLevel%/"=="/0/" exit /b %ErrorLevel%
+  if not "/!ErrorLevel!/"=="/0/" exit /b %ErrorLevel%
   cd /d "%SRCSSL%\.."
   move "%PKGNAM:.tar.gz=%" "src" 1>nul
 )
@@ -83,7 +83,7 @@ if not exist "%BLDSSL%\libcrypto.lib" (
   cd /d "%BLDSSL%"
   echo ===== Making OpenSSL =====
   nmake 1>>%OUTSSL% 2>>%ERRSSL%
-  if %ErrorLevel% EQU 0 (
+  if !ErrorLevel! EQU 0 (
     echo ----- Made OpenSSL -----
   ) else (
     set ResultCode=%ErrorLevel%
@@ -133,7 +133,7 @@ echo OSSL_LIBPATH   = %OSSL_LIBPATH%
 echo OSSL_LIBSTATIC = %OSSL_LIBSTATIC%
 echo OSSL_LIBIMPORT = %OSSL_LIBIMPORT%
 echo OSSL_LIBSHARED = %OSSL_LIBSHARED%
-echo ----------------------------------------
+echo -------------------------------------------
 
 
 :: Cleanup

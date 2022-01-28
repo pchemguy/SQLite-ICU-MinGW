@@ -51,10 +51,10 @@ if not exist "%HOMNASM%\x32\nasm.exe" (
   if exist "%HOMNASM%" rmdir /S /Q "%HOMNASM%" 2>nul
   mkdir "%HOMNASM%"
   call "%~dp0ExtractArchive.bat" %NASMx32File% "%HOMNASM%"
-  if not "/%ErrorLevel%/"=="/0/" exit /b %ErrorLevel%
+  if not "/!ErrorLevel!/"=="/0/" exit /b !ErrorLevel!
   move "%HOMNASM%\nasm-%NASM_VERSION%" "%HOMNASM%\x32"
   call "%~dp0ExtractArchive.bat" %NASMx64File% "%HOMNASM%"
-  if not "/%ErrorLevel%/"=="/0/" exit /b %ErrorLevel%
+  if not "/!ErrorLevel!/"=="/0/" exit /b !ErrorLevel!
   move "%HOMNASM%\nasm-%NASM_VERSION%" "%HOMNASM%\x64"
 )
 
