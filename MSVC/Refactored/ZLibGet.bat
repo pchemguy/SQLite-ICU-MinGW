@@ -5,18 +5,10 @@
 :: The script enters the "%dp0distro" subdirectory (creates, if necessary).
 :: Distro archive is downloaded, if not present, and saved in "%dp0distro".
 :: Distro archive is expanded in "%dp0distro\zlib" (it contains the README
-:: file). The library is build along the source. Binaries are moved to
-:: "%dp0dev\zlib\lib" and .h to "%dp0dev\zlib\include".
-:: 
-:: Set
-::   - USE_STDCALL to 1 to build STDCALL; use CDECL otherwise.
-::   - ZLIB_SHARED to 1 to use dynamic linking via an import library (default);
-::     to use static linking, set ZLIB_SHARED to 0.
+:: file). The library is build via CMake/MSVC.
 ::
-set ZLIB_CFLAGS=
-set ZLIB_INCLUDE=
-set ZLIB_LIBPATH=
-set ZLIB_LIB=
+call "%~dp0CMakeMSVCActivate.bat"
+if not "/%ErrorLevel%/"=="/0/" exit /b %ErrorLevel%
 
 if "/%VSCMD_ARG_TGT_ARCH%/"=="/x64/" set "ARCH=x64"
 if "/%VSCMD_ARG_TGT_ARCH%/"=="/x86/" set "ARCH=x32"
@@ -26,6 +18,7 @@ set BASEDIR=%BASEDIR:~0,-1%
 set PKGDIR=%BASEDIR%\pkg
 set BLDDIR=%BASEDIR%\bld
 set DEVDIR=%BASEDIR%\dev
+set SRCZLIB=%BASEDIR%\bld\zlib\src
 set BLDZLIB=%BASEDIR%\bld\zlib\%ARCH%
 set HOMZLIB=%BASEDIR%\dev\zlib\%ARCH%
 
@@ -37,6 +30,12 @@ set ResultCode=0
 
 if not exist "%PKGDIR%" mkdir "%PKGDIR%"
 pushd "%PKGDIR%"
+
+:: Build dir holds the log files, so reset it first, if necessary.
+if not exist "%BLDZLIB%\CMakeCache.txt" (
+  if exist "%BLDZLIB%" rmdir /S /Q "%BLDZLIB%" 1>nul
+  mkdir "%BLDZLIB%" 1>nul
+)
 
 :: Retrieve ChangeLog.txt and extract the latest release version (at the top).
 set ChangeLogURL=https://zlib.net/ChangeLog.txt
@@ -59,81 +58,79 @@ call "%~dp0DownloadFile.bat" %ReleaseURL%
 if not "/%ErrorLevel%/"=="/0/" exit /b %ErrorLevel%
 
 :: Expand
-if not exist "%BLDZLIB%\Makefile" (
-  if exist "%BLDZLIB%" rmdir /S /Q "%BLDZLIB%" 1>nul
-  if not exist "!BLDZLIB:~0,-4!" mkdir "!BLDZLIB:~0,-4!" 1>nul
-  call "%~dp0ExtractArchive.bat" %PKGNAM% "!BLDZLIB:~0,-4!"
+if not exist "%SRCZLIB%\Makefile" (
+  if exist "%SRCZLIB%" rmdir /S /Q "%SRCZLIB%" 1>nul
+  if not exist "!SRCZLIB:~0,-4!" mkdir "!SRCZLIB:~0,-4!" 1>nul
+  call "%~dp0ExtractArchive.bat" %PKGNAM% "!SRCZLIB:~0,-4!"
   if not "/%ErrorLevel%/"=="/0/" exit /b %ErrorLevel%
-  cd /d "%BLDZLIB%\.."
-  move "zlib-%PKGVER%" "%ARCH%" 1>nul
+  cd /d "%SRCZLIB:~0,-4%"
+  move "zlib-%PKGVER%" "src" 1>nul
+)
+
+:: Configure
+if not exist "%BLDZLIB%\CMakeCache.txt" (
+  echo. 1>>%OUTZLIB% 2>>%ERRZLIB%
+  echo ============= CMake configure ZLIB ============ 1>>%OUTZLIB% 2>>%ERRZLIB%
+  if exist "%HOMZLIB%" rmdir /S /Q "%HOMZLIB%" 1>nul
+  cd /d "%BLDZLIB%"
+  cmake "%SRCZLIB%" -DCMAKE_INSTALL_PREFIX:PATH="%HOMZLIB%" 1>>%OUTZLIB% 2>>%ERRZLIB%
+) else (
+  echo ============= Using previously configured ZLIB ============ 1>>%OUTZLIB% 2>>%ERRZLIB%
 )
 
 :: Build
-cd /d "%BLDZLIB%"
-if "/%USE_STDCALL%/"=="/1/" (set ZLIB_LOC=-DZLIB_WINAPI)
-nmake -f win32/Makefile.msc LOC="%ZLIB_LOC%" clean all 1>>%OUTZLIB% 2>>%ERRZLIB%
+if not exist "%BLDZLIB%\Release\zlib.dll" (
+  echo. 1>>%OUTZLIB% 2>>%ERRZLIB%
+  echo ============= CMake build ZLIB ============ 1>>%OUTZLIB% 2>>%ERRZLIB%
+  if exist "%HOMZLIB%" rmdir /S /Q "%HOMZLIB%" 1>nul
+  cd /d "%BLDZLIB%"
+  cmake --build . --target ALL_BUILD --config Release 1>>%OUTZLIB% 2>>%ERRZLIB%
+) else (
+  echo ============= Using previously built ZLIB ============ 1>>%OUTZLIB% 2>>%ERRZLIB%
+)
+
+:: Install
+if not exist "%HOMZLIB%\bin\zlib.dll" (
+  echo. 1>>%OUTZLIB% 2>>%ERRZLIB%
+  echo ============= CMake install ZLIB ============ 1>>%OUTZLIB% 2>>%ERRZLIB%
+  if exist "%HOMZLIB%" rmdir /S /Q "%HOMZLIB%" 1>nul
+  mkdir "%HOMZLIB%" 1>nul
+  cd /d "%BLDZLIB%"
+  cmake --install . 1>>%OUTZLIB% 2>>%ERRZLIB%
+) else (
+  echo ============= Using previously installed ZLIB ============ 1>>%OUTZLIB% 2>>%ERRZLIB%
+)
 set ResultCode=%ErrorLevel%
 if not "/%ResultCode%/"=="/0/" (
   echo Error making ZLIB.
   exit /b %ResultCode%
 )
 
-:: Collect binaries
-if exist "%HOMZLIB%" rmdir /S /Q "%HOMZLIB%" 1>nul
-mkdir "%HOMZLIB%"
-set ZLIB_LIBSTATIC=zlib.lib
-copy /Y "%BLDZLIB%\%ZLIB_LIBSTATIC%" "%HOMZLIB%" 1>nul
-set ZLIB_LIBIMPORT=zdll.lib
-copy /Y "%BLDZLIB%\%ZLIB_LIBIMPORT%" "%HOMZLIB%" 1>nul
-set ZLIB_LIBSHARED=zlib1.dll
-copy /Y "%BLDZLIB%\%ZLIB_LIBSHARED%" "%HOMZLIB%" 1>nul
-copy /Y "%BLDZLIB%\zlib.h" "%HOMZLIB%" 1>nul
-copy /Y "%BLDZLIB%\zconf.h" "%HOMZLIB%" 1>nul
-
 :: Set building flags
-::   /LIBPATH:"%HOMZLIB%\lib"
 set ZLIBDIR=%HOMZLIB%
-set ZLIB_LIBPATH=%HOMZLIB%
+set ZLIB_ROOT=%HOMZLIB%
+set ZLIB_BINPATH=%HOMZLIB%\bin
+set ZLIB_LIBPATH=%HOMZLIB%\lib
 if "/!LIBPATH!/"=="/!LIBPATH:%ZLIB_LIBPATH%=!/" set LIBPATH=%ZLIB_LIBPATH%;%LIBPATH%
-::   -I"%HOMZLIB%\include"
-set ZLIB_INCLUDE=%HOMZLIB%
+set ZLIB_INCLUDE=%HOMZLIB%\include
 if "/!INCLUDE!/"=="/!INCLUDE:%ZLIB_INCLUDE%=!/" set INCLUDE=%ZLIB_INCLUDE%;%INCLUDE%
 
-if "/%USE_STDCALL%/"=="/1/" (
-  echo Building WINAPI
-  set ZLIB_CFLAGS=-DZLIB_WINAPI !ZLIB_CFLAGS!
-) else (
-  echo Building CDECL
-  set ZLIB_CFLAGS=-DZEXPORT=__cdecl !ZLIB_CFLAGS!
-)
+set ZLIB_LIBSTATIC=zlibstatic.lib
+set ZLIB_LIBIMPORT=zlib.lib
+set ZLIB_LIBSHARED=zlib.dll
 
-if not "/%ZLIB_SHARED%/"=="/0/" (
-  echo SHARED ZLib setting requested.
-  set ZLIB_CFLAGS=-DZLIB_DLL !ZLIB_CFLAGS!
-  set ZLIB_LIB=!ZLIB_LIBIMPORT! !ZLIB_LIB!
-) else (
-  echo STATIC ZLib setting requested.
-  set ZLIB_LIB=!ZLIB_LIBSTATIC! !ZLIB_LIB!
-)
-
-echo.
-echo ============= ZLIB settings ============
-echo USE_STDCALL    = %USE_STDCALL%
-echo ZLIB_SHARED    = %ZLIB_SHARED%
-echo ----------------------------------------
 echo.
 echo ========== ZLIB linking flags ==========
-echo ZLIB_CFLAGS    = %ZLIB_CFLAGS%
+echo ZLIBDIR        = %ZLIBDIR%
+echo ZLIB_ROOT      = %ZLIB_ROOT%
+echo ZLIB_BINPATH   = %ZLIB_BINPATH%
 echo ZLIB_INCLUDE   = %ZLIB_INCLUDE%
 echo ZLIB_LIBPATH   = %ZLIB_LIBPATH%
-echo ZLIB_LIB       = %ZLIB_LIB%
 echo ZLIB_LIBSTATIC = %ZLIB_LIBSTATIC%
 echo ZLIB_LIBIMPORT = %ZLIB_LIBIMPORT%
 echo ZLIB_LIBSHARED = %ZLIB_LIBSHARED%
-echo ZLIBDIR        = %ZLIBDIR%
 echo ----------------------------------------
 echo.
-
 
 echo.
 echo ============= zlib building is complete. ============
@@ -142,7 +139,6 @@ echo.
 
 :: Cleanup
 set URL=
-set ZLIB_SHARED=
 set PKGVER=
 set BASEDIR=
 set HOMZLIB=
