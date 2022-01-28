@@ -63,7 +63,7 @@ if not exist "%DEVDIR%\gnu\grep.exe" (
   rmdir /S /Q "%TMPDIR%" 2>nul
 )
 
-if "/!Path!/"=="/!Path:%DEVDIR%\gnu=!/" set Path=%DEVDIR%\gnu;%Path%
+if "/!Path!/"=="/!Path:%DEVDIR%\gnu=!/" set Path=%Path%;%DEVDIR%\gnu
 
 :: Cleanup
 set GNU32URL=
