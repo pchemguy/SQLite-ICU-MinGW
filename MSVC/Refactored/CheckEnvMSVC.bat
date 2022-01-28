@@ -155,16 +155,20 @@ exit /b 0
 ::   - %1 - Variable name
 ::   - %2 - Variable value
 ::
+SetLocal
+
 set VarName=%~1
 set "VarValue=%~2"
 if "/%VarValue%/"=="//" (
   set ErrorStatus=1
   echo %%%VarName%%% not set.
 ) else (
+  set ErrorStatus=0
   echo %VarName%=!VarValue!
 )
 
-exit /b 0
+popd
+EndLocal & exit /b %ErrorStatus%
 
 
 :: ============================================================================
@@ -173,6 +177,11 @@ exit /b 0
 ::   - %1 - Tool executable name
 ::   - %2 - CD before check
 ::
+SetLocal
+
+if exist "%~2" (set TARGETDIR=%~2) else (set TARGETDIR=.)
+pushd "%TARGETDIR%"
+
 set CurDir=%CD%
 if exist "%~2" cd /d "%~2"
 set CommandText=where "%~1" 2^^^>nul
@@ -182,16 +191,17 @@ for /f "Usebackq delims=" %%i in (`%CommandText%`) do (
     set Output=%%i
   )
 )
-cd /d "%CurDir%"
 
 if "/%Output%/"=="//" (
   set ErrorStatus=1
   echo "%~1" not found.
 ) else (
+  set ErrorStatus=0
   echo %~1=%Output%
 )
 
-exit /b 0
+popd
+EndLocal & set "TOOLPATH=%Output%" & exit /b %ErrorStatus%
 
 
 :: ============================================================================
@@ -201,6 +211,9 @@ exit /b 0
 ::   - %2 - Variable value
 ::   - %3 - Substring
 ::
+SetLocal
+
+
 set VarName=%~1
 set VarValue=_%~2_
 set Substring=%~3
@@ -214,7 +227,8 @@ if "/%TestString%/"=="/%VarValue%/" (
   echo "%VarName%" - match found.
 )
 
-exit /b %ErrorStatus%
+popd
+EndLocal & exit /b %ErrorStatus%
 
 
 :: ============================================================================
