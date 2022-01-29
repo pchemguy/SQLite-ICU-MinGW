@@ -91,6 +91,10 @@ if %ResultCode% NEQ 0 (
 :: both the target file and its companion holding the size are renamed as invalid.
 :: Skip check if size information is not available.
 ::
+if "/%FileLen%/"=="/0/" (
+  set "FileLen="
+  echo.>"%FileName%.size"
+)
 if "/%FileLen%/"=="//" (
   echo Warning: file size information is not available.
   set FileSize=
