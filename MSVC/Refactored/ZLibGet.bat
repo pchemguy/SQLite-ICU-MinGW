@@ -7,9 +7,6 @@
 :: Distro archive is expanded in "%dp0distro\zlib" (it contains the README
 :: file). The library is build via CMake/MSVC.
 ::
-call "%~dp0CMakeMSVCActivate.bat"
-if not "/%ErrorLevel%/"=="/0/" exit /b %ErrorLevel%
-
 if "/%VSCMD_ARG_TGT_ARCH%/"=="/x64/" set "ARCH=x64"
 if "/%VSCMD_ARG_TGT_ARCH%/"=="/x86/" set "ARCH=x32"
 

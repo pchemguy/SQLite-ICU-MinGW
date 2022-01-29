@@ -9,6 +9,9 @@
 :: Distro archives are downloaded, if not present, and saved in "%dp0pkg".
 :: Distro archives are expanded in "%dp0dev\nasm" and NASM is prepended to Path.
 :: 
+call "%~dp0GNUGet.bat"
+if not "/%ErrorLevel%/"=="/0/" (set ResultCode=%ErrorLevel%)
+
 set BASEDIR=%~dp0
 set BASEDIR=%BASEDIR:~0,-1%
 set PKGDIR=%BASEDIR%\pkg
@@ -16,9 +19,6 @@ set BLDDIR=%BASEDIR%\bld
 set DEVDIR=%BASEDIR%\dev
 set HOMNASM=%DEVDIR%\nasm
 set ResultCode=0
-
-call "%~dp0GNUGet.bat"
-if not "/%ErrorLevel%/"=="/0/" (set ResultCode=%ErrorLevel%)
 
 if not exist "%PKGDIR%" mkdir "%PKGDIR%"
 pushd "%PKGDIR%"

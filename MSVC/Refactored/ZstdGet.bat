@@ -9,9 +9,6 @@ set DEVDIR=%BASEDIR%\dev
 set HOMZSTD=%DEVDIR%\zstd
 set ResultCode=0
 
-call "%~dp0GNUGet.bat"
-if not "/%ErrorLevel%/"=="/0/" (set ResultCode=%ErrorLevel%)
-
 if not exist "%PKGDIR%" mkdir "%PKGDIR%"
 pushd "%PKGDIR%"
 

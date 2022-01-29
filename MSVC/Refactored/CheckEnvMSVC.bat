@@ -179,12 +179,11 @@ EndLocal & exit /b %ErrorStatus%
 ::
 SetLocal
 
+set TOOLEXE=%~1
 if exist "%~2" (set TARGETDIR=%~2) else (set TARGETDIR=.)
 pushd "%TARGETDIR%"
 
-set CurDir=%CD%
-if exist "%~2" cd /d "%~2"
-set CommandText=where "%~1" 2^^^>nul
+set CommandText=where "%TOOLEXE%" 2^^^>nul
 set Output=
 for /f "Usebackq delims=" %%i in (`%CommandText%`) do (
   if "/!Output!/"=="//" (
@@ -194,10 +193,10 @@ for /f "Usebackq delims=" %%i in (`%CommandText%`) do (
 
 if "/%Output%/"=="//" (
   set ErrorStatus=1
-  echo "%~1" not found.
+  echo "%TOOLEXE%" not found.
 ) else (
   set ErrorStatus=0
-  echo %~1=%Output%
+  echo %TOOLEXE% location: %Output%
 )
 
 popd

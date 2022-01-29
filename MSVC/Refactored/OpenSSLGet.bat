@@ -2,6 +2,13 @@
 ::
 :: Prepares the OpenSSL library and sets build flags.
 ::
+call "%~dp0GNUGet.bat"
+if not "/%ErrorLevel%/"=="/0/" exit /b %ErrorLevel%
+call "%~dp0PerlGet.bat"
+if not "/%ErrorLevel%/"=="/0/" exit /b %ErrorLevel%
+call "%~dp0NASMGet.bat"
+if not "/%ErrorLevel%/"=="/0/" exit /b %ErrorLevel%
+
 if "/%VSCMD_ARG_TGT_ARCH%/"=="/x64/" (set "ARCH=x64" & set "SYSCONF=VC-WIN64A")
 if "/%VSCMD_ARG_TGT_ARCH%/"=="/x86/" (set "ARCH=x32" & set "SYSCONF=VC-WIN32")
 
@@ -18,14 +25,6 @@ set ERRSSL="%BLDSSL%\stderr.log"
 del %OUTSSL% 2>nul
 del %ERRSSL% 2>nul
 set ResultCode=0
-
-
-call "%~dp0GNUGet.bat"
-if not "/%ErrorLevel%/"=="/0/" exit /b %ErrorLevel%
-call "%~dp0PerlGet.bat"
-if not "/%ErrorLevel%/"=="/0/" exit /b %ErrorLevel%
-call "%~dp0NASMGet.bat"
-if not "/%ErrorLevel%/"=="/0/" exit /b %ErrorLevel%
 
 if not exist "%PKGDIR%" mkdir "%PKGDIR%"
 pushd "%PKGDIR%"

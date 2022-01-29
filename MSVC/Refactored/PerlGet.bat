@@ -12,6 +12,9 @@
 :: https://strawberryperl.com/download/5.32.1.1/strawberry-perl-5.32.1.1-64bit.zip
 :: https://strawberryperl.com/download/5.32.1.1/strawberry-perl-5.32.1.1-32bit.msi
 :: 
+call "%~dp0GNUGet.bat"
+if not "/%ErrorLevel%/"=="/0/" (set ResultCode=%ErrorLevel%)
+
 set BASEDIR=%~dp0
 set BASEDIR=%BASEDIR:~0,-1%
 set PKGDIR=%BASEDIR%\pkg
@@ -19,9 +22,6 @@ set BLDDIR=%BASEDIR%\bld
 set DEVDIR=%BASEDIR%\dev
 set HOMPERL=%DEVDIR%\perl
 set ResultCode=0
-
-call "%~dp0GNUGet.bat"
-if not "/%ErrorLevel%/"=="/0/" (set ResultCode=%ErrorLevel%)
 
 if not exist "%PKGDIR%" mkdir "%PKGDIR%"
 pushd "%PKGDIR%"
