@@ -13,7 +13,7 @@ del "%STDERRLOG%" 2>nul
 
 if "/%VSCMD_ARG_TGT_ARCH%/" == "/x64/" (set ARCH=x64)
 if "/%VSCMD_ARG_TGT_ARCH%/" == "/x86/" (set ARCH=x32)
-if not defined DEVDIR (set DEVDIR=C:\dev)
+if not defined DEVDIR (set DEVDIR=%~dp0dev)
 
 if exist CheckDelayedExpansion.bat (
   call CheckDelayedExpansion.bat
