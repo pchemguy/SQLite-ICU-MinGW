@@ -20,7 +20,11 @@ pushd "%PKGDIR%"
 
 set Owner=peazip
 set Repo=PeaZip
-set PatternURL=WINDOWS.zip
+if "%PROCESSOR_ARCHITECTURE%"=="AMD64" (
+  set PatternURL=WIN64.zip
+) else (
+  set PatternURL=WINDOWS.zip
+)
 
 call "%~dp0GitHubReleaseURL.bat" %Owner% %Repo% "%PatternURL%"
 
@@ -46,9 +50,21 @@ if exist "%PZIP7Z_BINPATH%\7z.exe" (
   set ResultCode=1
 )
 
+set ZSTD_BINPATH=%HOMPZIP%\res\bin\zstd
+if exist "%ZSTD_BINPATH%\zstd.exe" (
+  if "/!Path!/"=="/!Path:%ZSTD_BINPATH%=!/" set "Path=%Path%;%ZSTD_BINPATH%"
+  echo zstd = "%ZSTD_BINPATH%\zstd.exe"
+  set ResultCode=0
+) else (
+  echo Zstd is not found in PeaZip distro!
+  set ResultCode=1
+)
+
 
 :: Cleanup
 set HOMPZIP=
+set PZIP7Z_BINPATH=
+set ZSTD_BINPATH=
 set Owner=
 set Repo=
 set ReleaseURL=
