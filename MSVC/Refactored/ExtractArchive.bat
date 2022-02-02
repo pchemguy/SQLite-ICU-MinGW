@@ -3,11 +3,11 @@
 :: Extracts distro archive via tar.
 ::
 :: Set TARPATTERN before calling for partial extraction. The script reset this
-:: variable at exit.
+:: variable at exit. (For now, it is only used with tar.exe).
 ::
 :: Arguments:
 ::   %1 - Archive name
-::   %2 - Directory (optional
+::   %2 - Directory (optional)
 ::   %3 - File name flag (optional)
 ::
 :: On failure:
@@ -16,6 +16,9 @@
 :: Examples:
 ::   ExtractArchive.bat icu4c-70_1-Win32-MSVC2019.zip icu4c bin\uconv.exe
 ::
+call "%~dp0PeaZipGet.bat" %*
+if not "/%ErrorLevel%/"=="/0/" (set ResultCode=%ErrorLevel%)
+
 echo.
 echo ==================== Extracting archive ====================
 set ResultCode=0
@@ -36,12 +39,39 @@ set Flag=%~3
 if "/%Flag%/"=="//" (set Flag=$$$$$$.$$$)
 
 
+set EXTRACTED=0
 if not exist "%Folder%\%Flag%" (
   echo ===== Extracting %ArchiveName% =====
   if not exist "%Folder%" mkdir "%Folder%"
-  tar -C "%Folder%" -xf "%ArchiveName%" %TARPATTERN%
+  if !EXTRACTED! EQU 0 (
+    if /I "/%ArchiveName:~-4%/"=="/.zip/" (
+      tar -C "%Folder%" -xf "%ArchiveName%" %TARPATTERN%
+      set ResultCode=%ErrorLevel%
+      set EXTRACTED=1
+    )
+  )
+  if !EXTRACTED! EQU 0 (
+    if /I "/%ArchiveName:~-7%/"=="/.tar.gz/" (
+      tar -C "%Folder%" -xf "%ArchiveName%" %TARPATTERN%
+      set ResultCode=%ErrorLevel%
+      set EXTRACTED=1
+    )
+  )
+  if !EXTRACTED! EQU 0 (
+    if /I "/%ArchiveName:~-7%/"=="/.tar.xz/" (
+      7z x "%ArchiveName%" -so | 7z x -aoa -si -ttar -o"%Folder%"
+      set ResultCode=%ErrorLevel%
+      set EXTRACTED=1
+    )
+  )
+  if !EXTRACTED! EQU 0 (
+    if /I "/%ArchiveName:~-8%/"=="/.tar.zst/" (
+      zstd -d "%ArchiveName%" -c | 7z x -aoa -si -ttar -o"%Folder%"
+      set ResultCode=%ErrorLevel%
+      set EXTRACTED=1
+    )
+  )
 
-  set ResultCode=%ErrorLevel%
   if %ResultCode% EQU 0 (
     echo ----- Extracted %ArchiveName%  -----
   ) else (
