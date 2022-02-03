@@ -17,8 +17,16 @@
 :: Examples:
 ::   MSYS2pkgURL.bat bash
 ::
-call "%~dp0GNUGet.bat"
-if not "/%ErrorLevel%/"=="/0/" (set ResultCode=%ErrorLevel%)
+set ResultCode=0
+if not defined GNUWIN32 (
+  call "%~dp0GNUGet.bat" 1>nul
+  set ResultCode=!ErrorLevel!
+)
+if not "/%ResultCode%/"=="/0/" (
+  echo GNUGet.bat error!
+  echo -----------------
+  goto :EOS
+)
 
 echo.
 echo ======================= Determine current MSYS2 package URL ======================
@@ -51,8 +59,8 @@ if not exist "%InfoFile%" (
   curl %PKGPage% -o "%InfoFile%"
 )
 
-set PatternURL="href..https://mirror.msys2.org/msys/x86_64/%PKGNAM%.*?-x86_64.pkg.tar.[a-z]*"
-set CommandText=grep.exe -m 1 -Po "%PatternURL%" "%InfoFile%"
+set PatternURL="href..https://mirror.msys2.org/msys/x86_64/.*?.pkg.tar.[a-z]*"
+set CommandText=grep.exe -m 1 -Po %PatternURL% "%InfoFile%"
 for /f "Usebackq delims=" %%G in (`%CommandText%`) do (
   set PKGURL=%%G
   set PKGURL=!PKGURL:"=!
@@ -70,10 +78,22 @@ if /I "/%ARCHMSYS%/"=="/x32/" (
   set PKGURL=%PKGURL:x86_64=i686%
 )
 
+set Pattern="title.Package: [[:alnum:]-_]*"
+set CommandText=grep.exe -m 1 -Po %Pattern% "%InfoFile%"
+for /f "Usebackq delims=" %%G in (`%CommandText%`) do (
+  set PKGACT=%%G
+  set PKGACT=!PKGACT:~15!
+)
+
 echo ----------------------------------------------------------------------------------
 echo.
 
+
+:EOS
+
 :: Cleanup
 set ARCHMSYS=
+set Pattern=
+set PatternURL=
 
 exit /b %ResultCode%
