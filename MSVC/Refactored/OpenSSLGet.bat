@@ -2,12 +2,34 @@
 ::
 :: Prepares the OpenSSL library and sets build flags.
 ::
-call "%~dp0GNUGet.bat"
-if not "/%ErrorLevel%/"=="/0/" exit /b %ErrorLevel%
-call "%~dp0PerlGet.bat"
-if not "/%ErrorLevel%/"=="/0/" exit /b %ErrorLevel%
-call "%~dp0NASMGet.bat"
-if not "/%ErrorLevel%/"=="/0/" exit /b %ErrorLevel%
+set ResultCode=0
+if not defined GNUWIN32 (
+  call "%~dp0GNUGet.bat" 1>nul
+  set ResultCode=!ErrorLevel!
+  if not "/!ResultCode!/"=="/0/" (
+    echo GNUGet.bat error.
+    echo -----------------
+    goto :EOS
+  )
+)
+if not defined PERL (
+  call "%~dp0PerlGet.bat" 1>nul
+  set ResultCode=!ErrorLevel!
+  if not "/!ResultCode!/"=="/0/" (
+    echo PerlGet.bat error.
+    echo -----------------
+    goto :EOS
+  )
+)
+if not defined NASM (
+  call "%~dp0NASMGet.bat" 1>nul
+  set ResultCode=!ErrorLevel!
+  if not "/!ResultCode!/"=="/0/" (
+    echo NASMGet.bat error.
+    echo -----------------
+    goto :EOS
+  )
+)
 
 if "/%VSCMD_ARG_TGT_ARCH%/"=="/x64/" (set "ARCH=x64" & set "SYSCONF=VC-WIN64A")
 if "/%VSCMD_ARG_TGT_ARCH%/"=="/x86/" (set "ARCH=x32" & set "SYSCONF=VC-WIN32")
@@ -134,6 +156,7 @@ echo OSSL_LIBIMPORT = %OSSL_LIBIMPORT%
 echo OSSL_LIBSHARED = %OSSL_LIBSHARED%
 echo -------------------------------------------
 
+:EOS
 
 :: Cleanup
 set HOMSSL=

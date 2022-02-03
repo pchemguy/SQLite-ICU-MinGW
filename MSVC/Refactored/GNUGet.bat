@@ -64,6 +64,7 @@ if not exist "%DEVDIR%\gnu\grep.exe" (
 )
 
 if "/!Path!/"=="/!Path:%DEVDIR%\gnu=!/" set Path=%Path%;%DEVDIR%\gnu
+set GNUWIN32=1
 
 :: Cleanup
 set GNU32URL=

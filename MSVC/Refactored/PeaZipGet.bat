@@ -59,6 +59,7 @@ if exist "%ZSTD_BINPATH%\zstd.exe" (
   echo Zstd is not found in PeaZip distro!
   set ResultCode=1
 )
+set PEAZIP=1
 
 
 :: Cleanup

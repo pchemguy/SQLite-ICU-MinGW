@@ -18,12 +18,15 @@
 ::
 SetLocal
 
-call "%~dp0PeaZipGet.bat" %*
-set ResultCode=%ErrorLevel%
-if not "/%ResultCode%/"=="/0/" (
-  echo PeaZipGet.bat error!
-  echo --------------------
-  goto :EOS
+set ResultCode=0
+if not defined PEAZIP (
+  call "%~dp0PeaZipGet.bat" %* 1>nul
+  set ResultCode=!ErrorLevel!
+  if not "/!ResultCode!/"=="/0/" (
+    echo PeaZipGet.bat error.
+    echo --------------------
+    goto :EOS
+  )
 )
 
 echo.

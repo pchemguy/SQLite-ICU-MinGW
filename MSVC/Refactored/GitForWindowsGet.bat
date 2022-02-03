@@ -1,7 +1,15 @@
 @echo off
 
-call "%~dp0PeaZipGet.bat"
-if not "/%ErrorLevel%/"=="/0/" (set ResultCode=%ErrorLevel%)
+set ResultCode=0
+if not defined PEAZIP (
+  call "%~dp0PeaZipGet.bat" %* 1>nul
+  set ResultCode=!ErrorLevel!
+  if not "/!ResultCode!/"=="/0/" (
+    echo PeaZipGet.bat error.
+    echo --------------------
+    goto :EOS
+  )
+)
 
 if not defined ARCH (
   if "/%VSCMD_ARG_TGT_ARCH%/"=="/x64/" set "ARCH=x64"
@@ -56,6 +64,8 @@ if "/!Path!/"=="/!Path:%MSYS2BIN%=!/" (
   set "Path=!Path!;%MINGWBIN%"
 )
 
+
+:EOS
 
 :: Cleanup
 set HOMGIT=

@@ -9,8 +9,16 @@
 :: Distro archives are downloaded, if not present, and saved in "%dp0pkg".
 :: Distro archives are expanded in "%dp0dev\nasm" and NASM is prepended to Path.
 :: 
-call "%~dp0GNUGet.bat"
-if not "/%ErrorLevel%/"=="/0/" (set ResultCode=%ErrorLevel%)
+set ResultCode=0
+if not defined GNUWIN32 (
+  call "%~dp0GNUGet.bat" 1>nul
+  set ResultCode=!ErrorLevel!
+  if not "/!ResultCode!/"=="/0/" (
+    echo GNUGet.bat error.
+    echo -----------------
+    goto :EOS
+  )
+)
 
 set BASEDIR=%~dp0
 set BASEDIR=%BASEDIR:~0,-1%
@@ -63,11 +71,14 @@ if "/%VSCMD_ARG_TGT_ARCH%/"=="/x86/" (set ARCH=x32)
 if not defined ARCH set ARCH=x32
 
 if "/!Path!/"=="/!Path:%HOMNASM%\%ARCH%=!/" set Path=%HOMNASM%\%ARCH%;%Path%
+set NASM=1
 
 echo.
 echo ============= NASM installation is complete. ============
 echo ResultCode: %ResultCode% (^>0 - errors occured). Check the log files for errors. 
 echo.
+
+:EOS
 
 :: Cleanup
 set HOMNASM=

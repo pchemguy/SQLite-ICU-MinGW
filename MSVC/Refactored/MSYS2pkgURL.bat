@@ -9,6 +9,8 @@
 ::
 :: Sets:  
 ::   PKGURL to the target URL.
+::   PKGACT to the name of the package (this value usually matches %1,
+::          except for some special cases, such as <sh> or <libuuid>
 ::
 :: On failure:
 ::   PKGURL is undefined
@@ -21,11 +23,11 @@ set ResultCode=0
 if not defined GNUWIN32 (
   call "%~dp0GNUGet.bat" 1>nul
   set ResultCode=!ErrorLevel!
-)
-if not "/%ResultCode%/"=="/0/" (
-  echo GNUGet.bat error!
-  echo -----------------
-  goto :EOS
+  if not "/!ResultCode!/"=="/0/" (
+    echo GNUGet.bat error.
+    echo -----------------
+    goto :EOS
+  )
 )
 
 echo.

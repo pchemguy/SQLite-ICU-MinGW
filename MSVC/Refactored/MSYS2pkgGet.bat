@@ -19,16 +19,16 @@ set ResultCode=0
 if not defined GNUWIN32 (
   call "%~dp0GNUGet.bat" 1>nul
   set ResultCode=!ErrorLevel!
-)
-if not "/%ResultCode%/"=="/0/" (
-  echo GNUGet.bat error!
-  echo -----------------
-  goto :EOS
+  if not "/!ResultCode!/"=="/0/" (
+    echo GNUGet.bat error.
+    echo -----------------
+    goto :EOS
+  )
 )
 call "%~dp0MSYS2pkgURL.bat" %*
 set ResultCode=%ErrorLevel%
 if not "/%ResultCode%/"=="/0/" (
-  echo MSYS2pkgURL.bat error!
+  echo MSYS2pkgURL.bat error.
   echo ----------------------
   goto :EOS
 )

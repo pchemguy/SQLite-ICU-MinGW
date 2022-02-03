@@ -12,8 +12,16 @@
 :: https://strawberryperl.com/download/5.32.1.1/strawberry-perl-5.32.1.1-64bit.zip
 :: https://strawberryperl.com/download/5.32.1.1/strawberry-perl-5.32.1.1-32bit.msi
 :: 
-call "%~dp0GNUGet.bat"
-if not "/%ErrorLevel%/"=="/0/" (set ResultCode=%ErrorLevel%)
+set ResultCode=0
+if not defined GNUWIN32 (
+  call "%~dp0GNUGet.bat" 1>nul
+  set ResultCode=!ErrorLevel!
+  if not "/!ResultCode!/"=="/0/" (
+    echo GNUGet.bat error.
+    echo -----------------
+    goto :EOS
+  )
+)
 
 set BASEDIR=%~dp0
 set BASEDIR=%BASEDIR:~0,-1%
@@ -48,11 +56,14 @@ if not exist "%HOMPERL%\bin\perl.exe" (
 )
 
 if "/!Path!/"=="/!Path:%HOMPERL%\bin=!/" set Path=%HOMPERL%\bin;%Path%
+set PERL=1
 
 echo.
 echo ============= Perl installation is complete. ============
 echo ResultCode: %ResultCode% (^>0 - errors occured). Check the log files for errors. 
 echo.
+
+:EOS
 
 :: Cleanup
 set HOMPERL=
