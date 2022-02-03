@@ -1,11 +1,12 @@
 @echo off
-rem
-rem This script checks if EnableDelayedExpansion is set and sets:
-rem   ErrorStatus=0, if EnableDelayedExpansion is ON,
-rem   ErrorStatus=1, if EnableDelayedExpansion is OFF
-rem It returns ErrorStatus as ErrorLevel.
-rem
-
+::
+:: This script checks if EnableDelayedExpansion is set and sets:
+::   ErrorStatus=0, if EnableDelayedExpansion is ON,
+::   ErrorStatus=1, if EnableDelayedExpansion is OFF
+:: It returns ErrorStatus as ErrorLevel.
+::
+:: SHELL: CMD Or MSVC Build Tools
+::
 set $$$$$$$=$$$$$$$
 
 if "/%$$$$$$$%/"=="/!$$$$$$$!/" (

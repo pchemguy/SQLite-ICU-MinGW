@@ -1,6 +1,8 @@
 @echo off
 ::
-:: Downloads and installs TCL/TK.
+:: Downloads, builds, and installs TCL/TK.
+::
+:: SHELL: MSVC Build Tools
 ::
 set BASEDIR=%~dp0
 set BASEDIR=%BASEDIR:~0,-1%

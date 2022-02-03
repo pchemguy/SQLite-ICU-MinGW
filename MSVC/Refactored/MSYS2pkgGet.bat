@@ -13,6 +13,8 @@
 :: Examples:
 ::   MSYS2pkgGet.bat bash
 ::
+:: SHELL: CMD Or MSVC Build Tools
+::
 SetLocal
 
 set ResultCode=0

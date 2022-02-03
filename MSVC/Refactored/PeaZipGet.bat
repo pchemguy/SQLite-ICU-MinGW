@@ -6,6 +6,8 @@
 ::  attempt to use this feature caused hanging archive exe and started
 ::  git_bash.exe)
 ::
+:: SHELL: CMD Or MSVC Build Tools
+::
 set BASEDIR=%~dp0
 set BASEDIR=%BASEDIR:~0,-1%
 set PKGDIR=%BASEDIR%\pkg

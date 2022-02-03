@@ -20,6 +20,8 @@
 :: Examples:
 ::   GitHubReleaseURL.bat unicode-org icu Win32-MSVC
 ::
+:: SHELL: CMD Or MSVC Build Tools
+::
 echo.
 echo ====================== Determine current GitHub release URL ======================
 set ResultCode=0

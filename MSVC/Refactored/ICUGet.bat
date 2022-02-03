@@ -1,4 +1,7 @@
 @echo off
+::
+:: SHELL: CMD Or MSVC Build Tools
+::
 
 
 set BASEDIR=%~dp0

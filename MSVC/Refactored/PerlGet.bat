@@ -1,17 +1,9 @@
 @echo off
 ::
-:: Downloads stable NASM binary release from https://nasm.us.
+:: Downloads Perl binary release from https://strawberryperl.com.
 ::
-:: The script checks if "nasm" is in the path. If not, gets binaries in
-:: "%dp0dev\nasm\x32" and "%dp0dev\nasm\x64".
+:: SHELL: CMD Or MSVC Build Tools
 ::
-:: The script enters the "%dp0pkg" subdirectory (creates, if necessary).
-:: Distro archives are downloaded, if not present, and saved in "%dp0pkg".
-:: Distro archives are expanded in "%dp0dev\nasm" and NASM is prepended to Path.
-::
-:: https://strawberryperl.com/download/5.32.1.1/strawberry-perl-5.32.1.1-64bit.zip
-:: https://strawberryperl.com/download/5.32.1.1/strawberry-perl-5.32.1.1-32bit.msi
-:: 
 set ResultCode=0
 if not defined GNUWIN32 (
   call "%~dp0GNUGet.bat" 1>nul

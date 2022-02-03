@@ -19,6 +19,8 @@
 :: Examples:
 ::   MSYS2pkgURL.bat bash
 ::
+:: SHELL: CMD Or MSVC Build Tools
+::
 set ResultCode=0
 if not defined GNUWIN32 (
   call "%~dp0GNUGet.bat" 1>nul

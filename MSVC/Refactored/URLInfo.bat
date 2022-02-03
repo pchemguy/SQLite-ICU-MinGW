@@ -19,14 +19,16 @@
 :: Examples:
 ::   URLInfo.bat https://github.com/unicode-org/icu/releases/download/release-70-1/icu4c-70_1-Win32-MSVC2019.zip
 ::
-setlocal EnableDelayedExpansion
+:: SHELL: CMD Or MSVC Build Tools
+::
+SetLocal EnableDelayedExpansion
 
 
 set URLInfo=%~1
 if "/%URLInfo%/"=="//" (
   echo ----- URL is not supplied. -----
   set ResultCode=1
-  goto :EXIT
+  goto :EOS
 )
 
 if exist URLInfo.txt del /Q URLInfo.txt 1>nul
@@ -36,7 +38,7 @@ curl -Is -L %URLInfo% -o URLInfo.txt 2>URLInfoERR.log
 set ResultCode=%ErrorLevel%
 if not %ResultCode% EQU 0 (
   echo ----- URL fetching error #%ResultCode% -----
-  goto :EXIT
+  goto :EOS
 )
 
 set CommandText=URLInfo.txt
@@ -54,5 +56,5 @@ if "/%ResCod%/"=="/404/" (
 )
 
 
-:EXIT
-endlocal & set "FileLen=%ResLen%" & exit /b %ResultCode%
+:EOS
+EndLocal & set "FileLen=%ResLen%" & exit /b %ResultCode%

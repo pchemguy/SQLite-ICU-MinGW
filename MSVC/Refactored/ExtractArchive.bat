@@ -16,6 +16,8 @@
 :: Examples:
 ::   ExtractArchive.bat icu4c-70_1-Win32-MSVC2019.zip icu4c bin\uconv.exe
 ::
+:: SHELL: CMD Or MSVC Build Tools
+::
 SetLocal
 
 set ResultCode=0

@@ -2,6 +2,8 @@
 ::
 :: Downloads SQLite/SQLCipher distro and unpacks it.
 ::
+:: SHELL: CMD Or MSVC Build Tools
+::
 set BASEDIR=%~dp0
 set BASEDIR=%BASEDIR:~0,-1%
 set PKGDIR=%BASEDIR%\pkg

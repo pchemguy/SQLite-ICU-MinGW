@@ -1,7 +1,8 @@
 @echo off
 ::
-:: Downloads select GNU utilities for Windows. For now, uses GNUWin32 distro.
-:: Consider using MSYS2 packages instead.
+:: Downloads select GNUWin32 utilities (needed to bootstrap MSYS2).
+::
+:: SHELL: CMD Or MSVC Build Tools
 ::
 set BASEDIR=%~dp0
 set BASEDIR=%BASEDIR:~0,-1%

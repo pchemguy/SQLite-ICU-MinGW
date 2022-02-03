@@ -3,6 +3,8 @@
 :: Check if CMake is in Path. If not, check default MSVC location. If found, add
 :: to Path, else return an error.
 ::
+:: SHELL: MSVC Build Tools
+::
 call :CHECKTOOL cmake 1>nul
 set ResultCode=%ErrorLevel%
 if %ResultCode% NEQ 0 (
