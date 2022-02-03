@@ -16,8 +16,15 @@
 :: Examples:
 ::   ExtractArchive.bat icu4c-70_1-Win32-MSVC2019.zip icu4c bin\uconv.exe
 ::
+SetLocal
+
 call "%~dp0PeaZipGet.bat" %*
-if not "/%ErrorLevel%/"=="/0/" (set ResultCode=%ErrorLevel%)
+set ResultCode=%ErrorLevel%
+if not "/%ResultCode%/"=="/0/" (
+  echo PeaZipGet.bat error!
+  echo --------------------
+  goto :EOS
+)
 
 echo.
 echo ==================== Extracting archive ====================
@@ -29,9 +36,9 @@ if "/%ArchiveName%/"=="//" (
 )
 if not %ResultCode% EQU 0 (
   echo Correct arguments have not been provided to extract archive.
-  echo ----------------------------------------------------------
+  echo ------------------------------------------------------------
   echo.
-  exit /b %ResultCode%
+  goto :EOS
 )
 set Folder=%~2
 if "/%Folder%/"=="//" (set Folder=.)
@@ -80,9 +87,11 @@ if not exist "%Folder%\%Flag%" (
 ) else (
   echo ========= Using previously extracted %ArchiveName% =========
 )
-echo ------------------------------------------------------------
-echo.
 
 set TARPATTERN=
 
-exit /b %ResultCode%
+:EOS
+echo.
+echo ------------- LEAVING ExtractArchive.bat ---------------------
+
+EndLocal & exit /b %ResultCode%
