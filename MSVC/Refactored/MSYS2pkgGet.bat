@@ -1,6 +1,6 @@
 @echo off
 ::
-:: Downloads and extracts a package from the MSYS/MSYS2 repo.
+:: Downloads and extracts a package from the MSYS/MSYS2 repo, including dependency tree.
 ::
 :: Arguments:
 ::   %1 - Full package name

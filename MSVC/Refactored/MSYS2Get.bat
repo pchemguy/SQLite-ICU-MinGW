@@ -8,7 +8,7 @@ set BASEDIR=%~dp0
 set BASEDIR=%BASEDIR:~0,-1%
 set PKGDIR=%BASEDIR%\pkg
 set DEVDIR=%BASEDIR%\dev
-set PKGMSYS=%PKGDIR%\msys2
+set PKGMSYS=%PKGDIR%\msys2\pkg
 set HOMMSYS=%DEVDIR%\msys2
 set OUTMSYS="%BASEDIR%\stdout.log"
 set ERRMSYS="%BASEDIR%\stderr.log"
@@ -18,8 +18,8 @@ set ResultCode=0
 
 if exist "%HOMMSYS%\msys2_shell.cmd" goto :ADDPATH
 if exist "%HOMMSYS%" rmdir /S /Q "%HOMMSYS%" 1>nul
-if not exist "%PKGDIR%" mkdir "%PKGDIR%"
-pushd "%PKGDIR%"
+if not exist "%PKGMSYS%" mkdir "%PKGMSYS%"
+pushd "%PKGMSYS%\.."
 
 
 if /I "/%PROCESSOR_ARCHITECTURE%/"=="/AMD64/" (
@@ -29,6 +29,7 @@ if /I "/%PROCESSOR_ARCHITECTURE%/"=="/AMD64/" (
 )
 set MSYSDISTURL=https://mirror.msys2.org/distrib/msys2-%MSYSTEM_CARCH%-latest.tar.xz
 
+call "%~dp0DownloadFile.bat" %MSYSDISTURL%.sig
 call "%~dp0DownloadFile.bat" %MSYSDISTURL%
 set ResultCode=%ErrorLevel%
 if not "/%ResultCode%/"=="/0/" (
@@ -50,10 +51,16 @@ cd /d %DEVDIR%
 if exist "msys64" (ren "msys64" "msys2" 1>nul) else (ren "msys" "msys2" 1>nul)
 
 set MSYS_BIN=%HOMMSYS%\usr\bin
-call "%HOMMSYS%\msys2_shell.cmd" -defterm -no-start -c "pacman-key --init" 1>>%OUTMSYS% 2>>%ERRMSYS%
-call "%MSYS_BIN%\pacman" --noconfirm --needed --root "%HOMMSYS%" -Syu 1>>%OUTMSYS% 2>>%ERRMSYS%
-call "%MSYS_BIN%\pacman" --noconfirm --needed --root "%HOMMSYS%" -Su 1>>%OUTMSYS% 2>>%ERRMSYS%
-call "%MSYS_BIN%\pacman" --noconfirm --needed --root "%HOMMSYS%" -Su 1>>%OUTMSYS% 2>>%ERRMSYS%
+set PACMAN="%MSYS_BIN%\pacman" --noconfirm --needed --root "%HOMMSYS%" --cachedir "%PKGMSYS%" -S
+set CommandText=pacman-key --init
+call "%HOMMSYS%\msys2_shell.cmd" -defterm -no-start -c "%CommandText%" 1>>%OUTMSYS% 2>>%ERRMSYS%
+set CommandText=%PACMAN:"=""%yu
+call "%HOMMSYS%\msys2_shell.cmd" -defterm -no-start -c "%CommandText%" 1>>%OUTMSYS% 2>>%ERRMSYS%
+call "%HOMMSYS%\msys2_shell.cmd" -defterm -no-start -c "%CommandText%" 1>>%OUTMSYS% 2>>%ERRMSYS%
+call "%HOMMSYS%\msys2_shell.cmd" -defterm -no-start -c "%CommandText%" 1>>%OUTMSYS% 2>>%ERRMSYS%
+set PKGS=base-devel pactoys
+set CommandText=%PACMAN:"=""% %PKGS%
+call "%HOMMSYS%\msys2_shell.cmd" -defterm -no-start -c "%CommandText%" 1>>%OUTMSYS% 2>>%ERRMSYS%
 
 :ADDPATH
 set MSYS_BIN=%HOMMSYS%\usr\bin
