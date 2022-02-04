@@ -3,7 +3,7 @@
 :: Extracts distro archive via tar.
 ::
 :: Set TARPATTERN before calling for partial extraction. The script reset this
-:: variable at exit. (For now, it is only used with tar.exe).
+:: variable at exit.
 ::
 :: Arguments:
 ::   %1 - Archive name
@@ -71,14 +71,14 @@ if not exist "%Folder%\%Flag%" (
   )
   if !EXTRACTED! EQU 0 (
     if /I "/%ArchiveName:~-7%/"=="/.tar.xz/" (
-      7z x "%ArchiveName%" -so | 7z x -aoa -si -ttar -o"%Folder%"
+      7z x "%ArchiveName%" -so | tar -C "%Folder%" -xf - %TARPATTERN%
       set ResultCode=%ErrorLevel%
       set EXTRACTED=1
     )
   )
   if !EXTRACTED! EQU 0 (
     if /I "/%ArchiveName:~-8%/"=="/.tar.zst/" (
-      zstd -d "%ArchiveName%" -c | 7z x -aoa -si -ttar -o"%Folder%"
+      zstd -d "%ArchiveName%" -c | tar -C "%Folder%" -xf - %TARPATTERN%
       set ResultCode=%ErrorLevel%
       set EXTRACTED=1
     )
