@@ -1,6 +1,6 @@
 @echo off
 ::
-:: Downloads and installs MSYS2 distro.
+:: Downloads and installs MSYS2 distro and MinGW dev toolchains.
 ::
 :: SHELL: CMD Or MSVC Build Tools
 ::
@@ -53,13 +53,18 @@ if exist "msys64" (ren "msys64" "msys2" 1>nul) else (ren "msys" "msys2" 1>nul)
 set EXEC="%HOMMSYS%\msys2_shell.cmd" -defterm -no-start -c
 set PACMAN="%HOMMSYS%\usr\bin\pacman" --noconfirm --needed --root "%HOMMSYS%" --cachedir "%PKGMSYS%" -S
 set PACMAN=%PACMAN:"=""%
+set PACBOY=%PACMAN:pacman=pacboy%
 (
   call %EXEC% "pacman-key --init"
   call %EXEC% "%PACMAN%yuu"
   call %EXEC% "%PACMAN%yuu"
   call %EXEC% "%PACMAN%yuu"
-  set PKGS=base-devel pactoys ed
+  set PKGS=base-devel pactoys compression bc ed
   call %EXEC% "%PACMAN% !PKGS!"
+  set PKGS=mingw-w64-x86_64 mingw-w64-i686
+  call %EXEC% "%PACMAN% !PKGS!"
+  set PKGS=toolchain:m dlfcn:m icu:m nsis:m libfreexl:m librttopo:m minizip:m iconv:m
+  call %EXEC% "%PACBOY% !PKGS!"
 ) 1>>%OUTMSYS% 2>>%ERRMSYS%
 
 :ADDPATH
@@ -89,4 +94,3 @@ set InfoFile=
 popd
 
 exit /b %ResultCode%
-
