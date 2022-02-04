@@ -56,3 +56,5 @@ set InfoFile=
 popd
 
 exit /b %ResultCode%
+
+:: pacman --noconfirm --needed --root B:/SQLiteEx/BAZ/dev/msys2 --cachedir B:/SQLiteEx/BAZ/pacman -Sy

@@ -2,7 +2,6 @@
 ::
 :: SHELL: CMD Or MSVC Build Tools
 ::
-
 set ResultCode=0
 if not defined PEAZIP (
   call "%~dp0PeaZipGet.bat" %* 1>nul
