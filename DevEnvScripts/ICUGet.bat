@@ -60,10 +60,6 @@ set ICU_LIBIMPORT=icudt70.lib icuuc70.lib icuin70.lib icutu70.lib icuio70.lib
 set ICU_LIBSHARED=icudt70.dll icuuc70.dll icuin70.dll icutu70.dll icuio70.dll
 set ICU_LIB=%ICU_LIBIMPORT%
 
-:: For SQLite\Makefile.msc
-set ICUDIR=%HOMICU%
-set ICULIBDIR=%ICU_LIBPATH%
-
 echo.
 echo ============= ICU installation is complete. ============
 echo ResultCode: %ResultCode% (^>0 - errors occured). Check the log files for errors. 
