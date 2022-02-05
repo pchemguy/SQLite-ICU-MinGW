@@ -106,7 +106,6 @@ if not "/%ResultCode%/"=="/0/" (
 )
 
 :: Set building flags
-set ZLIBDIR=%HOMZLIB%
 set ZLIB_ROOT=%HOMZLIB%
 set ZLIB_BINPATH=%HOMZLIB%\bin
 set ZLIB_LIBPATH=%HOMZLIB%\lib
@@ -122,7 +121,6 @@ set ZLIB_LDFLAGS=/LIBPATH:"%ZLIB_LIBPATH%"
 
 echo.
 echo ========== ZLIB linking flags ==========
-echo ZLIBDIR        = %ZLIBDIR%
 echo ZLIB_ROOT      = %ZLIB_ROOT%
 echo ZLIB_BINPATH   = %ZLIB_BINPATH%
 echo ZLIB_INCLUDE   = %ZLIB_INCLUDE%

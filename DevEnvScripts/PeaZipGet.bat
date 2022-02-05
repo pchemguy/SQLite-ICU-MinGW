@@ -18,6 +18,9 @@ set ResultCode=0
 
 if not exist "%PKGDIR%" mkdir "%PKGDIR%"
 pushd "%PKGDIR%"
+:: Set this before the first call to ExtractArchive.bat to resolve cyclic
+:: dependency (this script only needs basic ExtractArchive.bat features).
+set PEAZIP=1
 
 
 set Owner=peazip
@@ -61,7 +64,6 @@ if exist "%ZSTD_BINPATH%\zstd.exe" (
   echo Zstd is not found in PeaZip distro!
   set ResultCode=1
 )
-set PEAZIP=1
 
 
 :: Cleanup

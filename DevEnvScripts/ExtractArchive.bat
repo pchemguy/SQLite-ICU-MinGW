@@ -21,6 +21,7 @@
 SetLocal
 
 set ResultCode=0
+:: Provides 7z and zstd
 if not defined PEAZIP (
   call "%~dp0PeaZipGet.bat" %* 1>nul
   set ResultCode=!ErrorLevel!
@@ -30,6 +31,15 @@ if not defined PEAZIP (
     goto :EOS
   )
 )
+
+set CommandText=where bsdtar 2^^^>nul
+set TOOLPATH=
+for /f "Usebackq delims=" %%i in (`%CommandText%`) do (
+  if "/!TOOLPATH!/"=="//" (
+    set TOOLPATH=%%i
+  )
+)
+if "/%TOOLPATH%/"=="//" (set TAR=tar) else (set TAR=bsdtar)
 
 echo.
 echo ==================== Extracting archive ====================
@@ -57,28 +67,28 @@ if not exist "%Folder%\%Flag%" (
   if not exist "%Folder%" mkdir "%Folder%"
   if !EXTRACTED! EQU 0 (
     if /I "/%ArchiveName:~-4%/"=="/.zip/" (
-      tar -C "%Folder%" -xf "%ArchiveName%" %TARPATTERN%
+      %TAR% -C "%Folder%" -xf "%ArchiveName%" %TARPATTERN%
       set ResultCode=%ErrorLevel%
       set EXTRACTED=1
     )
   )
   if !EXTRACTED! EQU 0 (
     if /I "/%ArchiveName:~-7%/"=="/.tar.gz/" (
-      tar -C "%Folder%" -xf "%ArchiveName%" %TARPATTERN%
+      %TAR% -C "%Folder%" -xf "%ArchiveName%" %TARPATTERN%
       set ResultCode=%ErrorLevel%
       set EXTRACTED=1
     )
   )
   if !EXTRACTED! EQU 0 (
     if /I "/%ArchiveName:~-7%/"=="/.tar.xz/" (
-      7z x "%ArchiveName%" -so | tar -C "%Folder%" -xf - %TARPATTERN%
+      7z x "%ArchiveName%" -so | %TAR% -C "%Folder%" -xf - %TARPATTERN%
       set ResultCode=%ErrorLevel%
       set EXTRACTED=1
     )
   )
   if !EXTRACTED! EQU 0 (
     if /I "/%ArchiveName:~-8%/"=="/.tar.zst/" (
-      zstd -d "%ArchiveName%" -c | tar -C "%Folder%" -xf - %TARPATTERN%
+      zstd -d "%ArchiveName%" -c | %TAR% -C "%Folder%" -xf - %TARPATTERN%
       set ResultCode=%ErrorLevel%
       set EXTRACTED=1
     )
