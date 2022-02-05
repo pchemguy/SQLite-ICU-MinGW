@@ -64,7 +64,7 @@ set PACMAN=%PACMAN:"=""%
 
 :ADDPATH
 set MSYS_BIN=%HOMMSYS%\usr\bin
-if "/!Path!/"=="/!Path:%MSYS_BIN%=!/" set "Path=%MSYS_BIN%;%Path%"
+if "/!Path!/"=="/!Path:%MSYS_BIN%=!/" set "Path=%Path%;%MSYS_BIN%"
 
 :EOS
 
