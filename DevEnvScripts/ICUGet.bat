@@ -38,6 +38,7 @@ if not exist "%HOMICU%\bin\uconv.exe" (
 )
 
 if not exist "%HOMICU%\bin64\uconv.exe" (
+  set TARPATTERN=bin* lib* inc*
   call "%~dp0ExtractArchive.bat" %ICUx64File% "%HOMICU%"
   if not "/!ErrorLevel!/"=="/0/" exit /b !ErrorLevel!
 )
@@ -50,6 +51,7 @@ if not defined ARCHX set "ARCHX="
 set ICU_BINPATH=%HOMICU%\bin%ARCHX%
 if "/!Path!/"=="/!Path:%ICU_BINPATH%=!/" set Path=%ICU_BINPATH%;%Path%
 
+set ICU_ROOT=%HOMICU%
 ::/LIBPATH:"%HOMICU%\lib%ARCHX%"
 set ICU_LIBPATH=%HOMICU%\lib%ARCHX%
 if "/!LIBPATH!/"=="/!LIBPATH:%ICU_LIBPATH%=!/" set LIBPATH=%ICU_LIBPATH%;%LIBPATH%
@@ -66,6 +68,7 @@ echo ResultCode: %ResultCode% (^>0 - errors occured). Check the log files for er
 echo.
 
 echo ========== ICU core linking flags ==========
+echo ICU_ROOT      = %ICU_ROOT%
 echo ICU_INCLUDE   = %ICU_INCLUDE%
 echo ICU_LIBPATH   = %ICU_LIBPATH%
 echo ICU_BINPATH   = %ICU_BINPATH%

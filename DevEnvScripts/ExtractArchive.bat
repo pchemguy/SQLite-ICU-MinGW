@@ -103,10 +103,9 @@ if not exist "%Folder%\%Flag%" (
   echo ========= Using previously extracted %ArchiveName% =========
 )
 
-set TARPATTERN=
 
 :EOS
 echo.
 echo ------------- LEAVING ExtractArchive.bat ---------------------
 
-EndLocal & exit /b %ResultCode%
+EndLocal & set "TARPATTERN=" & exit /b %ResultCode%
