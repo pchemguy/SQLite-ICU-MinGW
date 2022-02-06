@@ -1,5 +1,5 @@
-#ifdef _WIN32
-#endif
+
+
 int sqlite3SqlarInit(sqlite3 *db){
   int rc = SQLITE_OK;
   unsigned int i;
@@ -23,5 +23,3 @@ int sqlite3SqlarInit(sqlite3 *db){
   return rc;
 }
 
-
-#ifdef _WIN32

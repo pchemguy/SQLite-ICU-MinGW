@@ -1,4 +1,3 @@
-#endif /* !defined(SQLITE_OMIT_VIRTUALTABLE) */
 
 
 int sqlite3CsvInit(sqlite3 *db){

@@ -1,4 +1,3 @@
-#endif /* SQLITE_OMIT_VIRTUALTABLE */
 
 
 int sqlite3SeriesInit(sqlite3 *db){

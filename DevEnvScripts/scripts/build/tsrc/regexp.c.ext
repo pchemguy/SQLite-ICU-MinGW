@@ -1,5 +1,4 @@
-#ifdef _WIN32
-#endif
+
 
 int sqlite3RegexpInit(sqlite3 *db){
   int rc = SQLITE_OK;
@@ -15,7 +14,3 @@ int sqlite3RegexpInit(sqlite3 *db){
   }
   return rc;
 }
-
-
-#ifdef _WIN32
-

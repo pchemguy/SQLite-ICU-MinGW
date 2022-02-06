@@ -1,10 +1,6 @@
-#ifdef _WIN32
-#endif
 
 
 int sqlite3UintInit(sqlite3 *db){
   return sqlite3_create_collation(db, "uint", SQLITE_UTF8, 0, uintCollFunc);
 }
 
-
-#ifdef _WIN32

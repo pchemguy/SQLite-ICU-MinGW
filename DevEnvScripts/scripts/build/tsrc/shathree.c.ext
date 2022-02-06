@@ -1,5 +1,3 @@
-#ifdef _WIN32
-#endif
 
 
 int sqlite3ShathreeInit(sqlite3 *db){
@@ -25,5 +23,3 @@ int sqlite3ShathreeInit(sqlite3 *db){
   return rc;
 }
 
-
-#ifdef _WIN32
