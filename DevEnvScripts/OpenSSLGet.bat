@@ -138,6 +138,7 @@ echo.
 
 
 :: Set building flags
+set OSSL_BINPATH=%HOMSSL%\core\bin
 :: /LIBPATH:"%HOMSSL%\core\lib"
 set OSSL_LIBPATH=%HOMSSL%\core\lib
 if "/!LIBPATH!/"=="/!LIBPATH:%OSSL_LIBPATH%=!/" set LIBPATH=%OSSL_LIBPATH%;%LIBPATH%
@@ -151,8 +152,9 @@ set ARCHX=%ARCHX:-x32=%
 set OSSL_LIBSHARED=libssl-3%ARCHX%.dll libcrypto-3%ARCHX%.dll
 
 echo ========== OpenSSL linking flags ==========
-echo OSSL_INCLUDE   = %OSSL_INCLUDE%
+echo OSSL_BINPATH   = %OSSL_BINPATH%
 echo OSSL_LIBPATH   = %OSSL_LIBPATH%
+echo OSSL_INCLUDE   = %OSSL_INCLUDE%
 echo OSSL_LIBSTATIC = %OSSL_LIBSTATIC%
 echo OSSL_LIBIMPORT = %OSSL_LIBIMPORT%
 echo OSSL_LIBSHARED = %OSSL_LIBSHARED%
