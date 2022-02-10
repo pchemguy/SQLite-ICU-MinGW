@@ -37,7 +37,11 @@ if "/%FileName%/"=="//" (call :EXTRACT_FILENAME %FileURL%)
 :: Before downloading %FileName% file, check if %FileName%.size file exists.
 :: If not, get file size via URLInfo.bat and save it to %FileName%.size.
 ::
-if not exist "%FileName%.size" (
+if exist "%FileName%.size" (
+  for /f "Usebackq delims=" %%G in ("%FileName%.size") do (
+    set FileLen=%%G
+  )
+) else (
   call "%~dp0URLInfo.bat" %FileURL%
   set ResultCode=%ErrorLevel%
   if not !ResultCode! EQU 0 (
@@ -45,12 +49,6 @@ if not exist "%FileName%.size" (
     exit /b !ResultCode!
   )
   if not "/!FileLen!/"=="//" echo !FileLen!>"%FileName%.size"
-)
-
-if exist "%FileName%.size" (
-  for /f "Usebackq delims=" %%G in ("%FileName%.size") do (
-    set FileLen=%%G
-  )
 )
 
 :: If the %FileName% file has been downloaded and saved previously, its size
@@ -64,7 +62,7 @@ if exist "%FileName%" (
     echo ----------------------------------------------------------
     exit /b 0
   )
-  call :SET_FILEZIE "%FileName%"
+  call :SET_FILESIZE "%FileName%"
   if "/!FileSize!/"=="/%FileLen%/" (
     echo ========= Using previously downloaded %FileName% =========
     echo ----------------------------------------------------------
@@ -101,7 +99,7 @@ if "/%FileLen%/"=="//" (
   echo Warning: file size information is not available.
   set FileSize=
 ) else (
-  call :SET_FILEZIE "%FileName%"
+  call :SET_FILESIZE "%FileName%"
 )
 
 if "/!FileSize!/"=="/%FileLen%/" (
@@ -139,6 +137,6 @@ exit /b 0
 set FileName=%~nx2
 exit /b 0
 
-:SET_FILEZIE
+:SET_FILESIZE
 set FileSize=%~z1
 exit /b 0
