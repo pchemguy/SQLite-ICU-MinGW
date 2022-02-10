@@ -23,7 +23,7 @@ exit /b 0
 :MAIN
 SetLocal EnableExtensions EnableDelayedExpansion
 
-call "%~dp0MSYS2Get.bat" %DBENG%
+call "%~dp0MSYS2Get.bat"
 set ResultCode=!ErrorLevel!
 if not "/!ResultCode!/"=="/0/" (
   echo MSYS2Get.bat error.
