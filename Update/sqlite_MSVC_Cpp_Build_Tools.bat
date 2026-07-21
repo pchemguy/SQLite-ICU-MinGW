@@ -29,6 +29,7 @@ set "TAR=%windir%\System32\tar.exe"
 set "BASEDIR=%~dp0"
 set "BASEDIR=%BASEDIR:~0,-1%"
 set "DISTRODIR=%BASEDIR%\sqlite"
+set "BINDIR=%BASEDIR%\bin"
 set "STDOUTLOG=%BASEDIR%\stdout.log"
 set "STDERRLOG=%BASEDIR%\stderr.log"
 del "%STDOUTLOG%" 2>nul
@@ -69,6 +70,9 @@ call :ICU_BUILD
 if not "%ERROR_STATUS%"=="0" (exit /b 1)
 
 call :SQLITE_BUILD
+if not "%ERROR_STATUS%"=="0" (exit /b 1)
+
+call :COLLECT_BINARIES
 if not "%ERROR_STATUS%"=="0" (exit /b 1)
 
 EndLocal
@@ -424,3 +428,16 @@ if not exist "%DISTRODIR%\sqlite3.dll" (
 exit /b %ERROR_STATUS%
 
 
+:: ============================================================================
+:COLLECT_BINARIES
+echo ========== Collecting binaries ===========
+if not exist "%BINDIR%" (mkdir "%BINDIR%")
+del /Q bin\* 2>nul
+
+if exist "%DISTRODIR%\sqlite3.dll" (copy "%DISTRODIR%\sqlite3.dll" "%BINDIR%")
+if exist "%DISTRODIR%\sqlite3.exe" (copy "%DISTRODIR%\sqlite3.exe" "%BINDIR%")
+if exist "%DISTRODIR%\sqlite3.def" (copy "%DISTRODIR%\sqlite3.def" "%BINDIR%")
+if "%USE_ICU%"=="1" (copy /Y "%ICUBINDIR%\icu*.dll" "%BINDIR%")
+echo ---------- Copied  binaries -----------
+
+exit /b 0
