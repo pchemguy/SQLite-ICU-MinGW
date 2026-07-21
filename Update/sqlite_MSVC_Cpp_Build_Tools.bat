@@ -44,9 +44,6 @@ del "%STDERRLOG%" 2>nul
 call :CHECK_PREREQUISITES
 if not "%ERROR_STATUS%"=="0" (exit /b 1)
 
-set "BUILDDIR=%BASEDIR%\build"
-if not exist "%BUILDDIR%" (mkdir "%BUILDDIR%")
-
 call :SQLITE_DOWNLOAD
 if not "%ERROR_STATUS%"=="0" (exit /b 1)
 
@@ -69,6 +66,9 @@ call :ICU_EXTRACT
 if not "%ERROR_STATUS%"=="0" (exit /b 1)
 
 call :ICU_BUILD
+if not "%ERROR_STATUS%"=="0" (exit /b 1)
+
+call :SQLITE_BUILD
 if not "%ERROR_STATUS%"=="0" (exit /b 1)
 
 EndLocal
@@ -403,3 +403,24 @@ if not exist "%ICUDIR%\bin%ARCHX%\icuinfo.exe" (
 ) else (echo ===== Using previously built ICU =====)
 
 exit /b %ERROR_STATUS%
+
+
+:: ============================================================================
+:SQLITE_BUILD
+
+if not exist "%DISTRODIR%\sqlite3.dll" (
+    echo ===== Building SQLite =====
+    cd /d "%ZLIBDIR%"
+    nmake /f "%ZLIBDIR%\win32\Makefile.msc"
+    set "ERROR_STATUS=!ERRORLEVEL!"
+    if "!ERROR_STATUS!"=="0" (
+        echo ----- Built SQLite -----
+    ) else (
+        echo Error building SQLite.
+        echo Errod code: !ERROR_STATUS!
+    )
+) else (echo ===== Using previously built SQLite =====)
+
+exit /b %ERROR_STATUS%
+
+
