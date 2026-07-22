@@ -11,10 +11,7 @@
 :: Usage: run the script with "/?" or see :SHOW_HELP at the end.
 :: ===========================================================================
 
-
-
 :: ============================= BEGIN DISPATCHER =============================
-if "/%~1/"=="//?/" call :SHOW_HELP && exit /b 0
 call :MAIN %*
 
 exit /b 0
@@ -40,10 +37,6 @@ set "STDERRLOG=%BASEDIR%\stderr.log"
 del "%STDOUTLOG%" 2>nul
 del "%STDERRLOG%" 2>nul
 
-set "SHOW_HELP=0"
-call :HELP_CHECK %*
-if "%SHOW_HELP%"=="1" (exit /b 0)
-
 (
     call :ICU_OPTIONS
     call :TCL_OPTIONS
@@ -51,81 +44,20 @@ if "%SHOW_HELP%"=="1" (exit /b 0)
     call :BUILD_OPTIONS
 ) 1>>"%STDOUTLOG%" 2>>"%STDERRLOG%"
 
-call :SQLITE_DOWNLOAD
-if not "%ERROR_STATUS%"=="0" (exit /b 1)
-
-call :SQLITE_EXTRACT
-if not "%ERROR_STATUS%"=="0" (exit /b 1)
-
-call :ZLIB_DOWNLOAD
-if not "%ERROR_STATUS%"=="0" (exit /b 1)
-
-call :ZLIB_EXTRACT
-if not "%ERROR_STATUS%"=="0" (exit /b 1)
-
-call :ZLIB_BUILD
-if not "%ERROR_STATUS%"=="0" (exit /b 1)
-
-call :ICU_DOWNLOAD
-if not "%ERROR_STATUS%"=="0" (exit /b 1)
-
-call :ICU_EXTRACT
-if not "%ERROR_STATUS%"=="0" (exit /b 1)
-
-call :ICU_BUILD
-if not "%ERROR_STATUS%"=="0" (exit /b 1)
-
-call :SQLITE_BUILD_INIT
-if not "%ERROR_STATUS%"=="0" (exit /b 1)
+call :SQLITE_DOWNLOAD || exit /b %ERRORLEVEL%
+call :SQLITE_EXTRACT  || exit /b %ERRORLEVEL%
+call :ZLIB_DOWNLOAD   || exit /b %ERRORLEVEL%
+call :ZLIB_EXTRACT    || exit /b %ERRORLEVEL%
+call :ZLIB_BUILD      || exit /b %ERRORLEVEL%
+call :ICU_DOWNLOAD    || exit /b %ERRORLEVEL%
+call :ICU_EXTRACT     || exit /b %ERRORLEVEL%
+call :ICU_BUILD       || exit /b %ERRORLEVEL%
+call :SQLITE_BUILD    || exit /b %ERRORLEVEL%
 
 exit /b 0
 
-(
-  copy /Y "%BASEDIR%\extra\build\*" "%BUILDDIR%"
-  copy /Y "%BASEDIR%\extra\*.tcl" "%BASEDIR%"
-  xcopy /H /Y /B /E /Q "%BASEDIR%\extra\sqlite" "%BASEDIR%\sqlite"
-)  1>>"%STDOUTLOG%" 2>>"%STDERRLOG%"
-
-if %WITH_EXTRA_EXT% EQU 1 (
-  call :EXT_ADD_SOURCES_TO_MAKEFILE_MSC
-  call :EXT_ADD_SOURCES_TO_MKSQLITE3C_TCL
-  popd
-
-  ::TSRC
-  nmake /nologo /f Makefile.msc .target_source
-
-  set TARGETDIR=%BUILDDIR%\tsrc
-  pushd "%BUILDDIR%\tsrc"
-  xcopy /H /Y /B /E /Q "%BASEDIR%\extra\*" "%BASEDIR%"
-  call :TEST_MAIN_C_SQLITE3_H
-  call :EXT_MAIN
-  call :EXT_NORMALIZE
-  call :EXT_REGEXP
-  call :EXT_SHA1
-  call :EXT_BASE_PATCH CSV
-  call :EXT_BASE_PATCH SERIES
-  call :EXT_BASE_PATCH FILEIO
-  call :EXT_BASE_PATCH UINT
-  call :EXT_BASE_PATCH UUID
-  call :EXT_BASE_PATCH SHATHREE
-  if %USE_ZLIB%  EQU 1 (call :EXT_ZIPFILE)
-  if %USE_SQLAR% EQU 1 (call :EXT_BASE_PATCH SQLAR)
-) 1>>"%STDOUTLOG%" 2>>"%STDERRLOG%"
-
-popd
-echo ===== Making TARGETS ----- %TARGETS% -----
-nmake /nologo /f Makefile.msc sqlite3.c 1>>"%STDOUTLOG%" 2>>"%STDERRLOG%"
-
-:: There is a problem with integration of fileio properly resulting in
-:: '_stat' related errors. But bypassing the amalgmation generation tool
-:: works.
-if %WITH_EXTRA_EXT% EQU 1 (
-  call :EXT_WINDIRENT
-) 1>>"%STDOUTLOG%" 2>>"%STDERRLOG%"
-
-nmake /nologo /f Makefile.msc %TARGETS% 1>>"%STDOUTLOG%" 2>>"%STDERRLOG%"
-cd ..
-rem Leave BUILDDIR
+echo ===== Making -----
+nmake /nologo /f Makefile.msc 1>>"%STDOUTLOG%" 2>>"%STDERRLOG%"
 
 set COPY_BINARIES=0
 if exist "%BUILDDIR%\sqlite3.dll" (set COPY_BINARIES=1)
@@ -141,14 +73,13 @@ exit /b 0
 :: ============================================================================
 :ICU_OPTIONS
 
+set "USE_ICU=0"
 if not defined USE_ICU (set "USE_ICU=1")
-if "%USE_ICU%"=="1" (
-    if "/%VSCMD_ARG_TGT_ARCH%/" == "/x64/" (set "ARCHX=64") else (set "ARCHX=")
-    set "ICUDIR=%~dp0sqlite\compat\icu"
-    set "ICUINCDIR=!ICUDIR!\include"
-    set "ICULIBDIR=!ICUDIR!\lib!ARCH!"
-    set "ICUBINDIR=!ICUDIR!\bin!ARCH!"
-)
+if "/%VSCMD_ARG_TGT_ARCH%/" == "/x64/" (set "ARCHX=64") else (set "ARCHX=")
+set "ICUDIR=%DISTRODIR%\compat\icu"
+set "ICUINCDIR=!ICUDIR!\include"
+set "ICULIBDIR=!ICUDIR!\lib!ARCH!"
+set "ICUBINDIR=!ICUDIR!\bin!ARCH!"
 
 exit /b 0
 
@@ -188,6 +119,7 @@ set "RBU=1"
 set "API_ARMOR=1"
 set "SYMBOLS=0"
 set "NO_TCL=1"
+if not defined SQLITE_EXTRA (set "SQLITE_EXTRA=0")
 
 set OPT_XTRA=^
     -DSQLITE_ENABLE_NORMALIZE ^
@@ -207,6 +139,10 @@ set OPT_XTRA=^
     -DSQLITE_USE_URI=1 ^
     -DSQLITE_SOUNDEX
 
+if "%SQLITE_EXTRA%"=="1" (
+    set OPT_XTRA=%OPT_XTRA%^
+        -DSQLITE_EXTRA_AUTOEXT=sqlite3ExtraAutoExtInit
+)
 
 exit /b 0
 
@@ -478,7 +414,7 @@ exit /b %ERROR_STATUS%
 
 
 :: ============================================================================
-:SQLITE_BUILD_INIT
+:SQLITE_BUILD
 
 set "ERROR_STATUS=0"
 
@@ -493,102 +429,69 @@ cd /d "%BUILDDIR%" || exit /b %ERRORLEVEL%
 set SRC12=^
     ""%DISTRODIR%\ext\misc\windirent.h"" ^
     ""%DISTRODIR%\ext\misc\csv.c""       ^
-    ""%DISTRODIR%\ext\misc\regexp.c""    ^
-    ""%DISTRODIR%\ext\misc\mmapwarm.c""  ^
+    ""%DISTRODIR%\ext\misc\decimal.c""   ^
+    ""%DISTRODIR%\ext\misc\fileio.c""    ^
     ""%DISTRODIR%\ext\misc\normalize.c"" ^
+    ""%DISTRODIR%\ext\misc\regexp.c""    ^
     ""%DISTRODIR%\ext\misc\series.c""    ^
     ""%DISTRODIR%\ext\misc\sha1.c""      ^
     ""%DISTRODIR%\ext\misc\shathree.c""  ^
+    ""%DISTRODIR%\ext\misc\sqlar.c""     ^
     ""%DISTRODIR%\ext\misc\uint.c""      ^
     ""%DISTRODIR%\ext\misc\uuid.c""      ^
-    ""%DISTRODIR%\ext\misc\zipfile.c""   ^
-    ""%DISTRODIR%\ext\misc\sqlar.c"" 
+    ""%DISTRODIR%\ext\misc\zipfile.c""
 
+:: Initialize SQLite build directory
 
 nmake /nologo "SRC12=%SRC12%" "TOP=%DISTRODIR%" /f "%DISTRODIR%\Makefile.msc" .target_source
-set "ERROR_STATUS=!ERRORLEVEL!"
+set "ERROR_STATUS=%ERRORLEVEL%"
+if not "%ERROR_STATUS%"=="0" (exit /b %ERROR_STATUS%)
+
+:: Patch misc extensions as AutoExtensions
+
+cd /d "%BUILDDIR%\tsrc"
+
+set TARGETS=^
+    "csv.c"       ^
+    "decimal.c"   ^
+    "regexp.c"    ^
+    "series.c"    ^
+    "sha1.c"      ^
+    "shathree.c"  ^
+    "sqlar.c"     ^
+    "uint.c"      ^
+    "uuid.c"
+
+tclsh "%BASEDIR%\extra\patch_sqlite_misc_autoext.tcl" %TARGETS%
+set "ERROR_STATUS=%ERRORLEVEL%"
+if not "%ERROR_STATUS%"=="0" (exit /b %ERROR_STATUS%)
+
+:: Patch normalize.c
+
+set "FILENAME=%BUILDDIR%\tsrc\normalize.c"
+echo ========== Patching "%FILENAME%" ===========
+tclsh "%BASEDIR%\extra\replace.tcl" "int main" "int sqlite3_normalize_main" "%FILENAME%"
+tclsh "%BASEDIR%\extra\replace.tcl" "CC_" "CCN_" "%FILENAME%"
+tclsh "%BASEDIR%\extra\replace.tcl" "TK_" "TKN_" "%FILENAME%"
+tclsh "%BASEDIR%\extra\replace.tcl" "aiClass" "aiClassN" "%FILENAME%"
+tclsh "%BASEDIR%\extra\replace.tcl" "sqlite3UpperToLower" "sqlite3UpperToLowerN" "%FILENAME%"
+tclsh "%BASEDIR%\extra\replace.tcl" "sqlite3CtypeMap" "sqlite3CtypeMapN" "%FILENAME%"
+tclsh "%BASEDIR%\extra\replace.tcl" "sqlite3GetToken" "sqlite3GetTokenN" "%FILENAME%"
+tclsh "%BASEDIR%\extra\replace.tcl" "IdChar(" "IdCharN(" "%FILENAME%"
+tclsh "%BASEDIR%\extra\replace.tcl" "sqlite3I" "sqlite3IN" "%FILENAME%"
+tclsh "%BASEDIR%\extra\replace.tcl" "sqlite3T" "sqlite3TN" "%FILENAME%"
+rem tclsh "%BASEDIR%\extra\replace.tcl" "CCN__" "CC__" "%FILENAME%"
+
+set "ERROR_STATUS=%ERRORLEVEL%"
+if not "%ERROR_STATUS%"=="0" (exit /b %ERROR_STATUS%)
+
+:: Make SQLite
+
+cd /d "%BUILDDIR%"
+nmake /nologo "SRC12=%SRC12%" "TOP=%DISTRODIR%" /f "%DISTRODIR%\Makefile.msc" %*
+set "ERROR_STATUS=%ERRORLEVEL%"
 
 exit /b %ERROR_STATUS%
-
-
-:: ============================================================================
-:EXT_ADD_SOURCES_TO_MAKEFILE_MSC
-set TARGETDIR=%BUILDDIR%
-set FILENAME=Makefile.msc
-echo ========== Patching "%FILENAME%" ===========
-tclsh "%BASEDIR%\addlines.tcl" "%FILENAME%" "%FILENAME%.ext" "%TARGETDIR%"
-ren "%FILENAME%" "%FILENAME%" 
-
-exit /b 0
-
-
-:: ============================================================================
-:EXT_ADD_SOURCES_TO_MKSQLITE3C_TCL
-set TARGETDIR=%DISTRODIR%\tool
-set FILENAME=mksqlite3c.tcl
-echo ========== Patching "%FILENAME%" ===========
-pushd "%TARGETDIR%"
-if not exist "%FILENAME%.bak" (
-  copy /Y "%FILENAME%" "%FILENAME%.bak"
-) else (
-  copy /Y "%FILENAME%.bak" "%FILENAME%"
-)
-popd
-tclsh "%BASEDIR%\addlines.tcl" "%FILENAME%" "%FILENAME%.ext" "%TARGETDIR%"
-
-exit /b 0
-
-
-:: ============================================================================
-:TEST_MAIN_C_SQLITE3_H
-set FILENAME=main.c
-echo ========== Patching "%FILENAME%" ===========
-tclsh "%BASEDIR%\addlines.tcl" "%FILENAME%" "%FILENAME%.test" "%TARGETDIR%"
-set FILENAME=sqlite3.h
-echo ========== Patching "%FILENAME%" ===========
-tclsh "%BASEDIR%\addlines.tcl" "%FILENAME%" "%FILENAME%.test" "%TARGETDIR%"
-
-exit /b 0
-
-
-:: ============================================================================
-:EXT_MAIN
-set FILENAME=main.c
-echo ========== Patching "%FILENAME%" ===========
-tclsh "%BASEDIR%\addlines.tcl" "%FILENAME%" "%FILENAME%.1.ext" "%TARGETDIR%"
-tclsh "%BASEDIR%\addlines.tcl" "%FILENAME%" "%FILENAME%.2.ext" "%TARGETDIR%"
-
-exit /b 0
-
-
-:: ============================================================================
-:EXT_NORMALIZE
-set FILENAME=normalize.c
-echo ========== Patching "%FILENAME%" ===========
-tclsh "%BASEDIR%\replace.tcl" "int main" "int sqlite3_normalize_main" "%FILENAME%"
-tclsh "%BASEDIR%\replace.tcl" "CC_" "CCN_" "%FILENAME%"
-tclsh "%BASEDIR%\replace.tcl" "TK_" "TKN_" "%FILENAME%"
-tclsh "%BASEDIR%\replace.tcl" "aiClass" "aiClassN" "%FILENAME%"
-tclsh "%BASEDIR%\replace.tcl" "sqlite3UpperToLower" "sqlite3UpperToLowerN" "%FILENAME%"
-tclsh "%BASEDIR%\replace.tcl" "sqlite3CtypeMap" "sqlite3CtypeMapN" "%FILENAME%"
-tclsh "%BASEDIR%\replace.tcl" "sqlite3GetToken" "sqlite3GetTokenN" "%FILENAME%"
-tclsh "%BASEDIR%\replace.tcl" "IdChar(" "IdCharN(" "%FILENAME%"
-tclsh "%BASEDIR%\replace.tcl" "sqlite3I" "sqlite3NI" "%FILENAME%"
-tclsh "%BASEDIR%\replace.tcl" "sqlite3T" "sqlite3NT" "%FILENAME%"
-tclsh "%BASEDIR%\replace.tcl" "CCN__" "CC__" "%FILENAME%"
-
-exit /b 0
-
-
-:: ============================================================================
-:EXT_SHA1
-set FILENAME=sha1.c
-set OLDTEXT=hash_step_vformat
-set NEWTEXT=hash_step_vformat_sha1
-tclsh "%BASEDIR%\replace.tcl" "%OLDTEXT%" "%NEWTEXT%" "%FILENAME%"
-call :EXT_BASE_PATCH SHA sha1.c
-
-exit /b 0
 
 
 :: ============================================================================
@@ -606,66 +509,6 @@ exit /b 0
 
 
 :: ============================================================================
-:EXT_WINDIRENT
-if %USE_LIBSHELL% EQU 0 (
-  copy tsrc\test_windirent.c .
-  copy tsrc\test_windirent.h .
-  copy tsrc\fileio.c .
-  set FILENAME=test_windirent.c
-  echo ========== Patching "!FILENAME!" ===========
-  tclsh "%BASEDIR%\expandinclude.tcl" "!FILENAME!" "test_windirent.h" .
-  (
-    echo #include "test_windirent.c"
-    echo #include "fileio.c"
-  ) >>sqlite3.c
-  tclsh "%BASEDIR%\expandinclude.tcl" "sqlite3.c" "test_windirent.c" .
-  tclsh "%BASEDIR%\expandinclude.tcl" "sqlite3.c" "fileio.c" .
-)
-
-exit /b 0
-
-
-:: ============================================================================
-:EXT_ZIPFILE
-set FLAG=SQLITE_ENABLE_ZIPFILE
-set FILENAME=zipfile.c
-echo ========== Patching "%FILENAME%" ===========
-set OLDTEXT=static int zipfileRegister
-set NEWTEXT=int zipfileRegister
-tclsh "%BASEDIR%\replace.tcl" "%OLDTEXT%" "%NEWTEXT%" "%FILENAME%"
-set OLDTEXT=#include \"sqlite3ext.h\"
-set NEWTEXT=#if defined(%FLAG%)\n\n#include \"sqlite3ext.h\"
-tclsh "%BASEDIR%\replace.tcl" "%OLDTEXT%" "%NEWTEXT%" "%FILENAME%"
-echo. >>"%FILENAME%"
-echo #endif /* defined^(%FLAG%^) */ >>"%FILENAME%"
-
-exit /b 0
-
-
-:: ============================================================================
-:EXT_BASE_PATCH
-:: Call this sub with two arguments:
-::   - %1 - FLAG suffix
-::   - %2 - FILENAME (if omitted, use %1.c)
-set FLAG=SQLITE_ENABLE_%~1
-if "/%~2/"=="//" (set FILENAME=%~1.c) else (set FILENAME=%~2)
-echo ========== Patching "%FILENAME%" ===========
-if exist "%FILENAME%.ext" (
-  tclsh "%BASEDIR%\addlines.tcl" "%FILENAME%" "%FILENAME%.ext" .
-)
-set OLDTEXT=#include ^<sqlite3ext.h^>
-set NEWTEXT=#include \"sqlite3ext.h\"
-tclsh "%BASEDIR%\replace.tcl" "%OLDTEXT%" "%NEWTEXT%" "%FILENAME%"
-set OLDTEXT=#include \"sqlite3ext.h\"
-set NEWTEXT=#if defined(%FLAG%)\n\n#include \"sqlite3ext.h\"
-tclsh "%BASEDIR%\replace.tcl" "%OLDTEXT%" "%NEWTEXT%" "%FILENAME%"
-echo. >>"%FILENAME%"
-echo #endif /* defined^(%FLAG%^) */ >>"%FILENAME%"
-
-exit /b 0
-
-
-:: ============================================================================
 :COLLECT_BINARIES
 echo ========== Collecting binaries ===========
 set BINDIR=%~dp0bin
@@ -678,91 +521,4 @@ if %USE_ICU%  EQU 1 copy /Y "%ICUBINDIR%\icu*.dll" "%BINDIR%"
 if %USE_ZLIB% EQU 1 copy /Y "%ZLIBDIR%\zlib1.dll"  "%BINDIR%"
 echo ---------- Copied  binaries -----------
 
-exit /b 0
-
-
-:: ============================================================================
-:HELP_CHECK
-set ARG1=%~1
-if "/%~1/"=="//" (
-  set SHOW_HELP=0
-  exit /b 0
-)
-set ARG1=%ARG1:/=-%
-set ARG1=%ARG1:--=-%
-set ARG1=%ARG1:?=h%
-set ARG1=%ARG1:~,2%
-if /I "/%ARG1%/"=="/-h/" (
-  set SHOW_HELP=1
-  call :SHOW_HELP
-) else (set SHOW_HELP=0)
-
-exit /b 0
-
-
-:: ============================================================================
-:SHOW_HELP
-     ::==============================================================================
-echo.
-echo //================================== USAGE ===================================\\
-echo ^|^|                                                                            ^|^|
-echo ^|^| This script builds SQLite from standard source release using Microsoft     ^|^|
-echo ^|^| Visual C++ Build Tools (MSVC toolset). The script enables all extensions   ^|^|
-echo ^|^| integrated into the official SQLite amalgamtion release. The ICU extension ^|^|
-echo ^|^| is enabled by default if ICU binaries are available. Additionaly, several  ^|^|
-echo ^|^| extension from ext/misc are also integrated by default. If executed from   ^|^|
-echo ^|^| an x32 shell, STDCALL convention is activated by default.                  ^|^|
-echo ^|^|                                                                            ^|^|
-echo ^|^| Prerequisites:                                                             ^|^|
-echo ^|^|   - The script must be exectuted from an appropriate (either x32 or x64)   ^|^|
-echo ^|^|     Build Tools shell.                                                     ^|^|
-echo ^|^|   - Internet connection must be available, unless the distro archives are  ^|^|
-echo ^|^|     placed alongside the script.                                           ^|^|
-echo ^|^|   - TCL must be available. Either add TCL binary folder to the Path or set ^|^|
-echo ^|^|     TCL_HOME environment variable, so that %%TCL_HOME%%\bin\tclsh.exe points ^|^|
-echo ^|^|     to tclsh.exe.                                                          ^|^|
-echo ^|^|   - ICU binaries are required for ICU enabled build. Either add ICU binary ^|^|
-echo ^|^|     folder to the path or set ICU_HOME environment variable to the root of ^|^|
-echo ^|^|     ICU, e.g., ICU_HOME=%%ProgramFiles%%\icu4c (spaces in Path are not       ^|^|
-echo ^|^|     allowed). If ICU binaries are not found, ICU is disabled.              ^|^|
-echo ^|^|                                                                            ^|^|
-echo ^|^| Usage:                                                                     ^|^|
-echo ^|^|   Place this script and the "extra" folder in an empty folder (no spaces   ^|^|
-echo ^|^|   in path). It will download the current standard SQLite release and zlib  ^|^|
-echo ^|^|   sources. If "sqlite.zip" or "zlib.zip" are in the same folder, the       ^|^|
-echo ^|^|   script will use them. Make sure that the archives are good, otherwise    ^|^|
-echo ^|^|   the script will fail (e.g., if partially downloaded files are found).    ^|^|
-echo ^|^|                                                                            ^|^|
-echo ^|^|   Because some of the extra extensions are included in the shell, extra    ^|^|
-echo ^|^|   extension must be disabled when building the shell (WITH_EXTRA_EXT=0).   ^|^|
-echo ^|^|                                                                            ^|^|
-echo ^|^|   Build targets should be provided as one quoted space separated argument  ^|^|
-echo ^|^|   or as individual arguments, e.g.,                                        ^|^|
-echo ^|^|     SOMEPATH^> sqlite_MSVC_Cpp_Build_Tools.ext.bat_ "sqlite3.c dll"         ^|^|
-echo ^|^|     SOMEPATH^> sqlite_MSVC_Cpp_Build_Tools.ext.bat_ sqlite3.c dll           ^|^|
-echo ^|^|   If no build targets are provided, the script will print debugging info   ^|^|
-echo ^|^|   to the log file.                                                         ^|^|
-echo ^|^|                                                                            ^|^|
-echo ^|^|   Additional options should be set in advance, e.g.,                       ^|^|
-echo ^|^|     SOMEPATH^> set "USE_ICU=0" ^&^& set "USE_ZLIB=1" ^&^& ^<...^>.ext.bat dll     ^|^|
-echo ^|^|                                                                            ^|^|
-echo ^|^|   Available options (1 - enable, 0 - disable, not defined - default):      ^|^|
-echo ^|^|     USE_ICU (defaults to 1) - ICU support.                                 ^|^|
-echo ^|^|     SYMBOLS (defaults to 0) - keep symbols in DLL (see printed warnings).  ^|^|
-echo ^|^|     WITH_EXTRA_EXT (defaults to 1) - integrate additional extensions.      ^|^|
-echo ^|^|     USE_ZLIB (defaults to 1) - ZLIB support (WITH_EXTRA_EXT must be 1).    ^|^|
-echo ^|^|     USE_SQLAR (defaults to 1) - SQLAR support (requires ZLIB support).     ^|^|
-echo ^|^|     USE_STDCALL (defaults to 1 for x32) - use STDCALL instead of CDECL.    ^|^|
-echo ^|^|                                                                            ^|^|
-echo ^|^|     Presently, USE_ZLIB/USE_SQLAR should not be used. Either all extras    ^|^|
-echo ^|^|     should be activated or none; otherwise, build process may fail.        ^|^|
-echo ^|^|                                                                            ^|^|
-echo ^|^|   Build shell:                                                             ^|^|
-echo ^|^|   set WITH_EXTRA_EXT=0 ^&^& sqlite_MSVC_Cpp_Build_Tools.ext.bat sqlite3.exe  ^|^|
-echo ^|^|   Build dll with all extras and symbols:                                   ^|^|
-echo ^|^|   set SYMBOLS=1 ^&^& sqlite_MSVC_Cpp_Build_Tools.ext.bat dll                 ^|^|
-echo ^|^|                                                                            ^|^|
-echo \\============================================================================//
-echo.
-            
 exit /b 0
