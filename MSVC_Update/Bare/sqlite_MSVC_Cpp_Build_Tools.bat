@@ -324,7 +324,7 @@ exit /b %ERROR_STATUS%
 set "DISTRO=icu4c-X-sources.zip"
 set "URL="
 
-set "ICU_RELEASE_META=%~dp0icu_release_meta.json"
+set "ICU_RELEASE_META=%BASEDIR%\icu_release_meta.json"
 if not exist "%ICU_RELEASE_META%" (
     curl.exe -s https://api.github.com/repos/unicode-org/icu/releases/latest >"%ICU_RELEASE_META%"
 )
@@ -350,9 +350,9 @@ if defined URL (
     exit /b %ERROR_STATUS%
 )
 
-if not exist "%DISTRO%" (
+if not exist "%BASEDIR%\%DISTRO%" (
     echo ===== Downloading ICU =====
-    curl.exe -fL --retry 3 --output "%DISTRO%" %URL%
+    curl.exe -fL --retry 3 --output "%BASEDIR%\%DISTRO%" %URL%
     set "ERROR_STATUS=!ERRORLEVEL!"
     if "!ERROR_STATUS!"=="0" (
         echo ----- Downloaded ICU -----
@@ -414,8 +414,8 @@ exit /b %ERROR_STATUS%
 
 if not exist "%DISTRODIR%\sqlite3.dll" (
     echo ===== Building SQLite =====
-    cd /d "%ZLIBDIR%"
-    nmake /f "%ZLIBDIR%\win32\Makefile.msc"
+    cd /d "%DISTRODIR%"
+    nmake /f "%DISTRODIR%\Makefile.msc"
     set "ERROR_STATUS=!ERRORLEVEL!"
     if "!ERROR_STATUS!"=="0" (
         echo ----- Built SQLite -----
