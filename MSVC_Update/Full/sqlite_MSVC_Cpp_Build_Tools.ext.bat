@@ -425,7 +425,6 @@ cd /d "%BUILDDIR%" || exit /b %ERRORLEVEL%
 :: can be safely overwritten.
 
 set SRC12=^
-    ""%DISTRODIR%\ext\misc\windirent.h"" ^
     ""%DISTRODIR%\ext\misc\csv.c""       ^
     ""%DISTRODIR%\ext\misc\decimal.c""   ^
     ""%DISTRODIR%\ext\misc\normalize.c"" ^
@@ -486,7 +485,6 @@ if not "%ERROR_STATUS%"=="0" (exit /b %ERROR_STATUS%)
 cd /d "%BUILDDIR%"
 
 set EXTRA_SRC=^
-    ""%BUILDDIR%\tsrc\windirent.h""     ^
     ""%BUILDDIR%\tsrc\csv.c""           ^
     ""%BUILDDIR%\tsrc\decimal.c""       ^
     ""%BUILDDIR%\tsrc\normalize.c""     ^
