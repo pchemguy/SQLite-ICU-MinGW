@@ -23,13 +23,18 @@ exit /b 0
 
 :: ================================ BEGIN MAIN ================================
 :MAIN
+
 SetLocal EnableExtensions EnableDelayedExpansion
 
 set "ERROR_STATUS=0"
 
+set "TAR=%windir%\System32\tar.exe"
 set "BASEDIR=%~dp0"
 set "BASEDIR=%BASEDIR:~0,-1%"
 set "DISTRODIR=%BASEDIR%\sqlite"
+set "SQLITE_MAKEFILE=%DISTRODIR%\Makefile.msc"
+set "TOP=%DISTRODIR%"
+set "BUILDDIR=%BASEDIR%\build"
 set "STDOUTLOG=%BASEDIR%\stdout.log"
 set "STDERRLOG=%BASEDIR%\stderr.log"
 del "%STDOUTLOG%" 2>nul
@@ -70,16 +75,15 @@ if not "%ERROR_STATUS%"=="0" (exit /b 1)
 call :ICU_BUILD
 if not "%ERROR_STATUS%"=="0" (exit /b 1)
 
-set BUILDDIR=%BASEDIR%\build
-if not exist "%BUILDDIR%" mkdir "%BUILDDIR%"
+call :SQLITE_BUILD_INIT
+if not "%ERROR_STATUS%"=="0" (exit /b 1)
+
+exit /b 0
+
 (
   copy /Y "%BASEDIR%\extra\build\*" "%BUILDDIR%"
   copy /Y "%BASEDIR%\extra\*.tcl" "%BASEDIR%"
   xcopy /H /Y /B /E /Q "%BASEDIR%\extra\sqlite" "%BASEDIR%\sqlite"
-  cd /d "%BUILDDIR%"
-  
-  pushd .
-  call :MAKEFILE_MSC_TOP_AND_DEBUG_ZLIB_STDCALL
 )  1>>"%STDOUTLOG%" 2>>"%STDERRLOG%"
 
 if %WITH_EXTRA_EXT% EQU 1 (
@@ -108,15 +112,7 @@ if %WITH_EXTRA_EXT% EQU 1 (
   if %USE_SQLAR% EQU 1 (call :EXT_BASE_PATCH SQLAR)
 ) 1>>"%STDOUTLOG%" 2>>"%STDERRLOG%"
 
-if %USE_LIBSHELL% EQU 1 (
-  echo WARNING: Use libshell or shelldll as the target instead of dll!
-  call :LIBSHELL
-)
-
 popd
-if %USE_ZLIB% EQU 1 (
-  nmake /nologo /f Makefile.msc zlib
-) 1>>"%STDOUTLOG%" 2>>"%STDERRLOG%"
 echo ===== Making TARGETS ----- %TARGETS% -----
 nmake /nologo /f Makefile.msc sqlite3.c 1>>"%STDOUTLOG%" 2>>"%STDERRLOG%"
 
@@ -127,9 +123,6 @@ if %WITH_EXTRA_EXT% EQU 1 (
   call :EXT_WINDIRENT
 ) 1>>"%STDOUTLOG%" 2>>"%STDERRLOG%"
 
-if %USE_LIBSHELL% EQU 1 (
-  nmake /nologo /f Makefile.msc %LIBSHELLOBJ%
-) 1>>"%STDOUTLOG%" 2>>"%STDERRLOG%"
 nmake /nologo /f Makefile.msc %TARGETS% 1>>"%STDOUTLOG%" 2>>"%STDERRLOG%"
 cd ..
 rem Leave BUILDDIR
@@ -147,6 +140,7 @@ exit /b 0
 
 :: ============================================================================
 :ICU_OPTIONS
+
 if not defined USE_ICU (set "USE_ICU=1")
 if "%USE_ICU%"=="1" (
     if "/%VSCMD_ARG_TGT_ARCH%/" == "/x64/" (set "ARCHX=64") else (set "ARCHX=")
@@ -161,6 +155,7 @@ exit /b 0
 
 :: ============================================================================
 :ZLIB_OPTIONS
+
 if not defined USE_ZLIB (set "USE_ZLIB=1")
 if not defined USE_SQLAR (set "USE_SQLAR=1")
 
@@ -169,6 +164,7 @@ exit /b 0
 
 :: ============================================================================
 :TCL_OPTIONS
+
 set "TCL_OK=0"
 where tclsh 1>nul 2>nul && exit /b 0 || set "TCL_OK=1"
 if not defined TCL_HOME (set "TCL_HOME=%ProgramFiles%\TCL")
@@ -186,6 +182,7 @@ exit /b %TCL_OK%
 
 :: ============================================================================
 :BUILD_OPTIONS
+
 set "SESSION=1"
 set "RBU=1"
 set "API_ARMOR=1"
@@ -216,6 +213,7 @@ exit /b 0
 
 :: ============================================================================
 :CHECK_PREREQUISITES
+
 echo ===== Verifying environment =====
 
 if "/%VisualStudioVersion%/"=="//" (
@@ -283,12 +281,13 @@ exit /b %ERROR_STATUS%
 
 :: ============================================================================
 :SQLITE_DOWNLOAD
+
 set "DISTRO=sqlite.zip"
 set "URL=https://sqlite.org/src/zip/sqlite.zip"
 
-if not exist "%DISTRO%" (
+if not exist "%BASEDIR%\%DISTRO%" (
     echo ===== Downloading current SQLite release =====
-    curl.exe -fL --retry 3 --output "%DISTRO%" %URL%
+    curl.exe -fL --retry 3 --output "%BASEDIR%\%DISTRO%" %URL%
     set "ERROR_STATUS=!ERRORLEVEL!"
     if "!ERROR_STATUS!"=="0" (
         echo ----- Downloaded current SQLite release -----
@@ -303,6 +302,7 @@ exit /b %ERROR_STATUS%
 
 :: ============================================================================
 :SQLITE_EXTRACT
+
 set "DISTROFILE=sqlite.zip"
 
 if not exist "%DISTRODIR%\Makefile.msc" (
@@ -322,12 +322,13 @@ exit /b %ERROR_STATUS%
 
 :: ============================================================================
 :ZLIB_DOWNLOAD
+
 set "DISTRO=zlib.tar.gz"
 set "URL=https://zlib.net/current/zlib.tar.gz"
 
-if not exist "%DISTRO%" (
+if not exist "%BASEDIR%\%DISTRO%" (
     echo ===== Downloading ZLIB =====
-    curl.exe -fL --retry 3 --output "%DISTRO%" %URL%
+    curl.exe -fL --retry 3 --output "%BASEDIR%\%DISTRO%" %URL%
     set "ERROR_STATUS=!ERRORLEVEL!"
     if "!ERROR_STATUS!"=="0" (
         echo ----- Downloaded ZLIB -----
@@ -342,6 +343,7 @@ exit /b %ERROR_STATUS%
 
 :: ============================================================================
 :ZLIB_EXTRACT
+
 set "DISTROFILE=zlib.tar.gz"
 set "ZLIBDIR=%DISTRODIR%\compat\zlib"
 
@@ -369,8 +371,8 @@ exit /b %ERROR_STATUS%
 
 if not exist "%ZLIBDIR%\zlib1.dll" (
     echo ===== Building ZLIB =====
-    cd /d "%ZLIBDIR%"
-    nmake /f "%ZLIBDIR%\win32\Makefile.msc"
+    cd /d "%DISTRODIR%"
+    nmake /nologo "TOP=%DISTRODIR%" "ZLIBLIB=all" /f "%SQLITE_MAKEFILE%" zlib
     set "ERROR_STATUS=!ERRORLEVEL!"
     if "!ERROR_STATUS!"=="0" (
         echo ----- Built ZLIB -----
@@ -385,10 +387,11 @@ exit /b %ERROR_STATUS%
 
 :: ============================================================================
 :ICU_DOWNLOAD
+
 set "DISTRO=icu4c-X-sources.zip"
 set "URL="
 
-set "ICU_RELEASE_META=%~dp0icu_release_meta.json"
+set "ICU_RELEASE_META=%BASEDIR%\icu_release_meta.json"
 if not exist "%ICU_RELEASE_META%" (
     curl.exe -s https://api.github.com/repos/unicode-org/icu/releases/latest >"%ICU_RELEASE_META%"
 )
@@ -414,9 +417,9 @@ if defined URL (
     exit /b %ERROR_STATUS%
 )
 
-if not exist "%DISTRO%" (
+if not exist "%BASEDIR%\%DISTRO%" (
     echo ===== Downloading ICU =====
-    curl.exe -fL --retry 3 --output "%DISTRO%" %URL%
+    curl.exe -fL --retry 3 --output "%BASEDIR%\%DISTRO%" %URL%
     set "ERROR_STATUS=!ERRORLEVEL!"
     if "!ERROR_STATUS!"=="0" (
         echo ----- Downloaded ICU -----
@@ -431,6 +434,7 @@ exit /b %ERROR_STATUS%
 
 :: ============================================================================
 :ICU_EXTRACT
+
 set "DISTROFILE=icu4c-X-sources.zip"
 set "ICUDIR=%DISTRODIR%\compat\icu"
 
@@ -474,27 +478,37 @@ exit /b %ERROR_STATUS%
 
 
 :: ============================================================================
-:MAKEFILE_MSC_TOP_AND_DEBUG_ZLIB_STDCALL
-set FILENAME=Makefile.msc
-if exist "%FILENAME%" (
-  nmake /nologo /f "%FILENAME%" clean
-  del "%FILENAME%" 2>nul
-)
-echo ========== Patching "%FILENAME%" ===========
-copy /Y "%DISTRODIR%\%FILENAME%" "%BUILDDIR%"
-set OLDTEXT=TOP = .
-set NEWTEXT=TOP = %DISTRODIR%
-tclsh "%BASEDIR%\replace.tcl" "%OLDTEXT%" "%NEWTEXT%" "%FILENAME%"
-set OLDTEXT=win32\Makefile.msc clean
-set NEWTEXT=win32\Makefile.msc LOC=$(ZLIBLOC) clean
-tclsh "%BASEDIR%\replace.tcl" "%OLDTEXT%" "%NEWTEXT%" "%FILENAME%"
-if %USE_LIBSHELL% EQU 1 call (
-  tclsh "%BASEDIR%\addlines.tcl" "%FILENAME%" "%FILENAME%.libshell" %BUILDDIR%
-)
-type "%FILENAME%.debug" >>"%FILENAME%"
-ren "%FILENAME%" "%FILENAME%" 
+:SQLITE_BUILD_INIT
 
-exit /b 0
+set "ERROR_STATUS=0"
+
+if not exist "%BUILDDIR%" mkdir "%BUILDDIR%" || exit /b %ERRORLEVEL%
+cd /d "%BUILDDIR%" || exit /b %ERRORLEVEL%
+
+:: Instead of patching Makefile.msc to copy extra/misc extension source files or
+:: doing so explictly, set SRC12. SRC12 is used for generated Tcl header files
+:: when building for WIN10 and USE_STDCALL. This use is irrelevant, so the macro
+:: can be safely overwritten.
+
+set SRC12=^
+    ""%DISTRODIR%\ext\misc\windirent.h"" ^
+    ""%DISTRODIR%\ext\misc\csv.c""       ^
+    ""%DISTRODIR%\ext\misc\regexp.c""    ^
+    ""%DISTRODIR%\ext\misc\mmapwarm.c""  ^
+    ""%DISTRODIR%\ext\misc\normalize.c"" ^
+    ""%DISTRODIR%\ext\misc\series.c""    ^
+    ""%DISTRODIR%\ext\misc\sha1.c""      ^
+    ""%DISTRODIR%\ext\misc\shathree.c""  ^
+    ""%DISTRODIR%\ext\misc\uint.c""      ^
+    ""%DISTRODIR%\ext\misc\uuid.c""      ^
+    ""%DISTRODIR%\ext\misc\zipfile.c""   ^
+    ""%DISTRODIR%\ext\misc\sqlar.c"" 
+
+
+nmake /nologo "SRC12=%SRC12%" "TOP=%DISTRODIR%" /f "%DISTRODIR%\Makefile.msc" .target_source
+set "ERROR_STATUS=!ERRORLEVEL!"
+
+exit /b %ERROR_STATUS%
 
 
 :: ============================================================================
@@ -647,39 +661,6 @@ set NEWTEXT=#if defined(%FLAG%)\n\n#include \"sqlite3ext.h\"
 tclsh "%BASEDIR%\replace.tcl" "%OLDTEXT%" "%NEWTEXT%" "%FILENAME%"
 echo. >>"%FILENAME%"
 echo #endif /* defined^(%FLAG%^) */ >>"%FILENAME%"
-
-exit /b 0
-
-
-:: ============================================================================
-:LIBSHELL
-set FLAG=SQLITE_ENABLE_LIBSHELL
-set FILENAME=libshell.c
-echo ========== Patching "%FILENAME%" ===========
-
-pushd "%BUILDDIR%"
-nmake /nologo /f Makefile.msc shell.c
-
-echo #if ^^!defined^^(LIBSHELL_C^^) ^&^& defined^^(%FLAG%^^) >%FILENAME%
-echo #define LIBSHELL_C >>%FILENAME%
-type shell.c >>%FILENAME%
-
-set OLDTEXT=int SQLITE_CDECL main
-set NEWTEXT=int SQLITE_CDECL libshell_main
-tclsh "%BASEDIR%\replace.tcl" "%OLDTEXT%" "%NEWTEXT%" "%FILENAME%"
-
-set OLDTEXT=appendText
-set NEWTEXT=shAppendText
-tclsh "%BASEDIR%\replace.tcl" "%OLDTEXT%" "%NEWTEXT%" "%FILENAME%"
-
-echo. >>%FILENAME%
-echo. >>%FILENAME%
-type libshell.c.ext >>%FILENAME%
-echo. >>%FILENAME%
-echo. >>%FILENAME%
-echo #endif /* ^^!defined^^(LIBSHELL_C^^) ^&^& defined^^(%FLAG%^^) */ >>%FILENAME%
-
-popd
 
 exit /b 0
 
