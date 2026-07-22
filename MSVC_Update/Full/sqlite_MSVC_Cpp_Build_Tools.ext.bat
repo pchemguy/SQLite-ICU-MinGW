@@ -51,13 +51,7 @@ call :ICU_DOWNLOAD    || exit /b %ERRORLEVEL%
 call :ICU_EXTRACT     || exit /b %ERRORLEVEL%
 call :ICU_BUILD       || exit /b %ERRORLEVEL%
 call :SQLITE_BUILD    || exit /b %ERRORLEVEL%
-
-exit /b 0
-
-set COPY_BINARIES=0
-if exist "%BUILDDIR%\sqlite3.dll" (set COPY_BINARIES=1)
-if exist "%BUILDDIR%\sqlite3.exe" (set COPY_BINARIES=1)
-if %COPY_BINARIES% EQU 1 (call :COLLECT_BINARIES) 1>>"%STDOUTLOG%" 2>>"%STDERRLOG%"
+call :COLLECT_BINARIES
 
 EndLocal
 
@@ -520,8 +514,8 @@ del /Q bin\* 2>nul
 if exist "%BUILDDIR%\sqlite3.dll" move "%BUILDDIR%\sqlite3.dll" "%BINDIR%"
 if exist "%BUILDDIR%\sqlite3.exe" move "%BUILDDIR%\sqlite3.exe" "%BINDIR%"
 if exist "%BUILDDIR%\sqlite3.def" move "%BUILDDIR%\sqlite3.def" "%BINDIR%"
-if %USE_ICU%  EQU 1 copy /Y "%ICUBINDIR%\icu*.dll" "%BINDIR%"
-if %USE_ZLIB% EQU 1 copy /Y "%ZLIBDIR%\zlib1.dll"  "%BINDIR%"
+if "%USE_ICU%"=="1" (copy /Y "%ICUBINDIR%\icu*.dll" "%BINDIR%")
+if "%USE_ZLIB%"=="1" (copy /Y "%ZLIBDIR%\zlib1.dll"  "%BINDIR%")
 echo ---------- Copied  binaries -----------
 
 exit /b 0
