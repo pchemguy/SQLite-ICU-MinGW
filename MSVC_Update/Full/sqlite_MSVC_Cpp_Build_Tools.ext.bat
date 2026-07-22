@@ -73,7 +73,7 @@ exit /b 0
 :: ============================================================================
 :ICU_OPTIONS
 
-set "USE_ICU=0"
+rem set "USE_ICU=0"
 if not defined USE_ICU (set "USE_ICU=1")
 if "/%VSCMD_ARG_TGT_ARCH%/" == "/x64/" (set "ARCHX=64") else (set "ARCHX=")
 set "ICUDIR=%DISTRODIR%\compat\icu"
@@ -123,6 +123,7 @@ if not defined SQLITE_EXTRA (set "SQLITE_EXTRA=0")
 
 set OPT_XTRA=^
     -DSQLITE_ENABLE_NORMALIZE ^
+    -DSQLITE_ENABLE_ICU_COLLATIONS ^
     -DSQLITE_ENABLE_FTS4=1 ^
     -DSQLITE_ENABLE_FTS3_PARENTHESIS ^
     -DSQLITE_ENABLE_FTS3_TOKENIZER ^
