@@ -56,9 +56,6 @@ call :SQLITE_BUILD    || exit /b %ERRORLEVEL%
 
 exit /b 0
 
-echo ===== Making -----
-nmake /nologo /f Makefile.msc 1>>"%STDOUTLOG%" 2>>"%STDERRLOG%"
-
 set COPY_BINARIES=0
 if exist "%BUILDDIR%\sqlite3.dll" (set COPY_BINARIES=1)
 if exist "%BUILDDIR%\sqlite3.exe" (set COPY_BINARIES=1)
@@ -431,7 +428,6 @@ set SRC12=^
     ""%DISTRODIR%\ext\misc\windirent.h"" ^
     ""%DISTRODIR%\ext\misc\csv.c""       ^
     ""%DISTRODIR%\ext\misc\decimal.c""   ^
-    ""%DISTRODIR%\ext\misc\fileio.c""    ^
     ""%DISTRODIR%\ext\misc\normalize.c"" ^
     ""%DISTRODIR%\ext\misc\regexp.c""    ^
     ""%DISTRODIR%\ext\misc\series.c""    ^
@@ -439,8 +435,7 @@ set SRC12=^
     ""%DISTRODIR%\ext\misc\shathree.c""  ^
     ""%DISTRODIR%\ext\misc\sqlar.c""     ^
     ""%DISTRODIR%\ext\misc\uint.c""      ^
-    ""%DISTRODIR%\ext\misc\uuid.c""      ^
-    ""%DISTRODIR%\ext\misc\zipfile.c""
+    ""%DISTRODIR%\ext\misc\uuid.c""
 
 :: Initialize SQLite build directory
 
@@ -489,7 +484,22 @@ if not "%ERROR_STATUS%"=="0" (exit /b %ERROR_STATUS%)
 :: Make SQLite
 
 cd /d "%BUILDDIR%"
-nmake /nologo "SRC12=%SRC12%" "TOP=%DISTRODIR%" /f "%DISTRODIR%\Makefile.msc" %*
+
+set EXTRA_SRC=^
+    ""%BUILDDIR%\tsrc\windirent.h""     ^
+    ""%BUILDDIR%\tsrc\csv.c""           ^
+    ""%BUILDDIR%\tsrc\decimal.c""       ^
+    ""%BUILDDIR%\tsrc\normalize.c""     ^
+    ""%BUILDDIR%\tsrc\regexp.c""        ^
+    ""%BUILDDIR%\tsrc\series.c""        ^
+    ""%BUILDDIR%\tsrc\sha1.c""          ^
+    ""%BUILDDIR%\tsrc\shathree.c""      ^
+    ""%BUILDDIR%\tsrc\sqlar.c""         ^
+    ""%BUILDDIR%\tsrc\uint.c""          ^
+    ""%BUILDDIR%\tsrc\uuid.c""          ^
+    ""%BUILDDIR%\tsrc\misc_ext_init.c""
+
+nmake /nologo "EXTRA_SRC=%EXTRA_SRC%" "TOP=%DISTRODIR%" /f "%DISTRODIR%\Makefile.msc" %*
 set "ERROR_STATUS=%ERRORLEVEL%"
 
 exit /b %ERROR_STATUS%
