@@ -7,8 +7,6 @@
 ::   - Visual Studio installer (including CE):
 ::       https://visualstudio.microsoft.com/downloads
 :: TCL must also be available, as it is required by the building workflow.
-::
-:: Usage: run the script with "/?" or see :SHOW_HELP at the end.
 :: ===========================================================================
 
 :: ============================= BEGIN DISPATCHER =============================
@@ -38,10 +36,10 @@ del "%STDOUTLOG%" 2>nul
 del "%STDERRLOG%" 2>nul
 
 (
-    call :ICU_OPTIONS
-    call :TCL_OPTIONS
-    call :ZLIB_OPTIONS
-    call :BUILD_OPTIONS
+    call :ICU_OPTIONS   || exit /b !ERRORLEVEL!
+    call :TCL_OPTIONS   || exit /b !ERRORLEVEL!
+    call :ZLIB_OPTIONS  || exit /b !ERRORLEVEL!
+    call :BUILD_OPTIONS || exit /b !ERRORLEVEL!
 ) 1>>"%STDOUTLOG%" 2>>"%STDERRLOG%"
 
 call :SQLITE_DOWNLOAD || exit /b %ERRORLEVEL%
@@ -511,20 +509,6 @@ nmake /nologo "EXTRA_SRC=%EXTRA_SRC%" "TOP=%DISTRODIR%" /f "%DISTRODIR%\Makefile
 set "ERROR_STATUS=%ERRORLEVEL%"
 
 exit /b %ERROR_STATUS%
-
-
-:: ============================================================================
-:EXT_REGEXP
-set FILENAME=regexp.c
-set OLDTEXT=#include ^<string.h^>
-set NEWTEXT=#include ^<sqlite3ext.h^>
-tclsh "%BASEDIR%\replace.tcl" "%OLDTEXT%" "%NEWTEXT%" "%FILENAME%"
-set OLDTEXT=#include \"sqlite3ext.h\"
-set NEWTEXT=#include ^<string.h^>
-tclsh "%BASEDIR%\replace.tcl" "%OLDTEXT%" "%NEWTEXT%" "%FILENAME%"
-call :EXT_BASE_PATCH REGEXP
-
-exit /b 0
 
 
 :: ============================================================================

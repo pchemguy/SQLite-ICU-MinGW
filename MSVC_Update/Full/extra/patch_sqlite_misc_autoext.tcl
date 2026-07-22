@@ -21,6 +21,8 @@
 # FEATURES:    - Idempotent: Safe for multi-pass execution in build pipelines.
 #              - Input Sanitization: Cleans non-breaking spaces (\u00A0) and 
 #                handles space-delimited string arguments from NMake macros.
+#
+# https://gemini.google.com/app/a928354bab65795e
 #===============================================================================
 
 # List accumulators for the activation stub generator
