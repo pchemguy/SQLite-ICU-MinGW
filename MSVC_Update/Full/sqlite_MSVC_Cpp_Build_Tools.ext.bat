@@ -116,6 +116,7 @@ set "RBU=1"
 set "API_ARMOR=1"
 set "SYMBOLS=0"
 set "NO_TCL=1"
+set "SQLITE_EXTRA=1"
 if not defined SQLITE_EXTRA (set "SQLITE_EXTRA=0")
 
 set OPT_XTRA=^
@@ -139,7 +140,16 @@ set OPT_XTRA=^
 
 if "%SQLITE_EXTRA%"=="1" (
     set OPT_XTRA=%OPT_XTRA%^
-        -DSQLITE_EXTRA_AUTOEXT=sqlite3ExtraAutoExtInit
+        -DSQLITE_EXTRA_AUTOEXT=sqlite3ExtraAutoExtInit ^
+        -DSQLITE_ENABLE_CSV      ^
+        -DSQLITE_ENABLE_DECIMAL  ^
+        -DSQLITE_ENABLE_REGEXP   ^
+        -DSQLITE_ENABLE_SERIES   ^
+        -DSQLITE_ENABLE_SHA      ^
+        -DSQLITE_ENABLE_SHATHREE ^
+        -DSQLITE_ENABLE_SQLAR    ^
+        -DSQLITE_ENABLE_UINT     ^
+        -DSQLITE_ENABLE_UUID     
 )
 
 exit /b 0

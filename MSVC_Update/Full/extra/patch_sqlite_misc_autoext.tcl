@@ -126,12 +126,12 @@ puts $fp "*/"
 puts $fp ""
 
 # Generate forward declarations
-foreach ext $ext_names Ext $Ext_names {
-    set EXT [string toupper $ext]
-    puts $fp "#ifdef SQLITE_ENABLE_${EXT}"
-    puts $fp "int sqlite3${Ext}Init(sqlite3*);"
-    puts $fp "#endif"
-}
+# foreach ext $ext_names Ext $Ext_names {
+#     set EXT [string toupper $ext]
+#     puts $fp "#ifdef SQLITE_ENABLE_${EXT}"
+#     puts $fp "int sqlite3${Ext}Init(sqlite3*);"
+#     puts $fp "#endif"
+# }
 
 puts $fp ""
 puts $fp "int sqlite3ExtraAutoExtInit(sqlite3 *db){"
