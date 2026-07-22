@@ -1,0 +1,60 @@
+int LibshellInit(sqlite3 *db){
+  int rc = SQLITE_OK;
+  unsigned int i;
+
+  if( rc==SQLITE_OK ){
+    rc = sqlite3_db_config(db, SQLITE_DBCONFIG_DEFENSIVE, 1, 0);
+  }
+
+  static const struct {
+     const char *zName;
+     int nArg;
+     int flag;
+     void (*xFunc)(sqlite3_context*,int,sqlite3_value**);
+  } aFunc[] = {
+    { "shell_add_schema",     3, 0,   shellAddSchemaName    },
+    { "shell_module_schema",  1, 0,   shellModuleSchema     },
+    { "shell_module_schema",  1, 0,   shellModuleSchema     },
+    { "shell_escape_crnl",    1, 0,   shellEscapeCrnl       },
+    { "shell_int32",          2, 0,   shellInt32            },
+    { "shell_idquote",        1, 0,   shellIdQuote          },
+    { "usleep",               1, 0,   shellUSleepFunc       },
+#ifndef SQLITE_NOHAVE_SYSTEM
+    { "edit",                 1, 0,   editFunc              },
+    { "edit",                 2, 0,   editFunc              },
+#endif
+  };
+
+  static const int enc = SQLITE_UTF8;
+  for(i=0; i<sizeof(aFunc)/sizeof(aFunc[0]) && rc==SQLITE_OK; i++){
+    rc = sqlite3_create_function(db, aFunc[i].zName, aFunc[i].nArg, enc,
+                                 (void*)&aFunc[i].flag,
+                                 aFunc[i].xFunc, 0, 0);
+  }
+
+  static const struct {
+     int (*xFunc)(sqlite3*,char**,const sqlite3_api_routines*);
+  } aModInit[] = {
+    { sqlite3_fileio_init                                   },
+    { sqlite3_shathree_init                                 },
+    { sqlite3_completion_init                               },
+    { sqlite3_uint_init                                     },
+    { sqlite3_decimal_init                                  },
+    { sqlite3_regexp_init                                   },
+    { sqlite3_ieee_init                                     },
+    { sqlite3_series_init                                   },
+#if !defined(SQLITE_OMIT_VIRTUALTABLE) && defined(SQLITE_ENABLE_DBPAGE_VTAB)
+    { sqlite3_dbdata_init                                   },
+#endif
+#ifdef SQLITE_HAVE_ZLIB
+    { sqlite3_zipfile_init                                  },
+    { sqlite3_sqlar_init                                    },
+#endif
+  };
+
+  for(i=0; i<sizeof(aModInit)/sizeof(aModInit[0]) && rc==SQLITE_OK; i++){
+    rc = aModInit[i].xFunc(db, 0, 0);
+  }
+
+  return rc;
+}

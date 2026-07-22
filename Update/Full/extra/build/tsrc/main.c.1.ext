@@ -1,0 +1,34 @@
+int sqlite3Json1Init(sqlite3*);
+#endif
+#ifdef SQLITE_ENABLE_CSV
+int sqlite3CsvInit(sqlite3*);
+#endif
+#ifdef SQLITE_ENABLE_REGEXP
+int sqlite3RegexpInit(sqlite3*);
+#endif
+#ifdef SQLITE_ENABLE_ZIPFILE
+int zipfileRegister(sqlite3*);
+#endif
+#if defined(SQLITE_ENABLE_SQLAR) && defined(SQLITE_ENABLE_ZIPFILE)
+int sqlite3SqlarInit(sqlite3*);
+#endif
+#ifdef SQLITE_ENABLE_SERIES
+int sqlite3SeriesInit(sqlite3*);
+#endif
+#ifdef SQLITE_ENABLE_SHA
+int sqlite3ShaInit(sqlite3*);
+#endif
+#ifdef SQLITE_ENABLE_SHATHREE
+int sqlite3ShathreeInit(sqlite3*);
+#endif
+#ifdef SQLITE_ENABLE_FILEIO
+int sqlite3FileioInit(sqlite3*);
+#endif
+#ifdef SQLITE_ENABLE_UINT
+int sqlite3UintInit(sqlite3*);
+#endif
+#ifdef SQLITE_ENABLE_UUID
+int sqlite3UuidInit(sqlite3*);
+#endif
+#ifdef SQLITE_ENABLE_LIBSHELL
+SQLITE_EXTERN int LibshellInit(sqlite3*);

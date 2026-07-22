@@ -1,0 +1,7 @@
+	$(LTCOMPILE) $(CORE_COMPILE_OPTS) -c $(SQLITE3C)
+
+crypto_openssl_p.c:	.target_source
+	copy /Y .\tsrc\$(@:.c=.*) .
+
+crypto_openssl_p.lo: crypto_openssl_p.c
+	$(LTCOMPILE) $(CORE_COMPILE_OPTS:-Gz =) -c crypto_openssl_p.c
