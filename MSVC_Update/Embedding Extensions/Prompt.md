@@ -594,3 +594,5 @@ int sqlite3ExtraAutoExtInit(sqlite3 *db){
   return rc;
 }
 ```
+
+The script should be idempotent.
