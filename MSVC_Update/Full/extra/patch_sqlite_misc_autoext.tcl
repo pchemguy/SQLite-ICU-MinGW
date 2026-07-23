@@ -5,29 +5,38 @@
 #              as autoextensions via -DSQLITE_EXTRA_AUTOEXT=sqlite3ExtraAutoExtInit.
 #
 # OVERVIEW:
-#              1. Converts 'sqlite3_<name>_init' entry points into standard core
-#                 initialization functions ('sqlite3<Name>Init').
-#              2. Strips dynamic load macros ('SQLITE_EXTENSION_INIT2') and 
-#                 unused parameter casts.
-#              3. Appends a '#ifndef SQLITE_CORE' dynamic wrapper block to 
+#              1. Header Patch: Locates extension header declarations matching:
+#                     #include "sqlite3ext.h" (or <sqlite3ext.h>)
+#                     SQLITE_EXTENSION_INIT1
+#                 and wraps them in a conditional `#ifndef SQLITE_CORE` block 
+#                 to include "sqlite3.h" instead when compiled into the core.
+#              2. Init Patch & Detection: Converts dynamic 'sqlite3_<name>_init' 
+#                 entry points into static initializers ('sqlite3<Name>Init').
+#                 Includes fallback detection to identify modules that already 
+#                 have 'sqlite3<Name>Init' (skipping the patch while registering 
+#                 them correctly).
+#              3. Dynamic Wrapper: Appends a '#ifndef SQLITE_CORE' block to 
 #                 maintain dual static/dynamic load capability.
-#              4. Generates 'misc_ext_init.c' containing forward declarations
-#                 and the 'sqlite3ExtraAutoExtInit' dispatcher function.
+#              4. Dispatcher Gen: Generates 'misc_ext_init.c' with forward 
+#                 declarations and the 'sqlite3ExtraAutoExtInit' dispatcher.
+#                 Intelligently converts CamelCase names to UPPER_SNAKE_CASE 
+#                 (e.g., StmtVtab -> STMT_VTAB) for build macros.
 #
 # USAGE:       tclsh patch_sqlite_misc_autoext.tcl <file1.c> [file2.c ...]
 #              Example (MSVC / NMake):
 #                tclsh patch_sqlite_misc_autoext.tcl $(MISC_SRC)
 #
-# FEATURES:    - Idempotent: Safe for multi-pass execution in build pipelines.
+# FEATURES:    - Fully Idempotent: Safe for multi-pass execution in pipelines.
 #              - Input Sanitization: Cleans non-breaking spaces (\u00A0) and 
 #                handles space-delimited string arguments from NMake macros.
+#              - Robust Parsing: Prevents TCL parser brace-counting conflicts.
 #
 # https://gemini.google.com/app/a928354bab65795e
 #===============================================================================
 
-# List accumulators for the activation stub generator
-set ext_names {}
-set Ext_names {}
+# Accumulators for the activation stub generator
+set EXT_macros {}
+set Ext_funcs {}
 
 # Normalize and clean input arguments (handles NBSPs, multi-spaces, and quoted lists)
 set clean_files {}
@@ -55,69 +64,110 @@ foreach file $clean_files {
     set content [read $fp]
     close $fp
 
-    # Idempotency Check: Look for the specific dynamic loading wrapper we append
-    if {[regexp {#ifndef SQLITE_CORE\s+#ifdef _WIN32\s+__declspec\(dllexport\)\s+#endif\s+int\s+sqlite3_([a-zA-Z0-9_]+)_init} $content _ extname]} {
-        puts "Skipping '$file': already patched."
+    set modified 0
+    set ext_found 0
+    set extname ""
+    set Extname ""
+    set EXT ""
+
+    # -------------------------------------------------------------------------
+    # PART 1: INIT FUNCTION PATCHING & REGISTRATION
+    # -------------------------------------------------------------------------
+    
+    # Pathway A: Module has the standard dynamic init function
+    if {[regexp {int\s+sqlite3_([a-zA-Z0-9_]+)_init\s*\(} $content _ match_ext]} {
+        set extname $match_ext
         
         # Convert snake_case to CamelCase (e.g. stmt_vtab -> StmtVtab)
-        set Extname ""
         foreach part [split $extname "_"] {
             append Extname [string totitle $part]
         }
+        set EXT [string toupper $extname]
+        set ext_found 1
+
+        # If sqlite3<Name>Init already exists, skip patching the init block
+        if {[regexp "int\\s+sqlite3${Extname}Init\\s*\\(" $content]} {
+            # Natively compliant or previously patched. No action needed for Init block.
+        } else {
+            # 1. Remove the DLLEXPORT block while preserving trailing comments
+            set pattern "#ifdef _WIN32\\s+__declspec\\(dllexport\\)\\s+#endif\\s+(/\\*.*?\\*/\\s*)?int\\s+sqlite3_${extname}_init"
+            regsub -all -- $pattern $content "\\1int sqlite3_${extname}_init" content
+            
+            # 2. Change the function signature
+            set sig_old "int\\s+sqlite3_${extname}_init\\s*\\(\\s*sqlite3\\s*\\*\\s*db\\s*,\\s*char\\s*\\*\\*\\s*pzErrMsg\\s*,\\s*const\\s+sqlite3_api_routines\\s*\\*\\s*pApi\\s*\\)"
+            set sig_new "int sqlite3${Extname}Init(sqlite3 *db)"
+            regsub -all -- $sig_old $content $sig_new content
+            
+            # 3. Remove SQLITE_EXTENSION_INIT2
+            regsub -all -- {\s*SQLITE_EXTENSION_INIT2\s*\(\s*pApi\s*\)\s*;?} $content "" content
+            
+            # 4. Remove unused parameter cast for pzErrMsg
+            regsub -all -- {\s*\(\s*void\s*\)\s*pzErrMsg\s*;[^\n\r]*} $content "" content
+            
+            # Safety Check: Inject a dummy variable if pzErrMsg is still evaluated in body
+            if {[string match "*pzErrMsg*" $content]} {
+                set search_pattern "int sqlite3${Extname}Init\\(sqlite3 \\*db\\)\\s*\\\{"
+                set replace_pattern "int sqlite3${Extname}Init(sqlite3 *db)\{\n  char **pzErrMsg = 0; /* dummy for static build */"
+                regsub -- $search_pattern $content $replace_pattern content
+            }
+
+            # 5. Append dynamic loading wrapper stub to EOF
+            set stub "\n\n#ifndef SQLITE_CORE\n#ifdef _WIN32\n__declspec(dllexport)\n#endif\nint sqlite3_${extname}_init(\n  sqlite3 *db,\n  char **pzErrMsg,\n  const sqlite3_api_routines *pApi\n)\{\n  (void)pzErrMsg;  /* Unused parameter */\n  SQLITE_EXTENSION_INIT2(pApi);\n  return sqlite3${Extname}Init(db);\n\}\n#endif\n"
+            append content $stub
+            
+            set modified 1
+        }
+    
+    # Pathway B: Module is missing dynamic init, but already has a static init
+    } elseif {[regexp {int\s+sqlite3([A-Z][a-zA-Z0-9_]*?)Init\s*\(} $content _ match_Ext]} {
+        set Extname $match_Ext
         
-        lappend ext_names $extname
-        lappend Ext_names $Extname
-        continue
+        # Convert CamelCase back to UPPER_SNAKE_CASE (e.g. StmtVtab -> STMT_VTAB)
+        set EXT [string toupper [regsub -all {([a-z])([A-Z])} $Extname {\1_\2}]]
+        set ext_found 1
+    } else {
+        puts "Warning: Could not find initialization function in '$file'."
     }
 
-    # Find the original auto-load extension initialization function
-    if {[regexp {int\s+sqlite3_([a-zA-Z0-9_]+)_init\s*\(} $content _ extname]} {
-        set Extname ""
-        foreach part [split $extname "_"] {
-            append Extname [string totitle $part]
-        }
-        
-        # 1. Remove the DLLEXPORT block while preserving the trailing comment if present
-        set pattern "#ifdef _WIN32\\s+__declspec\\(dllexport\\)\\s+#endif\\s+(/\\*.*?\\*/\\s*)?int\\s+sqlite3_${extname}_init"
-        regsub -all -- $pattern $content "\\1int sqlite3_${extname}_init" content
-        
-        # 2. Change the function signature
-        set sig_old "int\\s+sqlite3_${extname}_init\\s*\\(\\s*sqlite3\\s*\\*\\s*db\\s*,\\s*char\\s*\\*\\*\\s*pzErrMsg\\s*,\\s*const\\s+sqlite3_api_routines\\s*\\*\\s*pApi\\s*\\)"
-        set sig_new "int sqlite3${Extname}Init(sqlite3 *db)"
-        regsub -all -- $sig_old $content $sig_new content
-        
-        # 3. Remove SQLITE_EXTENSION_INIT2
-        regsub -all -- {\s*SQLITE_EXTENSION_INIT2\s*\(\s*pApi\s*\)\s*;?} $content "" content
-        
-        # 4. Remove the unused parameter cast for pzErrMsg
-        regsub -all -- {\s*\(\s*void\s*\)\s*pzErrMsg\s*;[^\n\r]*} $content "" content
-        
-        # Safety Check: If an extension (like series.c) actively evaluates `pzErrMsg!=0` 
-        # inject a dummy variable at the top of the block.
-        if {[string match "*pzErrMsg*" $content]} {
-            set search_pattern "int sqlite3${Extname}Init\\(sqlite3 \\*db\\)\\s*\\\{"
-            set replace_pattern "int sqlite3${Extname}Init(sqlite3 *db)\{\n  char **pzErrMsg = 0; /* dummy for static build */"
-            regsub -- $search_pattern $content $replace_pattern content
-        }
+    # Register the resolved module for the dispatcher
+    if {$ext_found} {
+        lappend EXT_macros $EXT
+        lappend Ext_funcs $Extname
+    }
 
-        # 5. Append the dynamic loading wrapper stub to the EOF
-        set stub "\n\n#ifndef SQLITE_CORE\n#ifdef _WIN32\n__declspec(dllexport)\n#endif\nint sqlite3_${extname}_init(\n  sqlite3 *db,\n  char **pzErrMsg,\n  const sqlite3_api_routines *pApi\n)\{\n  (void)pzErrMsg;  /* Unused parameter */\n  SQLITE_EXTENSION_INIT2(pApi);\n  return sqlite3${Extname}Init(db);\n\}\n#endif\n"
-        append content $stub
+    # -------------------------------------------------------------------------
+    # PART 2: HEADER PATCHING
+    # -------------------------------------------------------------------------
+    # Ensure it's not already conditionally wrapped. Check for both "..." and <...> formats.
+    if {![regexp {#ifndef SQLITE_CORE\s+#include\s+["<]sqlite3ext\.h[">]} $content]} {
         
-        # Write back the patched content in-place
+        # Matches: include, either " or <, sqlite3ext.h, either " or >, spaces/newlines, and INIT1
+        set hdr_search {[ \t]*#include[ \t]+["<]sqlite3ext\.h[">][ \t\r\n]+SQLITE_EXTENSION_INIT1[ \t]*}
+        
+        # Statically standardizes output to the quoted variant "sqlite3ext.h"
+        set hdr_replace "#ifndef SQLITE_CORE\n  #include \"sqlite3ext.h\"\n  SQLITE_EXTENSION_INIT1\n#else\n  #include \"sqlite3.h\"\n#endif\n"
+        
+        if {[regsub -- $hdr_search $content $hdr_replace content]} {
+            set modified 1
+        }
+    }
+
+    # -------------------------------------------------------------------------
+    # WRITE BACK
+    # -------------------------------------------------------------------------
+    if {$modified} {
         set fp [open $file w]
         puts -nonewline $fp $content
         close $fp
-        
-        puts "Patched '$file' ($extname -> $Extname)"
-        lappend ext_names $extname
-        lappend Ext_names $Extname
-    } else {
-        puts "Warning: Could not find 'int sqlite3_<name>_init' in '$file'."
+        puts "Patched '$file' (Registered as $Extname)"
+    } elseif {$ext_found} {
+        puts "Skipping '$file': already completely patched. (Registered as $Extname)"
     }
 }
 
-# Generate the activation stub module: misc_ext_init.c
+# -----------------------------------------------------------------------------
+# PART 3: DISPATCHER MODULE GENERATION
+# -----------------------------------------------------------------------------
 set out_c "misc_ext_init.c"
 set fp [open $out_c w]
 
@@ -128,20 +178,18 @@ puts $fp "*/"
 puts $fp ""
 
 # Generate forward declarations
-# foreach ext $ext_names Ext $Ext_names {
-#     set EXT [string toupper $ext]
-#     puts $fp "#ifdef SQLITE_ENABLE_${EXT}"
-#     puts $fp "int sqlite3${Ext}Init(sqlite3*);"
-#     puts $fp "#endif"
-# }
+foreach EXT $EXT_macros Ext $Ext_funcs {
+    puts $fp "#ifdef SQLITE_ENABLE_${EXT}"
+    puts $fp "int sqlite3${Ext}Init(sqlite3*);"
+    puts $fp "#endif"
+}
 
 puts $fp ""
 puts $fp "int sqlite3ExtraAutoExtInit(sqlite3 *db){"
 puts $fp "  int rc = SQLITE_OK;"
 
-# Generate the dispatcher sequences
-foreach ext $ext_names Ext $Ext_names {
-    set EXT [string toupper $ext]
+# Generate dispatcher sequences
+foreach EXT $EXT_macros Ext $Ext_funcs {
     puts $fp "#ifdef SQLITE_ENABLE_${EXT}"
     puts $fp "  if( rc==SQLITE_OK ) rc = sqlite3${Ext}Init(db);"
     puts $fp "#endif"
