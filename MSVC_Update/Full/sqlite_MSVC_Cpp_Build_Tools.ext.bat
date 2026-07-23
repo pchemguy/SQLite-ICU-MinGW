@@ -42,6 +42,11 @@ del "%STDERRLOG%" 2>nul
     call :BUILD_OPTIONS || exit /b !ERRORLEVEL!
 ) 1>>"%STDOUTLOG%" 2>>"%STDERRLOG%"
 
+if "%~1"=="env" (
+    nmake "TOP=%DISTRODIR%" /f "%DISTRODIR%\Makefile.msc" env
+    exit /b 0
+)
+
 call :SQLITE_DOWNLOAD || exit /b %ERRORLEVEL%
 call :SQLITE_EXTRACT  || exit /b %ERRORLEVEL%
 call :ZLIB_DOWNLOAD   || exit /b %ERRORLEVEL%
@@ -64,11 +69,11 @@ exit /b 0
 
 rem set "USE_ICU=0"
 if not defined USE_ICU (set "USE_ICU=1")
-if "/%VSCMD_ARG_TGT_ARCH%/" == "/x64/" (set "ARCHX=64") else (set "ARCHX=")
+if "/%VSCMD_ARG_TGT_ARCH%/" == "/x64/" (set "ARCH=64") else (set "ARCH=")
 set "ICUDIR=%DISTRODIR%\compat\icu"
-set "ICUINCDIR=!ICUDIR!\include"
-set "ICULIBDIR=!ICUDIR!\lib!ARCH!"
-set "ICUBINDIR=!ICUDIR!\bin!ARCH!"
+set "ICUINCDIR=%ICUDIR%\include"
+set "ICULIBDIR=%ICUDIR%\lib%ARCH%"
+set "ICUBINDIR=%ICUDIR%\bin%ARCH%"
 
 exit /b 0
 
@@ -85,19 +90,31 @@ exit /b 0
 :: ============================================================================
 :TCL_OPTIONS
 
-set "TCL_OK=0"
-where tclsh 1>nul 2>nul && exit /b 0 || set "TCL_OK=1"
-if not defined TCL_HOME (set "TCL_HOME=%ProgramFiles%\TCL")
-if exist "%TCL_HOME%\bin\tclsh.exe" (set "TCL_OK=0")
+where tclsh 1>nul 2>nul && echo TCL found. && exit /b 0
 
-if "%TCL_OK%"=="0" (
-    set "Path=%TCL_HOME%\bin;%Path%"
-    echo TCL found.
-) else (
-    echo TCL not found.
+echo TCL not on Path. Trying TCL_HOME "%TCL_HOME%" and conventional locations.
+if not exist "%TCL_HOME%\bin\tclsh.exe" if exist "%ProgramFiles%\TCL\bin\tclsh.exe" (
+    set "TCL_HOME=%ProgramFiles%\TCL"
+) else if exist "C:\dev\TCL\bin\tclsh.exe" (
+    set "TCL_HOME=C:\dev\TCL"
+) else if exist "G:\dev\TCL\bin\tclsh.exe" (
+    set "TCL_HOME=G:\dev\TCL"
+) else if exist "H:\dev\TCL\bin\tclsh.exe" (
+    set "TCL_HOME=H:\dev\TCL"
 )
 
-exit /b %TCL_OK%
+echo TCL_HOME: "%TCL_HOME%"
+
+if exist "%TCL_HOME%\bin\tclsh.exe" (
+    set "Path=%TCL_HOME%\bin;%Path%"
+    echo TCL found.
+    set "ERROR_STATUS=0"
+) else (
+    echo TCL not found.
+    set "ERROR_STATUS=1"
+)
+
+exit /b %ERROR_STATUS%
 
 
 :: ============================================================================
@@ -340,7 +357,7 @@ if "!ERROR_STATUS!"=="0" (
     exit /b %ERROR_STATUS%
 )
 
-for /f "usebackq tokens=2" %%I in (`findstr /R /C:"browser_download_url.*icu4c-.*-sources.zip" "%ICU_RELEASE_META%"`) do (
+for /f "usebackq tokens=2" %%I in (`findstr /R /C:"browser_download_url.*icu4c-.*-s.*rc.*\.zip" "%ICU_RELEASE_META%"`) do (
     set "BUFFER=%%~I"
     if "!BUFFER:~-3!"=="zip" (set "URL=!BUFFER!")
     set "BUFFER="
@@ -393,7 +410,7 @@ exit /b %ERROR_STATUS%
 :: ============================================================================
 :ICU_BUILD
 
-if not exist "%ICUDIR%\bin%ARCHX%\icuinfo.exe" (
+if not exist "%ICUBINDIR%\icuinfo.exe" (
     echo ===== Building ICU =====
     cd /d "%ICUDIR%"
     msbuild "%ICUDIR%\source\allinone\allinone.sln" /m /p:Configuration=Release /p:SkipUWP=true
@@ -403,7 +420,7 @@ if not exist "%ICUDIR%\bin%ARCHX%\icuinfo.exe" (
     ) else (
         echo Error building ICU.
         echo Errod code: !ERROR_STATUS!
-        if exist "%ICUDIR%\bin%ARCHX%\icuinfo.exe" (
+        if exist "%ICUBINDIR%\icuinfo.exe" (
            echo ----- Built ICU -----
            set "ERROR_STATUS=0"
         )
