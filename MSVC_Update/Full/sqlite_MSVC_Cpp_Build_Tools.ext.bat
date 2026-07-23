@@ -150,9 +150,14 @@ set OPT_XTRA=^
 if "%SQLITE_EXTRA%"=="1" (
     set OPT_XTRA=%OPT_XTRA%^
         -DSQLITE_EXTRA_AUTOEXT=sqlite3ExtraAutoExtInit ^
+        -DSQLITE_ENABLE_COMPRESS ^
         -DSQLITE_ENABLE_CSV      ^
         -DSQLITE_ENABLE_DECIMAL  ^
+        -DSQLITE_ENABLE_FUZZER   ^
+        -DSQLITE_ENABLE_NOOP     ^
+        -DSQLITE_ENABLE_PREFIXES ^
         -DSQLITE_ENABLE_REGEXP   ^
+        -DSQLITE_ENABLE_ROT      ^
         -DSQLITE_ENABLE_SERIES   ^
         -DSQLITE_ENABLE_SHA      ^
         -DSQLITE_ENABLE_SHATHREE ^
@@ -444,10 +449,15 @@ cd /d "%BUILDDIR%" || exit /b %ERRORLEVEL%
 :: can be safely overwritten.
 
 set SRC12=^
+    ""%DISTRODIR%\ext\misc\compress.c""  ^
     ""%DISTRODIR%\ext\misc\csv.c""       ^
     ""%DISTRODIR%\ext\misc\decimal.c""   ^
+    ""%DISTRODIR%\ext\misc\fuzzer.c""    ^
+    ""%DISTRODIR%\ext\misc\noop.c""      ^
     ""%DISTRODIR%\ext\misc\normalize.c"" ^
+    ""%DISTRODIR%\ext\misc\prefixes.c""  ^
     ""%DISTRODIR%\ext\misc\regexp.c""    ^
+    ""%DISTRODIR%\ext\misc\rot13.c""     ^
     ""%DISTRODIR%\ext\misc\series.c""    ^
     ""%DISTRODIR%\ext\misc\sha1.c""      ^
     ""%DISTRODIR%\ext\misc\shathree.c""  ^
@@ -466,9 +476,14 @@ if not "%ERROR_STATUS%"=="0" (exit /b %ERROR_STATUS%)
 cd /d "%BUILDDIR%\tsrc"
 
 set TARGETS=^
+    "compress.c"  ^
     "csv.c"       ^
     "decimal.c"   ^
+    "fuzzer.c"    ^
+    "noop.c"      ^
+    "prefixes.c"  ^
     "regexp.c"    ^
+    "rot13.c"     ^
     "series.c"    ^
     "sha1.c"      ^
     "shathree.c"  ^
@@ -504,10 +519,15 @@ if not "%ERROR_STATUS%"=="0" (exit /b %ERROR_STATUS%)
 cd /d "%BUILDDIR%"
 
 set EXTRA_SRC=^
+    ""%BUILDDIR%\tsrc\compress.c""      ^
     ""%BUILDDIR%\tsrc\csv.c""           ^
     ""%BUILDDIR%\tsrc\decimal.c""       ^
+    ""%BUILDDIR%\tsrc\fuzzer.c""        ^
+    ""%BUILDDIR%\tsrc\noop.c""          ^
     ""%BUILDDIR%\tsrc\normalize.c""     ^
+    ""%BUILDDIR%\tsrc\prefixes.c""      ^
     ""%BUILDDIR%\tsrc\regexp.c""        ^
+    ""%BUILDDIR%\tsrc\rot13.c""         ^
     ""%BUILDDIR%\tsrc\series.c""        ^
     ""%BUILDDIR%\tsrc\sha1.c""          ^
     ""%BUILDDIR%\tsrc\shathree.c""      ^
