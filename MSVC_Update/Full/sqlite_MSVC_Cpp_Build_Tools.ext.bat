@@ -30,10 +30,18 @@ set "DISTRODIR=%BASEDIR%\sqlite"
 set "SQLITE_MAKEFILE=%DISTRODIR%\Makefile.msc"
 set "TOP=%DISTRODIR%"
 set "BUILDDIR=%BASEDIR%\build"
+set "THIRDDIR=%DISTRODIR%\compat"
 set "STDOUTLOG=%BASEDIR%\stdout.log"
 set "STDERRLOG=%BASEDIR%\stderr.log"
 del "%STDOUTLOG%" 2>nul
 del "%STDERRLOG%" 2>nul
+
+set "OPT_XTRA="
+set "USE_ICU=1"
+if not defined USE_ICU (set "USE_ICU=1")
+set "SQLITE_EXTRA=1"
+if not defined SQLITE_EXTRA (set "SQLITE_EXTRA=0")
+if not exist "%THIRDDIR%" (cmd /c mkdir "%THIRDDIR%" || exit /b !ERRORLEVEL!)
 
 (
     call :ICU_OPTIONS   || exit /b !ERRORLEVEL!
@@ -47,19 +55,22 @@ if "%~1"=="env" (
     exit /b 0
 )
 
-call :SQLITE_DOWNLOAD        || exit /b %ERRORLEVEL%
-call :SQLITE_EXTRACT         || exit /b %ERRORLEVEL%
-call :ZLIB_DOWNLOAD          || exit /b %ERRORLEVEL%
-call :ZLIB_EXTRACT           || exit /b %ERRORLEVEL%
-call :ZLIB_BUILD             || exit /b %ERRORLEVEL%
-call :ICU_DOWNLOAD           || exit /b %ERRORLEVEL%
-call :ICU_EXTRACT            || exit /b %ERRORLEVEL%
-call :ICU_BUILD              || exit /b %ERRORLEVEL%
-call :FP16_DOWNLOAD          || exit /b %ERRORLEVEL%
-call :FP16_EXTRACT           || exit /b %ERRORLEVEL%
-call :PATCH_BUNDLE_EXTRA_SRC || exit /b %ERRORLEVEL%
-call :SQLITE_BUILD_INIT      || exit /b %ERRORLEVEL%
-call :SQLITE_BUILD           || exit /b %ERRORLEVEL%
+call :SQLITE_DOWNLOAD   || exit /b !ERRORLEVEL!
+call :SQLITE_EXTRACT    || exit /b !ERRORLEVEL!
+call :ZLIB_DOWNLOAD     || exit /b !ERRORLEVEL!
+call :ZLIB_EXTRACT      || exit /b !ERRORLEVEL!
+call :ZLIB_BUILD        || exit /b !ERRORLEVEL!
+if not "%USE_ICU%"=="0" (
+    call :ICU_DOWNLOAD      || exit /b !ERRORLEVEL!
+    call :ICU_EXTRACT       || exit /b !ERRORLEVEL!
+    call :ICU_BUILD         || exit /b !ERRORLEVEL!
+)
+call :FP16_DOWNLOAD     || exit /b !ERRORLEVEL!
+call :FP16_EXTRACT      || exit /b !ERRORLEVEL!
+if not "%SQLITE_EXTRA%"=="0" (
+    call :EXTRA_SRC_PREPARE || exit /b !ERRORLEVEL!
+)
+call :SQLITE_BUILD      || exit /b !ERRORLEVEL!
 call :COLLECT_BINARIES
 
 EndLocal
@@ -72,13 +83,14 @@ exit /b 0
 :: ============================================================================
 :ICU_OPTIONS
 
-rem set "USE_ICU=0"
-if not defined USE_ICU (set "USE_ICU=1")
 if "/%VSCMD_ARG_TGT_ARCH%/" == "/x64/" (set "ARCH=64") else (set "ARCH=")
-set "ICUDIR=%DISTRODIR%\compat\icu"
+set "ICUDIR=%THIRDDIR%\icu"
 set "ICUINCDIR=%ICUDIR%\include"
 set "ICULIBDIR=%ICUDIR%\lib%ARCH%"
 set "ICUBINDIR=%ICUDIR%\bin%ARCH%"
+
+set OPT_XTRA=%OPT_XTRA% ^
+    -DSQLITE_ENABLE_ICU_COLLATIONS
 
 echo:
 exit /b 0
@@ -133,12 +145,10 @@ set "RBU=1"
 set "API_ARMOR=1"
 set "SYMBOLS=0"
 set "NO_TCL=1"
-set "SQLITE_EXTRA=1"
-if not defined SQLITE_EXTRA (set "SQLITE_EXTRA=0")
+set "EXTRA_SRC="
 
-set OPT_XTRA=^
+set OPT_XTRA=%OPT_XTRA% ^
     -DSQLITE_ENABLE_NORMALIZE ^
-    -DSQLITE_ENABLE_ICU_COLLATIONS ^
     -DSQLITE_ENABLE_FTS4=1 ^
     -DSQLITE_ENABLE_FTS3_PARENTHESIS ^
     -DSQLITE_ENABLE_FTS3_TOKENIZER ^
@@ -155,24 +165,7 @@ set OPT_XTRA=^
     -DSQLITE_USE_URI=1 ^
     -DSQLITE_SOUNDEX
 
-if "%SQLITE_EXTRA%"=="1" (
-    set OPT_XTRA=%OPT_XTRA%^
-        -DSQLITE_EXTRA_AUTOEXT=sqlite3ExtraAutoExtInit ^
-        -DSQLITE_ENABLE_COMPRESS ^
-        -DSQLITE_ENABLE_CSV      ^
-        -DSQLITE_ENABLE_DECIMAL  ^
-        -DSQLITE_ENABLE_FUZZER   ^
-        -DSQLITE_ENABLE_NOOP     ^
-        -DSQLITE_ENABLE_PREFIXES ^
-        -DSQLITE_ENABLE_REGEXP   ^
-        -DSQLITE_ENABLE_ROT      ^
-        -DSQLITE_ENABLE_SERIES   ^
-        -DSQLITE_ENABLE_SHA      ^
-        -DSQLITE_ENABLE_SHATHREE ^
-        -DSQLITE_ENABLE_SQLAR    ^
-        -DSQLITE_ENABLE_UINT     ^
-        -DSQLITE_ENABLE_UUID     
-)
+if not exist "%BUILDDIR%" (mkdir "%BUILDDIR%" || exit /b !ERRORLEVEL!)
 
 echo:
 exit /b 0
@@ -316,7 +309,7 @@ exit /b %ERROR_STATUS%
 :ZLIB_EXTRACT
 
 set "DISTROFILE=zlib.tar.gz"
-set "ZLIBDIR=%DISTRODIR%\compat\zlib"
+set "ZLIBDIR=%THIRDDIR%\zlib"
 
 if not exist "%ZLIBDIR%\win32\Makefile.msc" (
     echo ===== Extracting ZLIB =====
@@ -325,9 +318,9 @@ if not exist "%ZLIBDIR%\win32\Makefile.msc" (
     set "ERROR_STATUS=!ERRORLEVEL!"
     if "!ERROR_STATUS!"=="0" (
         echo ----- Extracted ZLIB -----
-        mkdir "%DISTRODIR%\compat" 2>nul
+        mkdir "%THIRDDIR%" 2>nul
         move /Y "%BASEDIR%\zlib-*" "%BASEDIR%\zlib" 1>>"%STDOUTLOG%" 2>>"%STDERRLOG%"
-        move /Y "%BASEDIR%\zlib" "%DISTRODIR%\compat" 1>>"%STDOUTLOG%" 2>>"%STDERRLOG%"
+        move /Y "%BASEDIR%\zlib" "%THIRDDIR%" 1>>"%STDOUTLOG%" 2>>"%STDERRLOG%"
     ) else (
         echo Error extracting ZLIB.
         echo Errod code: !ERROR_STATUS!
@@ -410,11 +403,11 @@ exit /b %ERROR_STATUS%
 :ICU_EXTRACT
 
 set "DISTROFILE=icu4c-X-sources.zip"
-set "ICUDIR=%DISTRODIR%\compat\icu"
+set "ICUDIR=%THIRDDIR%\icu"
 
 if not exist "%ICUDIR%\source\allinone\allinone.sln" (
     echo ===== Extracting ICU =====
-    cd /d "%DISTRODIR%\compat"
+    cd /d "%THIRDDIR%"
     "%TAR%" -xf "%BASEDIR%\%DISTROFILE%"
     set "ERROR_STATUS=!ERRORLEVEL!"
     if "!ERROR_STATUS!"=="0" (
@@ -479,11 +472,11 @@ exit /b %ERROR_STATUS%
 :FP16_EXTRACT
 
 set "DISTROFILE=fp16_master.zip"
-set "SRCDIR=%DISTRODIR%\compat\FP16-master"
+set "SRCDIR=%THIRDDIR%\FP16-master"
 
 if not exist "%SRCDIR%" (
     echo ===== Extracting FP16 =====
-    cd /d "%DISTRODIR%\compat"
+    cd /d "%THIRDDIR%"
     "%TAR%" -xf "%BASEDIR%\%DISTROFILE%"
     set "ERROR_STATUS=!ERRORLEVEL!"
     if "!ERROR_STATUS!"=="0" (
@@ -502,7 +495,7 @@ echo ========== Copy FP16 ===========
 if not exist "%BUILDDIR%\tsrc" (cmd /c mkdir "%BUILDDIR%\tsrc")
 cd /d "%BUILDDIR%\tsrc"
 
-tclsh "%BASEDIR%\extra\copy_here.tcl" "%DISTRODIR%\compat\FP16-master\include\*"
+tclsh "%BASEDIR%\extra\copy_here.tcl" "%THIRDDIR%\FP16-master\include\*"
 set "ERROR_STATUS=%ERRORLEVEL%"
 
 echo:
@@ -510,11 +503,28 @@ exit /b %ERROR_STATUS%
 
 
 :: ============================================================================
-:PATCH_BUNDLE_EXTRA_SRC
+:EXTRA_SRC_PREPARE
+
+set OPT_XTRA=%OPT_XTRA%^
+    -DSQLITE_EXTRA_AUTOEXT=sqlite3ExtraAutoExtInit ^
+    -DSQLITE_ENABLE_COMPRESS ^
+    -DSQLITE_ENABLE_CSV      ^
+    -DSQLITE_ENABLE_DECIMAL  ^
+    -DSQLITE_ENABLE_FUZZER   ^
+    -DSQLITE_ENABLE_NOOP     ^
+    -DSQLITE_ENABLE_PREFIXES ^
+    -DSQLITE_ENABLE_REGEXP   ^
+    -DSQLITE_ENABLE_ROT      ^
+    -DSQLITE_ENABLE_SERIES   ^
+    -DSQLITE_ENABLE_SHA      ^
+    -DSQLITE_ENABLE_SHATHREE ^
+    -DSQLITE_ENABLE_SQLAR    ^
+    -DSQLITE_ENABLE_UINT     ^
+    -DSQLITE_ENABLE_UUID     
 
 cd /d "%DISTRODIR%\ext\misc"
 
-set EXTRA_SRC=^
+set MISC_EXT=^
     "compress.c"  ^
     "csv.c"       ^
     "decimal.c"   ^
@@ -530,32 +540,17 @@ set EXTRA_SRC=^
     "uint.c"      ^
     "uuid.c"
 
-echo ========== Patch EXTRA_SRC ===========
-tclsh "%BASEDIR%\extra\patch_sqlite_misc_autoext.tcl" %EXTRA_SRC% || exit /b !ERRORLEVEL!
+echo ========== Patch MISC_EXT ===========
+tclsh "%BASEDIR%\extra\patch_sqlite_misc_autoext.tcl" %MISC_EXT% || exit /b !ERRORLEVEL!
 
 echo:
 
-echo ========== Bundle EXTRA_SRC ===========
-tclsh "%BASEDIR%\extra\bundle_extra_src.tcl" %EXTRA_SRC% || exit /b !ERRORLEVEL!
+echo ========== Bundle MISC_EXT ===========
+tclsh "%BASEDIR%\extra\bundle_extra_src.tcl" %MISC_EXT% || exit /b !ERRORLEVEL!
 
-echo:
-exit /b %ERRORLEVEL%
+echo ========== Set EXTRA_SRC for extended SQLite build ===========
 
-
-:: ============================================================================
-:SQLITE_BUILD_INIT
-
-set "ERROR_STATUS=0"
-
-if not exist "%BUILDDIR%" (mkdir "%BUILDDIR%" || exit /b %ERRORLEVEL%)
-cd /d "%BUILDDIR%" || exit /b %ERRORLEVEL%
-
-:: Instead of patching Makefile.msc to copy extra/misc extension source files or
-:: doing so explictly, set SRC12. SRC12 is used for generated Tcl header files
-:: when building for WIN10 and USE_STDCALL. This use is irrelevant, so the macro
-:: can be safely overwritten.
-
-set SRC12=^
+set EXTRA_SRC=%EXTRA_SRC% ^
     ""%DISTRODIR%\ext\misc\compress.c""      ^
     ""%DISTRODIR%\ext\misc\csv.c""           ^
     ""%DISTRODIR%\ext\misc\decimal.c""       ^
@@ -572,10 +567,6 @@ set SRC12=^
     ""%DISTRODIR%\ext\misc\uuid.c""          ^
     ""%DISTRODIR%\ext\misc\misc_ext_init.c""
 
-:: Initialize SQLite build directory
-
-nmake /nologo "SRC12=%SRC12%" "TOP=%DISTRODIR%" /f "%DISTRODIR%\Makefile.msc" .target_source
-
 echo:
 exit /b %ERRORLEVEL%
 
@@ -583,24 +574,7 @@ exit /b %ERRORLEVEL%
 :: ============================================================================
 :SQLITE_BUILD
 
-cd /d "%BUILDDIR%"
-
-set EXTRA_SRC=^
-    ""%BUILDDIR%\tsrc\compress.c""      ^
-    ""%BUILDDIR%\tsrc\csv.c""           ^
-    ""%BUILDDIR%\tsrc\decimal.c""       ^
-    ""%BUILDDIR%\tsrc\fuzzer.c""        ^
-    ""%BUILDDIR%\tsrc\noop.c""          ^
-    ""%BUILDDIR%\tsrc\prefixes.c""      ^
-    ""%BUILDDIR%\tsrc\regexp.c""        ^
-    ""%BUILDDIR%\tsrc\rot13.c""         ^
-    ""%BUILDDIR%\tsrc\series.c""        ^
-    ""%BUILDDIR%\tsrc\sha1.c""          ^
-    ""%BUILDDIR%\tsrc\shathree.c""      ^
-    ""%BUILDDIR%\tsrc\sqlar.c""         ^
-    ""%BUILDDIR%\tsrc\uint.c""          ^
-    ""%BUILDDIR%\tsrc\uuid.c""          ^
-    ""%BUILDDIR%\tsrc\misc_ext_init.c""
+cd /d "%BUILDDIR%" || exit /b !ERRORLEVEL!
 
 nmake /nologo "EXTRA_SRC=%EXTRA_SRC%" "TOP=%DISTRODIR%" /f "%DISTRODIR%\Makefile.msc" %*
 
