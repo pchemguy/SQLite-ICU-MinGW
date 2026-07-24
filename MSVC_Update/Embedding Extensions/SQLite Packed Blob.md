@@ -1885,3 +1885,442 @@ without committing to those now.
 The extension can therefore be defined as:
 
 > An amalgamation-only SQLite auto-extension, enabled only when JSON support is present, exposing deterministic SQL scalar functions that convert between flat numeric JSON arrays and raw packed numeric BLOBs. All implementation details and JSON integration remain private to the amalgamation.
+
+---
+---
+
+## 📗 Libraries
+
+> [!NOTE] Prompt
+> 
+> I do not need take json and jsonb. I need to take the one that it more convinient and let json.c handle conversion. The overall strategy is to minimize the amount of new code, especially perfoming core data conversion. I need a robust means to verify input json, and the other critical part is parsing and data conversion. Perhaps there are tiny open source, ideally available as integratable single pair of x.c/x.h modules, well established actively developed project(s) that can provide functionality not available from json.c or possibly other core modules? ( I only care about int8 and IEEE 754 binary f2/f4 with endianness, no other binary types)
+
+Yes. Under your constraints, the minimal design is:
+
+1. Require **JSONB** as the SQL input representation.
+2. Use `json.c` internals for validation, array traversal, numeric classification, decimal parsing, and JSON output.
+3. Add one small external dependency only for binary16 conversion.
+4. Implement endianness locally with a few byte shifts.
+5. Use ordinary C conversion for binary32.
+
+### Use JSONB as the input contract
+
+Define:
+
+```sql
+pblob_pack(jsonb_array, format) -> BLOB
+```
+
+The caller converts text JSON explicitly:
+
+```sql
+SELECT pblob_pack(jsonb('[1.0, 2.0, 3.0]'), '<f2');
+```
+
+This is preferable to accepting text JSON directly because SQLite’s JSON functions already use JSONB as their internal processing representation. Supplying JSONB bypasses the text-to-JSONB parsing stage. ([SQLite][1])
+
+It also gives you a clean type distinction:
+
+* `BLOB` containing valid JSONB: input array.
+* `TEXT`: rejected.
+* Ordinary BLOB: rejected as malformed JSONB.
+* `NULL`: propagated.
+
+The extension still must perform deep traversal and validation. SQLite documents that `jsonb()` itself only examines the outermost element when its input already appears to be JSONB, so merely receiving the output of `jsonb()` is not by itself proof that every nested element is structurally valid. ([SQLite][1])
+
+However, your traversal through the existing `json.c` machinery naturally validates every array element that you consume.
+
+### Why JSONB is especially suitable here
+
+SQLite JSONB is already a contiguous sequence of typed elements. Each element carries a type and payload length, and an array payload consists directly of its child JSONB elements. Numeric payloads remain textual and are converted only when needed. ([SQLite][2])
+
+Your packing loop can therefore be approximately:
+
+```text
+obtain validated root JSONB element
+require ARRAY
+walk direct child elements
+    require INT/INT5 for int8
+    require numeric element for f2/f4
+    invoke SQLite numeric conversion
+    encode result
+```
+
+You do not need:
+
+* a second JSON parser,
+* tokenization code,
+* nested-array parsing,
+* string escape handling,
+* decimal-to-double conversion,
+* JSON5 number handling,
+* custom JSON syntax diagnostics.
+
+### Best external component: Maratyszcza/FP16
+
+The strongest fit is **Maratyszcza/FP16**.
+
+It is:
+
+* header-only,
+* C99-compatible,
+* MIT licensed,
+* specifically limited to conversion to and from half-precision formats,
+* tested for denormals, infinities, and NaNs,
+* covered by unit tests and microbenchmarks,
+* still actively maintained, including changes in 2025 and 2026. ([Chromium Git Repositories][3])
+
+The primary header provides IEEE binary16 ↔ binary32 conversions. Conceptually, the useful operations are:
+
+```c
+uint16_t fp16_ieee_from_fp32_value(float value);
+float fp16_ieee_to_fp32_value(uint16_t bits);
+```
+
+The result of the encoding function is the **binary16 bit pattern in a `uint16_t`**, not a native half object. That is exactly what your packed-BLOB extension needs.
+
+You can vendor only the required headers, likely:
+
+```text
+fp16/fp16.h
+fp16/bitcasts.h
+```
+
+Possibly also the small macro header required by the selected revision. It is not an `x.c/x.h` pair, but header-only is even easier for amalgamation integration.
+
+### Important limitation of FP16
+
+Maratyszcza/FP16 converts:
+
+```text
+binary32 ↔ binary16
+```
+
+It does not primarily provide:
+
+```text
+binary64 ↔ binary16
+```
+
+SQLite JSON numeric extraction normally yields a C `double`. Therefore the straightforward packing path is:
+
+```text
+JSON decimal
+→ SQLite double
+→ C float
+→ FP16 binary16
+```
+
+This introduces an intermediate binary32 rounding.
+
+For embedding data, this is generally the correct semantic path because embeddings conventionally originate as FP32 values before being stored as FP16. It also means that:
+
+```sql
+pblob_pack(..., '<f2')
+```
+
+should be defined as:
+
+> Convert each JSON number to SQLite REAL, narrow it to IEEE binary32, and then convert binary32 to IEEE binary16 using round-to-nearest-even.
+
+That contract is deterministic and maps cleanly to the available, established conversion library.
+
+#### Double-rounding caveat
+
+A decimal value converted directly to binary16 can, in rare halfway cases, produce a different result from:
+
+```text
+decimal → binary64 → binary32 → binary16
+```
+
+For actual JSON embeddings produced from FP32 values, this is not a meaningful problem: the JSON decimal is merely a textual representation of an original binary32 number. Reconstructing binary32 before converting to binary16 is appropriate.
+
+If the function is intended as a general mathematically correctly rounded decimal-to-binary16 converter, the FP32 intermediate would be insufficient. You would then need a correct binary64-to-binary16 conversion.
+
+### Berkeley SoftFloat: rigorous but excessive
+
+Berkeley SoftFloat provides `f64_to_f16`, `f64_to_f32`, `f16_to_f64`, explicit rounding behavior, exception handling, and fully software-defined IEEE-754 semantics. The implementation includes direct `f64_to_f16` conversion. ([QEMU][4])
+
+It is robust, but it is not a tiny pair of files. Pulling out `f64_to_f16.c` also pulls in:
+
+* SoftFloat internal types,
+* shift-with-jam helpers,
+* rounding state,
+* NaN specialization,
+* platform configuration,
+* exception flags,
+* several headers and support routines.
+
+For your extension, that would add substantially more code than the extension itself.
+
+I would use SoftFloat only if you require all of the following:
+
+* exact binary64-to-binary16 conversion,
+* selectable IEEE rounding modes,
+* platform-independent floating-point exception behavior,
+* exact NaN payload propagation,
+* operation on hosts that cannot be assumed to use IEEE binary32/binary64.
+
+You do not appear to require those.
+
+### Binary32 does not need another library
+
+For `<f4` and `>f4`, use SQLite’s parsed `double`, narrow it to C `float`, and copy the resulting bits into a 32-bit unsigned integer.
+
+Conceptually:
+
+```c
+double d = ...;           /* produced by json.c */
+float f = (float)d;
+uint32_t u;
+memcpy(&u, &f, sizeof(u));
+```
+
+Then explicitly write the bytes:
+
+```text
+little-endian:
+u
+u >> 8
+u >> 16
+u >> 24
+
+big-endian:
+u >> 24
+u >> 16
+u >> 8
+u
+```
+
+For unpacking, reconstruct the `uint32_t`, `memcpy` it into `float`, and promote the `float` to `double` for SQLite’s JSON number renderer.
+
+This is very little new conversion code. The only assumptions are:
+
+```text
+sizeof(float) == 4
+FLT_RADIX == 2
+FLT_MANT_DIG == 24
+FLT_MAX_EXP == 128
+```
+
+Those identify IEEE-754 binary32 characteristics sufficiently for this application. Reject the build at compile time when they are false.
+
+SQLite itself already assumes common IEEE floating-point behavior in many supported builds, so adding an exotic non-IEEE portability layer would be inconsistent with your goal of minimizing code.
+
+### Endianness does not warrant a dependency
+
+Do not integrate an endian library.
+
+The total required implementation is approximately four tiny helpers:
+
+```text
+read_u16_le
+read_u16_be
+write_u16_le
+write_u16_be
+
+read_u32_le
+read_u32_be
+write_u32_le
+write_u32_be
+```
+
+These are simple unsigned byte shifts and OR operations. They are:
+
+* independent of host endianness,
+* independent of alignment,
+* free from strict-aliasing problems,
+* easy to test exhaustively,
+* smaller than any external dependency.
+
+Do not use direct casts such as:
+
+```c
+*(uint32_t *)p
+```
+
+because that introduces alignment and aliasing issues.
+
+### `int8` needs no conversion library
+
+For `int8`:
+
+1. Require an SQLite JSONB integer element, not a floating-point element.
+2. Convert it through the integer conversion already used by `json.c`.
+3. Check:
+
+```text
+-128 <= value <= 127
+```
+
+4. Store:
+
+```c
+output[i] = (unsigned char)(signed char)value;
+```
+
+For unpacking, explicitly sign-extend the byte rather than relying on whether plain `char` is signed:
+
+```c
+int value = byte < 0x80 ? byte : byte - 0x100;
+```
+
+That is portable and unambiguous.
+
+### Use `json.c` for numeric parsing
+
+The most important code not to rewrite is decimal parsing.
+
+JSONB numeric payloads are stored as text, with distinct element types for canonical integers, canonical floating-point numbers, and JSON5 variants. This design deliberately defers numeric conversion until a consumer requests a number. ([SQLite][2])
+
+Therefore, use the same internal routines that existing JSON functions use to obtain:
+
+```text
+sqlite3_int64
+double
+```
+
+Do not:
+
+* call `strtod`,
+* call `sscanf`,
+* embed fast_float,
+* embed yyjson,
+* embed dtoa,
+* manually recognize exponent syntax,
+* manually handle JSON5 hexadecimal numbers.
+
+SQLite already owns this layer.
+
+### Use `json.c` for output too
+
+For unpacking, use SQLite’s JSON output accumulator and number-rendering routines.
+
+That gives you:
+
+* canonical JSON text,
+* locale-independent decimal rendering,
+* SQLite allocation and length-limit handling,
+* correct JSON subtype assignment,
+* existing handling of integer and real formatting.
+
+SQLite states that JSON text emitted by its JSON functions is canonical JSON even when input accepts JSON5 extensions. ([SQLite][1])
+
+The result function must be registered with:
+
+```text
+SQLITE_RESULT_SUBTYPE
+```
+
+in addition to:
+
+```text
+SQLITE_UTF8
+SQLITE_DETERMINISTIC
+SQLITE_INNOCUOUS
+```
+
+because functions that call `sqlite3_result_subtype()` must declare that property in current SQLite. ([SQLite][5])
+
+### Recommended dependency boundary
+
+#### From SQLite core/json.c
+
+Reuse directly:
+
+```text
+JSONB recognition
+root element decoding
+array child traversal
+deep structural validation during traversal
+numeric-type classification
+integer text → sqlite3_int64
+numeric text → double
+JSON output accumulator
+integer → JSON text
+double → JSON text
+error and allocation handling
+result subtype
+```
+
+#### From Maratyszcza/FP16
+
+Reuse:
+
+```text
+IEEE binary32 bits/value → IEEE binary16 bits
+IEEE binary16 bits → IEEE binary32 bits/value
+```
+
+#### New extension code
+
+Write only:
+
+```text
+format parser
+SQL argument/type checks
+array-homogeneity checks
+int8 range checking
+double → float narrowing and overflow checks
+byte-order reads/writes
+BLOB allocation
+element loop
+SQL function callbacks
+registration initializer
+```
+
+### Recommended conversion semantics
+
+The cleanest precise contract is:
+
+| Format       | Accepted JSONB numeric elements | Conversion                                                 |
+| ------------ | ------------------------------- | ---------------------------------------------------------- |
+| `int8`       | Integer elements only           | JSON integer → `sqlite3_int64` → range check → signed byte |
+| `<f2`, `>f2` | Integer or real elements        | JSON number → `double` → binary32 → binary16               |
+| `<f4`, `>f4` | Integer or real elements        | JSON number → `double` → binary32                          |
+
+For homogeneous input, enforce:
+
+* `int8`: all elements must be JSON integer types.
+* `f2`/`f4`: integers and reals may be mixed, because both are converted to the selected floating representation.
+
+If you interpret “all the same type” literally at the JSON syntax level, then `[1,2.0]` would be rejected for `f4`; that adds validation code without improving the packed result. I would instead define homogeneity by the **target packed type**.
+
+### Final recommendation
+
+Use:
+
+```text
+SQLite json.c internals
++
+Maratyszcza/FP16 header-only library
++
+small local endian helpers
+```
+
+Do not add a separate general JSON library, decimal parser, float formatter, endian library, or binary serialization library.
+
+The resulting critical path becomes:
+
+```text
+JSONB number
+→ json.c numeric conversion
+→ int8 / C binary32 / FP16 binary16 conversion
+→ explicit byte-order write
+```
+
+and the inverse:
+
+```text
+explicit byte-order read
+→ int8 / binary32 / FP16 binary16 decode
+→ json.c numeric writer
+```
+
+That is likely the smallest robust implementation available without relying on compiler-specific `_Float16` support.
+
+[1]: https://www.sqlite.org/json1.html "JSON Functions And Operators"
+[2]: https://sqlite.org/jsonb.html "The SQLite JSONB Format"
+[3]: https://chromium.googlesource.com/external/github.com/Maratyszcza/FP16/ "external/github.com/Maratyszcza/FP16 - Git at Google"
+[4]: https://qemu.googlesource.com/berkeley-softfloat-3/%2B/refs/heads/master/source/ "source - berkeley-softfloat-3 - Git at Google"
+[5]: https://www.sqlite.org/releaselog/3_45_1.html "SQLite Release 3.45.1 On 2024-01-30"
