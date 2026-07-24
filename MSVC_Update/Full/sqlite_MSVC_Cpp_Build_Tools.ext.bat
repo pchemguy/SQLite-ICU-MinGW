@@ -47,20 +47,19 @@ if "%~1"=="env" (
     exit /b 0
 )
 
-call :SQLITE_DOWNLOAD   || exit /b %ERRORLEVEL%
-call :SQLITE_EXTRACT    || exit /b %ERRORLEVEL%
-call :ZLIB_DOWNLOAD     || exit /b %ERRORLEVEL%
-call :ZLIB_EXTRACT      || exit /b %ERRORLEVEL%
-call :ZLIB_BUILD        || exit /b %ERRORLEVEL%
-call :ICU_DOWNLOAD      || exit /b %ERRORLEVEL%
-call :ICU_EXTRACT       || exit /b %ERRORLEVEL%
-call :ICU_BUILD         || exit /b %ERRORLEVEL%
-call :FP16_DOWNLOAD     || exit /b %ERRORLEVEL%
-call :FP16_EXTRACT      || exit /b %ERRORLEVEL%
-call :SQLITE_BUILD_INIT || exit /b %ERRORLEVEL%
-call :PATCH_EXTRA_SRC   || exit /b %ERRORLEVEL%
-call :BUNDLE_EXTRA_SRC  || exit /b %ERRORLEVEL%
-call :SQLITE_BUILD      || exit /b %ERRORLEVEL%
+call :SQLITE_DOWNLOAD        || exit /b %ERRORLEVEL%
+call :SQLITE_EXTRACT         || exit /b %ERRORLEVEL%
+call :ZLIB_DOWNLOAD          || exit /b %ERRORLEVEL%
+call :ZLIB_EXTRACT           || exit /b %ERRORLEVEL%
+call :ZLIB_BUILD             || exit /b %ERRORLEVEL%
+call :ICU_DOWNLOAD           || exit /b %ERRORLEVEL%
+call :ICU_EXTRACT            || exit /b %ERRORLEVEL%
+call :ICU_BUILD              || exit /b %ERRORLEVEL%
+call :FP16_DOWNLOAD          || exit /b %ERRORLEVEL%
+call :FP16_EXTRACT           || exit /b %ERRORLEVEL%
+call :PATCH_BUNDLE_EXTRA_SRC || exit /b %ERRORLEVEL%
+call :SQLITE_BUILD_INIT      || exit /b %ERRORLEVEL%
+call :SQLITE_BUILD           || exit /b %ERRORLEVEL%
 call :COLLECT_BINARIES
 
 EndLocal
@@ -511,11 +510,44 @@ exit /b %ERROR_STATUS%
 
 
 :: ============================================================================
+:PATCH_BUNDLE_EXTRA_SRC
+
+cd /d "%DISTRODIR%\ext\misc"
+
+set EXTRA_SRC=^
+    "compress.c"  ^
+    "csv.c"       ^
+    "decimal.c"   ^
+    "fuzzer.c"    ^
+    "noop.c"      ^
+    "prefixes.c"  ^
+    "regexp.c"    ^
+    "rot13.c"     ^
+    "series.c"    ^
+    "sha1.c"      ^
+    "shathree.c"  ^
+    "sqlar.c"     ^
+    "uint.c"      ^
+    "uuid.c"
+
+echo ========== Patch EXTRA_SRC ===========
+tclsh "%BASEDIR%\extra\patch_sqlite_misc_autoext.tcl" %EXTRA_SRC% || exit /b !ERRORLEVEL!
+
+echo:
+
+echo ========== Bundle EXTRA_SRC ===========
+tclsh "%BASEDIR%\extra\bundle_extra_src.tcl" %EXTRA_SRC% || exit /b !ERRORLEVEL!
+
+echo:
+exit /b %ERRORLEVEL%
+
+
+:: ============================================================================
 :SQLITE_BUILD_INIT
 
 set "ERROR_STATUS=0"
 
-if not exist "%BUILDDIR%" mkdir "%BUILDDIR%" || exit /b %ERRORLEVEL%
+if not exist "%BUILDDIR%" (mkdir "%BUILDDIR%" || exit /b %ERRORLEVEL%)
 cd /d "%BUILDDIR%" || exit /b %ERRORLEVEL%
 
 :: Instead of patching Makefile.msc to copy extra/misc extension source files or
@@ -524,80 +556,25 @@ cd /d "%BUILDDIR%" || exit /b %ERRORLEVEL%
 :: can be safely overwritten.
 
 set SRC12=^
-    ""%DISTRODIR%\ext\misc\compress.c""  ^
-    ""%DISTRODIR%\ext\misc\csv.c""       ^
-    ""%DISTRODIR%\ext\misc\decimal.c""   ^
-    ""%DISTRODIR%\ext\misc\fuzzer.c""    ^
-    ""%DISTRODIR%\ext\misc\noop.c""      ^
-    ""%DISTRODIR%\ext\misc\prefixes.c""  ^
-    ""%DISTRODIR%\ext\misc\regexp.c""    ^
-    ""%DISTRODIR%\ext\misc\rot13.c""     ^
-    ""%DISTRODIR%\ext\misc\series.c""    ^
-    ""%DISTRODIR%\ext\misc\sha1.c""      ^
-    ""%DISTRODIR%\ext\misc\shathree.c""  ^
-    ""%DISTRODIR%\ext\misc\sqlar.c""     ^
-    ""%DISTRODIR%\ext\misc\uint.c""      ^
-    ""%DISTRODIR%\ext\misc\uuid.c""
+    ""%DISTRODIR%\ext\misc\compress.c""      ^
+    ""%DISTRODIR%\ext\misc\csv.c""           ^
+    ""%DISTRODIR%\ext\misc\decimal.c""       ^
+    ""%DISTRODIR%\ext\misc\fuzzer.c""        ^
+    ""%DISTRODIR%\ext\misc\noop.c""          ^
+    ""%DISTRODIR%\ext\misc\prefixes.c""      ^
+    ""%DISTRODIR%\ext\misc\regexp.c""        ^
+    ""%DISTRODIR%\ext\misc\rot13.c""         ^
+    ""%DISTRODIR%\ext\misc\series.c""        ^
+    ""%DISTRODIR%\ext\misc\sha1.c""          ^
+    ""%DISTRODIR%\ext\misc\shathree.c""      ^
+    ""%DISTRODIR%\ext\misc\sqlar.c""         ^
+    ""%DISTRODIR%\ext\misc\uint.c""          ^
+    ""%DISTRODIR%\ext\misc\uuid.c""          ^
+    ""%DISTRODIR%\ext\misc\misc_ext_init.c""
 
 :: Initialize SQLite build directory
 
 nmake /nologo "SRC12=%SRC12%" "TOP=%DISTRODIR%" /f "%DISTRODIR%\Makefile.msc" .target_source
-
-echo:
-exit /b %ERRORLEVEL%
-
-
-:: ============================================================================
-:PATCH_EXTRA_SRC
-
-cd /d "%BUILDDIR%\tsrc"
-echo ========== Patch EXTRA_SRC ===========
-
-set EXTRA_SRC=^
-    "compress.c"  ^
-    "csv.c"       ^
-    "decimal.c"   ^
-    "fuzzer.c"    ^
-    "noop.c"      ^
-    "prefixes.c"  ^
-    "regexp.c"    ^
-    "rot13.c"     ^
-    "series.c"    ^
-    "sha1.c"      ^
-    "shathree.c"  ^
-    "sqlar.c"     ^
-    "uint.c"      ^
-    "uuid.c"
-
-tclsh "%BASEDIR%\extra\patch_sqlite_misc_autoext.tcl" %EXTRA_SRC%
-
-echo:
-exit /b %ERRORLEVEL%
-
-
-:: ============================================================================
-:BUNDLE_EXTRA_SRC
-
-cd /d "%BUILDDIR%\tsrc"
-echo ========== Bundle EXTRA_SRC ===========
-
-set EXTRA_SRC=^
-    "compress.c"  ^
-    "csv.c"       ^
-    "decimal.c"   ^
-    "fuzzer.c"    ^
-    "noop.c"      ^
-    "prefixes.c"  ^
-    "regexp.c"    ^
-    "rot13.c"     ^
-    "series.c"    ^
-    "sha1.c"      ^
-    "shathree.c"  ^
-    "sqlar.c"     ^
-    "uint.c"      ^
-    "uuid.c"
-
-tclsh "%BASEDIR%\extra\bundle_extra_src.tcl" %EXTRA_SRC%
 
 echo:
 exit /b %ERRORLEVEL%
