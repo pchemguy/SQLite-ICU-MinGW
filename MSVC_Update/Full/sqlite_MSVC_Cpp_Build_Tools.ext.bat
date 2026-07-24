@@ -47,22 +47,20 @@ if "%~1"=="env" (
     exit /b 0
 )
 
-call :SQLITE_DOWNLOAD     || exit /b %ERRORLEVEL%
-call :SQLITE_EXTRACT      || exit /b %ERRORLEVEL%
-call :ZLIB_DOWNLOAD       || exit /b %ERRORLEVEL%
-call :ZLIB_EXTRACT        || exit /b %ERRORLEVEL%
-call :ZLIB_BUILD          || exit /b %ERRORLEVEL%
-call :ICU_DOWNLOAD        || exit /b %ERRORLEVEL%
-call :ICU_EXTRACT         || exit /b %ERRORLEVEL%
-call :ICU_BUILD           || exit /b %ERRORLEVEL%
-call :FP16_DOWNLOAD       || exit /b %ERRORLEVEL%
-call :FP16_EXTRACT        || exit /b %ERRORLEVEL%
-call :SQLITE_BUILD_INIT   || exit /b %ERRORLEVEL%
-call :COPY_EXTRAS_TO_TSRC || exit /b %ERRORLEVEL%
-call :PATCH_NORMALIZE_C   || exit /b %ERRORLEVEL%
-call :PATCH_EXTRA_SRC     || exit /b %ERRORLEVEL%
-call :BUNDLE_EXTRA_SRC    || exit /b %ERRORLEVEL%
-call :SQLITE_BUILD        || exit /b %ERRORLEVEL%
+call :SQLITE_DOWNLOAD   || exit /b %ERRORLEVEL%
+call :SQLITE_EXTRACT    || exit /b %ERRORLEVEL%
+call :ZLIB_DOWNLOAD     || exit /b %ERRORLEVEL%
+call :ZLIB_EXTRACT      || exit /b %ERRORLEVEL%
+call :ZLIB_BUILD        || exit /b %ERRORLEVEL%
+call :ICU_DOWNLOAD      || exit /b %ERRORLEVEL%
+call :ICU_EXTRACT       || exit /b %ERRORLEVEL%
+call :ICU_BUILD         || exit /b %ERRORLEVEL%
+call :FP16_DOWNLOAD     || exit /b %ERRORLEVEL%
+call :FP16_EXTRACT      || exit /b %ERRORLEVEL%
+call :SQLITE_BUILD_INIT || exit /b %ERRORLEVEL%
+call :PATCH_EXTRA_SRC   || exit /b %ERRORLEVEL%
+call :BUNDLE_EXTRA_SRC  || exit /b %ERRORLEVEL%
+call :SQLITE_BUILD      || exit /b %ERRORLEVEL%
 call :COLLECT_BINARIES
 
 EndLocal
@@ -497,6 +495,17 @@ if not exist "%SRCDIR%" (
     )
 ) else (echo ===== Using previously extracted FP16 =====)
 
+if not "%ERROR_STATUS%"=="0" (exit /b %ERROR_STATUS%)
+echo:
+
+echo ========== Copy FP16 ===========
+
+if not exist "%BUILDDIR%\tsrc" (cmd /c mkdir "%BUILDDIR%\tsrc")
+cd /d "%BUILDDIR%\tsrc"
+
+tclsh "%BASEDIR%\extra\copy_here.tcl" "%DISTRODIR%\compat\FP16-master\include\*"
+set "ERROR_STATUS=%ERRORLEVEL%"
+
 echo:
 exit /b %ERROR_STATUS%
 
@@ -520,7 +529,6 @@ set SRC12=^
     ""%DISTRODIR%\ext\misc\decimal.c""   ^
     ""%DISTRODIR%\ext\misc\fuzzer.c""    ^
     ""%DISTRODIR%\ext\misc\noop.c""      ^
-    ""%DISTRODIR%\ext\misc\normalize.c"" ^
     ""%DISTRODIR%\ext\misc\prefixes.c""  ^
     ""%DISTRODIR%\ext\misc\regexp.c""    ^
     ""%DISTRODIR%\ext\misc\rot13.c""     ^
@@ -534,47 +542,6 @@ set SRC12=^
 :: Initialize SQLite build directory
 
 nmake /nologo "SRC12=%SRC12%" "TOP=%DISTRODIR%" /f "%DISTRODIR%\Makefile.msc" .target_source
-
-echo:
-exit /b %ERRORLEVEL%
-
-
-:: ============================================================================
-:COPY_EXTRAS_TO_TSRC
-
-echo ========== Copy EXTRAS ===========
-
-cd /d "%BUILDDIR%\tsrc"
-
-set EXTRAS=^
-    "%DISTRODIR%\compat\FP16-master\include\*"
-
-tclsh "%BASEDIR%\extra\copy_here.tcl" %EXTRAS%
-
-echo:
-exit /b %ERRORLEVEL%
-
-
-:: ============================================================================
-:PATCH_NORMALIZE_C
-
-set "FILENAME=%BUILDDIR%\tsrc\normalize.c"
-echo ========== Patch "%FILENAME%" ===========
-
-tclsh "%BASEDIR%\extra\replace.tcl" "%FILENAME%"  ^
-    "int main" "int sqlite3_normalize_main"       ^
-    "aiClass" "ai_ClassN"                         ^
-    "sqlite3UpperToLower" "sqlite3_UpperToLowerN" ^
-    "sqlite3CtypeMap" "sqlite3_CtypeMapN"         ^
-    "sqlite3GetToken" "sqlite3_GetTokenN"         ^
-    "IdChar(" "Id_CharN("                         ^
-    "sqlite3I" "sqlite3_IN"                       ^
-    "sqlite3T" "sqlite3_TN"                       ^
-    "TK_" "TKN_"                                  ^
-    "CC_" "CCN_"
-
-tclsh "%BASEDIR%\extra\replace.tcl" "%FILENAME%" ^
-    "__GCCN__" "__GCC__"
 
 echo:
 exit /b %ERRORLEVEL%
@@ -647,7 +614,6 @@ set EXTRA_SRC=^
     ""%BUILDDIR%\tsrc\decimal.c""       ^
     ""%BUILDDIR%\tsrc\fuzzer.c""        ^
     ""%BUILDDIR%\tsrc\noop.c""          ^
-    ""%BUILDDIR%\tsrc\normalize.c""     ^
     ""%BUILDDIR%\tsrc\prefixes.c""      ^
     ""%BUILDDIR%\tsrc\regexp.c""        ^
     ""%BUILDDIR%\tsrc\rot13.c""         ^
@@ -681,3 +647,28 @@ echo ---------- Copied  binaries -----------
 
 echo:
 exit /b 0
+
+
+:: ============================================================================
+rem :PATCH_NORMALIZE_C
+rem 
+rem set "FILENAME=%BUILDDIR%\tsrc\normalize.c"
+rem echo ========== Patch "%FILENAME%" ===========
+rem 
+rem tclsh "%BASEDIR%\extra\replace.tcl" "%FILENAME%"  ^
+rem     "int main" "int sqlite3_normalize_main"       ^
+rem     "aiClass" "ai_ClassN"                         ^
+rem     "sqlite3UpperToLower" "sqlite3_UpperToLowerN" ^
+rem     "sqlite3CtypeMap" "sqlite3_CtypeMapN"         ^
+rem     "sqlite3GetToken" "sqlite3_GetTokenN"         ^
+rem     "IdChar(" "Id_CharN("                         ^
+rem     "sqlite3I" "sqlite3_IN"                       ^
+rem     "sqlite3T" "sqlite3_TN"                       ^
+rem     "TK_" "TKN_"                                  ^
+rem     "CC_" "CCN_"
+rem 
+rem tclsh "%BASEDIR%\extra\replace.tcl" "%FILENAME%" ^
+rem     "__GCCN__" "__GCC__"
+rem 
+rem echo:
+rem exit /b %ERRORLEVEL%
