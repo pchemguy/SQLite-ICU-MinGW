@@ -17758,5 +17758,3 @@ Stage 16 is complete only when:
 * no second C module, public C API, public header, or loadable-extension entry point exists.
 
 Stop after satisfying these criteria. The implementation is ready for merge.
-
-
