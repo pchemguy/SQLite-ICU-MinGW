@@ -62,7 +62,7 @@ Each stage must leave the tree in a compilable state. Once SQL functions are reg
 | 7     | `int8` unpacking                                          |
 | 8     | Binary32 packing                                          |
 | 9     | Binary32 unpacking                                        |
-| 10    | Integrate FP16 and implement binary16 packing             |
+| 10    | Binary16 packing                                          |
 | 11    | Implement binary16 unpacking                              |
 | 12    | Complete validation and edge-case behavior                |
 | 13    | Add test-only low-level hooks                             |
@@ -918,7 +918,7 @@ Reject any BLOB length not divisible by four.
 
 ---
 
-### Stage 10 — Integrate FP16 and implement binary16 packing
+### Stage 10 — Binary16 packing
 
 #### Goal
 
