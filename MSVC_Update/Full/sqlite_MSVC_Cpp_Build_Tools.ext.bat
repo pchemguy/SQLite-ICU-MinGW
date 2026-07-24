@@ -47,15 +47,18 @@ if "%~1"=="env" (
     exit /b 0
 )
 
-call :SQLITE_DOWNLOAD || exit /b %ERRORLEVEL%
-call :SQLITE_EXTRACT  || exit /b %ERRORLEVEL%
-call :ZLIB_DOWNLOAD   || exit /b %ERRORLEVEL%
-call :ZLIB_EXTRACT    || exit /b %ERRORLEVEL%
-call :ZLIB_BUILD      || exit /b %ERRORLEVEL%
-call :ICU_DOWNLOAD    || exit /b %ERRORLEVEL%
-call :ICU_EXTRACT     || exit /b %ERRORLEVEL%
-call :ICU_BUILD       || exit /b %ERRORLEVEL%
-call :SQLITE_BUILD    || exit /b %ERRORLEVEL%
+call :SQLITE_DOWNLOAD   || exit /b %ERRORLEVEL%
+call :SQLITE_EXTRACT    || exit /b %ERRORLEVEL%
+call :ZLIB_DOWNLOAD     || exit /b %ERRORLEVEL%
+call :ZLIB_EXTRACT      || exit /b %ERRORLEVEL%
+call :ZLIB_BUILD        || exit /b %ERRORLEVEL%
+call :ICU_DOWNLOAD      || exit /b %ERRORLEVEL%
+call :ICU_EXTRACT       || exit /b %ERRORLEVEL%
+call :ICU_BUILD         || exit /b %ERRORLEVEL%
+call :SQLITE_BUILD_INIT || exit /b %ERRORLEVEL%
+call :PATCH_NORMALIZE_C || exit /b %ERRORLEVEL%
+call :PATCH_EXTRA_SRC   || exit /b %ERRORLEVEL%
+call :SQLITE_BUILD      || exit /b %ERRORLEVEL%
 call :COLLECT_BINARIES
 
 EndLocal
@@ -436,7 +439,7 @@ exit /b %ERROR_STATUS%
 
 
 :: ============================================================================
-:SQLITE_BUILD
+:SQLITE_BUILD_INIT
 
 set "ERROR_STATUS=0"
 
@@ -468,9 +471,37 @@ set SRC12=^
 :: Initialize SQLite build directory
 
 nmake /nologo "SRC12=%SRC12%" "TOP=%DISTRODIR%" /f "%DISTRODIR%\Makefile.msc" .target_source
-set "ERROR_STATUS=%ERRORLEVEL%"
-if not "%ERROR_STATUS%"=="0" (exit /b %ERROR_STATUS%)
 
+exit /b %ERRORLEVEL%
+
+
+:: ============================================================================
+:PATCH_NORMALIZE_C
+:: Patch normalize.c
+
+set "FILENAME=%BUILDDIR%\tsrc\normalize.c"
+echo ========== Patching "%FILENAME%" ===========
+
+tclsh "%BASEDIR%\extra\replace.tcl" "%FILENAME%" ^
+    "int main" "int sqlite3_normalize_main"      ^
+    "aiClass" "aiClassN"                         ^
+    "sqlite3UpperToLower" "sqlite3UpperToLowerN" ^
+    "sqlite3CtypeMap" "sqlite3CtypeMapN"         ^
+    "sqlite3GetToken" "sqlite3GetTokenN"         ^
+    "IdChar(" "IdCharN("                         ^
+    "sqlite3I" "sqlite3IN"                       ^
+    "sqlite3T" "sqlite3TN"                       ^
+    "TK_" "TKN_"                                 ^
+    "CC_" "CCN_"
+
+tclsh "%BASEDIR%\extra\replace.tcl" "%FILENAME%" ^
+    "__GCCN__" "__GCC__"                         
+
+exit /b %ERRORLEVEL%
+
+
+:: ============================================================================
+:PATCH_EXTRA_SRC
 :: Patch misc extensions as AutoExtensions
 
 cd /d "%BUILDDIR%\tsrc"
@@ -492,27 +523,12 @@ set TARGETS=^
     "uuid.c"
 
 tclsh "%BASEDIR%\extra\patch_sqlite_misc_autoext.tcl" %TARGETS%
-set "ERROR_STATUS=%ERRORLEVEL%"
-if not "%ERROR_STATUS%"=="0" (exit /b %ERROR_STATUS%)
 
-:: Patch normalize.c
+exit /b %ERRORLEVEL%
 
-set "FILENAME=%BUILDDIR%\tsrc\normalize.c"
-echo ========== Patching "%FILENAME%" ===========
-tclsh "%BASEDIR%\extra\replace.tcl" "int main" "int sqlite3_normalize_main" "%FILENAME%"
-tclsh "%BASEDIR%\extra\replace.tcl" "CC_" "CCN_" "%FILENAME%"
-tclsh "%BASEDIR%\extra\replace.tcl" "TK_" "TKN_" "%FILENAME%"
-tclsh "%BASEDIR%\extra\replace.tcl" "aiClass" "aiClassN" "%FILENAME%"
-tclsh "%BASEDIR%\extra\replace.tcl" "sqlite3UpperToLower" "sqlite3UpperToLowerN" "%FILENAME%"
-tclsh "%BASEDIR%\extra\replace.tcl" "sqlite3CtypeMap" "sqlite3CtypeMapN" "%FILENAME%"
-tclsh "%BASEDIR%\extra\replace.tcl" "sqlite3GetToken" "sqlite3GetTokenN" "%FILENAME%"
-tclsh "%BASEDIR%\extra\replace.tcl" "IdChar(" "IdCharN(" "%FILENAME%"
-tclsh "%BASEDIR%\extra\replace.tcl" "sqlite3I" "sqlite3IN" "%FILENAME%"
-tclsh "%BASEDIR%\extra\replace.tcl" "sqlite3T" "sqlite3TN" "%FILENAME%"
-rem tclsh "%BASEDIR%\extra\replace.tcl" "CCN__" "CC__" "%FILENAME%"
 
-set "ERROR_STATUS=%ERRORLEVEL%"
-if not "%ERROR_STATUS%"=="0" (exit /b %ERROR_STATUS%)
+:: ============================================================================
+:SQLITE_BUILD
 
 :: Make SQLite
 
@@ -537,9 +553,8 @@ set EXTRA_SRC=^
     ""%BUILDDIR%\tsrc\misc_ext_init.c""
 
 nmake /nologo "EXTRA_SRC=%EXTRA_SRC%" "TOP=%DISTRODIR%" /f "%DISTRODIR%\Makefile.msc" %*
-set "ERROR_STATUS=%ERRORLEVEL%"
 
-exit /b %ERROR_STATUS%
+exit /b %ERRORLEVEL%
 
 
 :: ============================================================================
