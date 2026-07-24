@@ -58,10 +58,10 @@ Each stage must leave the tree in a compilable state. Once SQL functions are reg
 | 3     | Format parsing and common argument handling               |
 | 4     | Endian and bit-level primitives                           |
 | 5     | JSONB numeric extraction helpers                          |
-| 6     | Implement `int8` packing                                  |
-| 7     | Implement `int8` unpacking                                |
-| 8     | Implement binary32 packing                                |
-| 9     | Implement binary32 unpacking                              |
+| 6     | `int8` packing                                            |
+| 7     | `int8` unpacking                                          |
+| 8     | Binary32 packing                                          |
+| 9     | Binary32 unpacking                                        |
 | 10    | Integrate FP16 and implement binary16 packing             |
 | 11    | Implement binary16 unpacking                              |
 | 12    | Complete validation and edge-case behavior                |
@@ -653,7 +653,7 @@ Remove temporary production-visible debug behavior before the next stage.
 
 ---
 
-### Stage 6 — Implement `int8` packing
+### Stage 6 — `int8` packing
 
 #### Goal
 
@@ -737,7 +737,7 @@ Do not treat a zero-byte allocation result as OOM.
 
 ---
 
-### Stage 7 — Implement `int8` unpacking
+### Stage 7 — `int8` unpacking
 
 #### Goal
 
@@ -795,7 +795,7 @@ Append using `jsonPrintf()` as integer syntax.
 
 ---
 
-### Stage 8 — Implement binary32 packing
+### Stage 8 — Binary32 packing
 
 #### Goal
 
@@ -867,7 +867,7 @@ Add `<f4` and `>f4` packing.
 
 ---
 
-### Stage 9 — Implement binary32 unpacking
+### Stage 9 — Binary32 unpacking
 
 #### Goal
 
