@@ -65,7 +65,7 @@ Each stage must leave the tree in a compilable state. Once SQL functions are reg
 | 10    | Binary16 packing                                          |
 | 11    | Binary16 unpacking                                        |
 | 12    | Validation, error, limit, and cleanup audit               |
-| 13    | Add test-only low-level hooks                             |
+| 13    | Consolidate test-only low-level hooks                     |
 | 14    | Complete SQL, vector, limit, and fault tests              |
 | 15    | Run full integration, release, and portability validation |
 | 16    | Final review and cleanup                                  |
@@ -1094,7 +1094,7 @@ Normalize extension-defined messages and ensure function names are included.
 
 ---
 
-### Stage 13 — Add test-only low-level hooks
+### Stage 13 — Consolidate test-only low-level hooks
 
 #### Goal
 

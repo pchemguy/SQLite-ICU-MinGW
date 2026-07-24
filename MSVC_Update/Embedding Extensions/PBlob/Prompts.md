@@ -12662,5 +12662,2660 @@ Stop after satisfying these criteria. Do not proceed to Stage 13.
 ---
 ---
 
-## 📗 
+## 📗 Stage 13: Consolidate Test-Only Low-Level Hooks
+
+Implement only Stage 13 of the packed numeric BLOB extension.
+
+This stage begins from the completed Stage 12 state, where:
+
+* `pblob.c` is the only production source module for the extension;
+* all supported packing and unpacking formats are functional;
+* validation, cleanup, limits, and ownership have been audited;
+* focused SQL tests exist;
+* test-only access added in earlier stages may be incomplete, temporary, fragmented, or narrowly tailored;
+* no public C API or public header exists.
+
+Stage 13 must create a deliberate, consolidated test-only interface for low-level and exhaustive testing.
+
+Do not change public SQL behavior.
+
+### Objective
+
+Add a coherent test-only command interface that exposes selected private `pblob.c` operations to SQLite’s Tcl test harness.
+
+The interface must support:
+
+* direct endian-helper testing;
+* raw binary16 and binary32 classification;
+* complete signed-byte decoding;
+* checked-size testing;
+* direct JSONB numeric extraction testing;
+* malformed internal JSONB testing;
+* exhaustive binary16 conversion and round-trip testing;
+* verification that portable FP16 conversion is active.
+
+The test interface must:
+
+* exist only when `SQLITE_TEST` is defined;
+* remain implemented in `pblob.c`;
+* call the actual private production helpers;
+* expose no production SQL functions;
+* expose no application-facing C API;
+* require no `pblob.h`;
+* add no second production or test C module.
+
+### Scope
+
+This stage is limited to:
+
+1. Reviewing all existing temporary test hooks.
+2. Removing obsolete or duplicated hooks.
+3. Defining one coherent Tcl-command interface.
+4. Registering that interface in `testfixture`.
+5. Implementing low-level command operations.
+6. Implementing exhaustive binary16 test operations.
+7. Adding Tcl tests for the consolidated interface.
+8. Verifying that release builds contain none of the test-only interface.
+9. Preserving all public SQL behavior and tests.
+
+Do not redesign the production implementation.
+
+---
+
+### Single-Module Requirement
+
+Keep all test-only `pblob` C code in:
+
+```text
+pblob.c
+```
+
+under:
+
+```c
+#ifdef SQLITE_TEST
+...
+#endif
+```
+
+Do not create:
+
+```text
+src/test_pblob.c
+pblob_test.c
+pblob_test.h
+pblob.h
+```
+
+This requirement preserves the extension’s single-C-module structure and allows test-only code to call private `static` helpers directly.
+
+The production helpers must remain `static`.
+
+Do not remove `static` from a helper merely to enable testing.
+
+---
+
+### Test Command Design
+
+Register one Tcl command:
+
+```text
+test_pblob
+```
+
+Preferred command form:
+
+```text
+test_pblob OPERATION ?ARGUMENT ...?
+```
+
+Use operation selectors rather than registering many independent commands.
+
+Required operations:
+
+```text
+u16le
+u16be
+u32le
+u32be
+classify-f16
+classify-f32
+decode-int8
+checked-size
+jsonb-integer
+jsonb-number
+malformed-jsonb
+fp16-mode
+exhaustive-f16-classify
+exhaustive-f16-convert
+exhaustive-f16-roundtrip
+```
+
+Equivalent concise names are acceptable, but one stable command namespace is required.
+
+Do not register these as SQL functions.
+
+Do not expose them in normal `sqlite3.exe` or `sqlite3.dll` builds.
+
+---
+
+### Testfixture Registration
+
+Follow the selected SQLite source tree’s established Tcl-command registration convention.
+
+The Stage 13 implementation must ensure:
+
+```text
+test_pblob
+```
+
+is registered only in the `SQLITE_TEST` testfixture build.
+
+Use the existing test initialization mechanism rather than inventing a second Tcl interpreter or registration framework.
+
+Possible integration forms include:
+
+* a test initialization function called from the existing testfixture setup;
+* an entry in an existing test command table;
+* a local registration hook included through the amalgamated test source.
+
+Use the actual project convention.
+
+The registration routine itself must also remain unavailable in production builds.
+
+---
+
+### Command Error Handling
+
+Every operation must validate:
+
+* argument count;
+* integer syntax;
+* numeric range;
+* hexadecimal word width;
+* malformed Tcl objects;
+* invalid operation names.
+
+Use Tcl result and error conventions established by the SQLite test suite.
+
+Do not:
+
+* call `abort()`;
+* call `exit()`;
+* rely only on assertions;
+* print directly to standard output;
+* return ambiguous empty results for invalid input.
+
+On error, return `TCL_ERROR` with a concise diagnostic.
+
+---
+
+### Hexadecimal Input Convention
+
+For bit-pattern operations, accept canonical hexadecimal text without prefixes:
+
+```text
+0000
+3C00
+FFFF
+
+00000000
+3F800000
+FFFFFFFF
+```
+
+Requirements:
+
+* binary16 input must contain exactly four hexadecimal digits;
+* binary32 input must contain exactly eight hexadecimal digits;
+* parsing must be case-insensitive;
+* invalid characters must be rejected;
+* leading or trailing whitespace must be rejected unless Tcl argument parsing already removes it structurally;
+* values must not be parsed through floating-point conversions.
+
+Do not silently accept short forms such as:
+
+```text
+1
+3c
+3f8000
+```
+
+unless an operation explicitly documents integer input instead of fixed-width bit-pattern input.
+
+---
+
+### `u16le` Operation
+
+Command form:
+
+```text
+test_pblob u16le WORD
+```
+
+Input:
+
+```text
+WORD = exactly four hexadecimal digits
+```
+
+Return a Tcl list containing:
+
+```text
+little-endian hex bytes
+round-tripped word
+```
+
+Example:
+
+```text
+test_pblob u16le 1234
+```
+
+Expected:
+
+```text
+3412 1234
+```
+
+The operation must call:
+
+```c
+pblobPutU16Le()
+pblobGetU16Le()
+```
+
+It must use an intentionally unaligned internal buffer offset.
+
+Do not duplicate endian logic in the test command.
+
+---
+
+### `u16be` Operation
+
+Command form:
+
+```text
+test_pblob u16be WORD
+```
+
+Example:
+
+```text
+test_pblob u16be 1234
+```
+
+Expected:
+
+```text
+1234 1234
+```
+
+Call:
+
+```c
+pblobPutU16Be()
+pblobGetU16Be()
+```
+
+Use an unaligned internal buffer offset.
+
+---
+
+### `u32le` Operation
+
+Command form:
+
+```text
+test_pblob u32le WORD
+```
+
+Input:
+
+```text
+WORD = exactly eight hexadecimal digits
+```
+
+Example:
+
+```text
+test_pblob u32le 12345678
+```
+
+Expected:
+
+```text
+78563412 12345678
+```
+
+Call:
+
+```c
+pblobPutU32Le()
+pblobGetU32Le()
+```
+
+Use an intentionally unaligned internal buffer.
+
+---
+
+### `u32be` Operation
+
+Command form:
+
+```text
+test_pblob u32be WORD
+```
+
+Example:
+
+```text
+test_pblob u32be 12345678
+```
+
+Expected:
+
+```text
+12345678 12345678
+```
+
+Call:
+
+```c
+pblobPutU32Be()
+pblobGetU32Be()
+```
+
+---
+
+### Classification Operations
+
+Provide:
+
+```text
+test_pblob classify-f16 WORD
+test_pblob classify-f32 WORD
+```
+
+Return a Tcl list:
+
+```text
+finite infinity nan
+```
+
+using integer booleans:
+
+```text
+0
+1
+```
+
+Examples:
+
+```text
+test_pblob classify-f16 3C00
+```
+
+Expected:
+
+```text
+1 0 0
+```
+
+```text
+test_pblob classify-f16 7C00
+```
+
+Expected:
+
+```text
+0 1 0
+```
+
+```text
+test_pblob classify-f16 7E00
+```
+
+Expected:
+
+```text
+0 0 1
+```
+
+The operations must call the production predicates:
+
+```c
+pblobF16IsFinite()
+pblobF16IsInf()
+pblobF16IsNaN()
+
+pblobF32IsFinite()
+pblobF32IsInf()
+pblobF32IsNaN()
+```
+
+Do not reproduce masks in the test-only command.
+
+---
+
+### `decode-int8` Operation
+
+Command form:
+
+```text
+test_pblob decode-int8 BYTE
+```
+
+Accept an integer in:
+
+```text
+0..255
+```
+
+Return:
+
+```text
+-128..127
+```
+
+The operation must call:
+
+```c
+pblobDecodeInt8()
+```
+
+Do not accept values outside the byte domain.
+
+Do not cast through `signed char` in the test command.
+
+---
+
+### `checked-size` Operation
+
+Command form:
+
+```text
+test_pblob checked-size COUNT WIDTH
+```
+
+Required widths:
+
+```text
+1
+2
+4
+```
+
+The operation must call the production checked-size helper.
+
+It must run against the active SQLite connection so that the current:
+
+```text
+SQLITE_LIMIT_LENGTH
+```
+
+is enforced.
+
+Return the calculated byte count on success.
+
+On failure, return the same error category produced by the production helper.
+
+The command must support large `sqlite3_uint64` count inputs where Tcl integer support permits them.
+
+Do not truncate through `int`.
+
+Do not perform an independent multiplication before calling the helper except where necessary to validate Tcl conversion.
+
+---
+
+### `jsonb-integer` Operation
+
+Command form:
+
+```text
+test_pblob jsonb-integer JSON ?INDEX?
+```
+
+Behavior:
+
+* parse `JSON` through SQLite’s internal JSON parser;
+* when `INDEX` is omitted, require the root itself to be a numeric node;
+* when `INDEX` is supplied, require the root to be an array and select that zero-based element;
+* call:
+
+  ```c
+  pblobJsonbInteger()
+  ```
+* return the extracted signed integer.
+
+The wrapper may use a small test-only node-selection helper.
+
+Do not add a production array-navigation abstraction solely for this command.
+
+Do not parse integer text independently in the wrapper.
+
+---
+
+### `jsonb-number` Operation
+
+Command form:
+
+```text
+test_pblob jsonb-number JSON ?INDEX?
+```
+
+Follow the same selection rules as `jsonb-integer`.
+
+Call:
+
+```c
+pblobJsonbNumber()
+```
+
+Return the extracted SQLite numeric value in a Tcl representation capable of preserving:
+
+* ordinary finite values;
+* signed zero where Tcl permits observation;
+* infinity where the extraction helper returns it.
+
+Do not impose binary16 or binary32 target-format rules in this command.
+
+---
+
+### `malformed-jsonb` Operation
+
+Provide a controlled test-only operation for malformed internal JSONB.
+
+Preferred form:
+
+```text
+test_pblob malformed-jsonb CASE HELPER
+```
+
+Where `CASE` selects a predefined malformed representation and `HELPER` selects:
+
+```text
+integer
+number
+traverse
+```
+
+Required predefined cases:
+
+```text
+offset-past-end
+truncated-root-header
+truncated-child-header
+payload-past-end
+zero-length-integer
+zero-length-float
+sign-only
+malformed-decimal
+malformed-hex
+reserved-type
+count-mismatch
+```
+
+Construct malformed buffers in test-only C.
+
+Do not accept arbitrary raw pointers or addresses from Tcl.
+
+Do not expose a general memory mutation primitive.
+
+The command must call the actual production helper or traversal path being tested.
+
+Expected result: controlled error, never crash or out-of-bounds access.
+
+---
+
+### `fp16-mode` Operation
+
+Command form:
+
+```text
+test_pblob fp16-mode
+```
+
+Return:
+
+```text
+portable
+```
+
+when:
+
+```c
+FP16_USE_NATIVE_CONVERSION == 0
+```
+
+The command must fail or return a distinct unexpected value if native conversion is enabled.
+
+This is a direct build-configuration check.
+
+Do not infer the mode from conversion results.
+
+---
+
+### Exhaustive Binary16 Classification
+
+Command form:
+
+```text
+test_pblob exhaustive-f16-classify
+```
+
+Loop over all:
+
+```text
+0x0000 through 0xFFFF
+```
+
+using the production classification helpers.
+
+Return a Tcl list or dictionary containing at least:
+
+```text
+finite
+infinity
+nan
+positive-finite
+negative-finite
+positive-infinity
+negative-infinity
+positive-nan
+negative-nan
+overlap
+unclassified
+```
+
+Required totals:
+
+```text
+finite              63488
+infinity                 2
+nan                    2046
+
+positive-finite       31744
+negative-finite       31744
+
+positive-infinity         1
+negative-infinity         1
+
+positive-nan           1023
+negative-nan           1023
+
+overlap                   0
+unclassified              0
+```
+
+Each raw word must belong to exactly one of:
+
+```text
+finite
+infinity
+NaN
+```
+
+The loop must run entirely in test-only C.
+
+Do not issue 65,536 Tcl callbacks.
+
+---
+
+### Exhaustive Binary16 Conversion
+
+Command form:
+
+```text
+test_pblob exhaustive-f16-convert
+```
+
+For every finite binary16 word:
+
+1. Convert using:
+
+   ```c
+   fp16_ieee_to_fp32_value()
+   ```
+2. Obtain resulting binary32 bits using:
+
+   ```c
+   fp32_to_bits()
+   ```
+3. Verify the result is finite.
+4. Compare against an independent test-only half-to-float oracle.
+5. Count mismatches.
+6. Compute a stable digest over:
+
+   ```text
+   input binary16 bits
+   expected binary32 bits
+   actual binary32 bits
+   ```
+
+Return at least:
+
+```text
+tested
+mismatches
+digest
+```
+
+Required:
+
+```text
+tested = 63488
+mismatches = 0
+```
+
+The independent oracle must not call:
+
+```c
+fp16_ieee_to_fp32_value()
+```
+
+internally.
+
+A concise test-only integer implementation of IEEE binary16-to-binary32 mapping is acceptable.
+
+Do not add that oracle to production code.
+
+---
+
+### Independent Binary16 Oracle
+
+Implement the test-only oracle using integer bit operations.
+
+For finite binary16 values, derive the expected binary32 bit pattern from:
+
+```text
+sign
+binary16 exponent
+binary16 fraction
+```
+
+Handle:
+
+* positive and negative zero;
+* subnormal normalization;
+* ordinary normals.
+
+The oracle must not:
+
+* use native half types;
+* call vendored FP16 conversion functions;
+* call production unpacking;
+* convert through decimal text.
+
+Keep the oracle under:
+
+```c
+#ifdef SQLITE_TEST
+```
+
+Document that it exists only as an independent test reference.
+
+---
+
+### Exhaustive Binary16 Round Trip
+
+Command form:
+
+```text
+test_pblob exhaustive-f16-roundtrip
+```
+
+For every finite binary16 raw word:
+
+1. Decode with:
+
+   ```c
+   fp16_ieee_to_fp32_value()
+   ```
+2. Promote to `double`.
+3. Format using the same SQLite JSON floating formatter used by production unpacking.
+4. Parse the resulting JSON through the same SQLite JSON parser used by production packing.
+5. Extract the numeric value.
+6. Narrow to binary32.
+7. Convert with:
+
+   ```c
+   fp16_ieee_from_fp32_value()
+   ```
+8. Compare resulting raw bits with the original word.
+
+Required:
+
+```text
+tested = 63488
+mismatches = 0
+```
+
+Return at least:
+
+```text
+tested
+mismatches
+first-input
+first-output
+first-json
+```
+
+Use empty values for first-failure fields when no mismatch occurs.
+
+The test must exercise the actual production formatting and parsing path as directly as practical.
+
+Do not reduce this to a direct:
+
+```text
+half -> float -> half
+```
+
+test, because that would not cover JSON formatting and reparsing.
+
+---
+
+### Exhaustive Round-Trip Efficiency
+
+The exhaustive round-trip test must run primarily in C.
+
+Avoid:
+
+* preparing one SQL statement per raw word;
+* invoking Tcl once per raw word;
+* constructing 63,488 independent database connections.
+
+A single prepared SQLite expression or direct use of the internal JSON helpers may be reused where correct.
+
+The command may periodically check for SQLite OOM or interrupt conditions if consistent with testfixture conventions.
+
+---
+
+### Stable Digest
+
+Use a simple documented stable digest suitable for regression detection.
+
+Acceptable choices include:
+
+```text
+FNV-1a 64-bit
+SHA-256 through an existing in-tree implementation
+```
+
+Prefer a compact dependency-free test-only digest such as FNV-1a 64-bit.
+
+Define byte order explicitly.
+
+For example, feed each integer as big-endian bytes:
+
+```text
+binary16 input: 2 bytes
+binary32 output: 4 bytes
+```
+
+Return lowercase fixed-width hexadecimal text.
+
+Do not use implementation-defined in-memory struct bytes.
+
+---
+
+### Test-Only OOM Behavior
+
+The consolidated hooks must not interfere with SQLite fault injection.
+
+For operations that allocate:
+
+* propagate OOM cleanly;
+* release temporary parse and string state;
+* return `TCL_ERROR`;
+* leave the interpreter usable.
+
+Do not add broad new OOM matrices in this stage; ensure the hooks themselves are safe under the existing fault tests.
+
+---
+
+### Tcl Test Module
+
+Create or extend a focused module:
+
+```text
+test/pblob_lowlevel.test
+```
+
+This module must test the consolidated `test_pblob` command.
+
+Keep public SQL behavior tests in:
+
+```text
+test/pblob.test
+```
+
+Do not move ordinary SQL tests unnecessarily.
+
+Required low-level test groups:
+
+```text
+command registration
+argument validation
+u16 endian helpers
+u32 endian helpers
+unaligned access
+binary16 classification
+binary32 classification
+full int8 byte domain
+checked-size behavior
+JSONB integer extraction
+JSONB numeric extraction
+malformed JSONB
+portable FP16 mode
+exhaustive binary16 classification
+exhaustive binary16 conversion
+exhaustive binary16 JSON round trip
+```
+
+Use standard SQLite Tcl test naming conventions.
+
+---
+
+### Remove Temporary Test Hooks
+
+Review all earlier-stage test-only interfaces.
+
+Remove:
+
+* duplicate commands;
+* temporary SQL debug functions;
+* one-off operation names superseded by `test_pblob`;
+* wrappers that reimplement production logic;
+* obsolete test registration code;
+* unused test helper declarations.
+
+Update tests to use the consolidated interface.
+
+Do not leave parallel low-level interfaces unless required by unrelated existing project code.
+
+---
+
+### Production Isolation
+
+Verify normal builds contain none of:
+
+```text
+test_pblob
+test-only oracle code
+exhaustive loops
+test-only digest code
+malformed JSONB constructors
+Tcl registration code
+```
+
+The production object must contain only normal extension implementation.
+
+Use compile guards narrowly enough that test-only string literals and operation names are also excluded.
+
+---
+
+### Public SQL Regression Tests
+
+Run the full public SQL suite after consolidating hooks.
+
+Verify unchanged behavior for:
+
+```text
+pblob_pack(..., 'int8')
+pblob_unpack(..., 'int8')
+pblob_pack(..., '<f2')
+pblob_unpack(..., '<f2')
+pblob_pack(..., '>f2')
+pblob_unpack(..., '>f2')
+pblob_pack(..., '<f4')
+pblob_unpack(..., '<f4')
+pblob_pack(..., '>f4')
+pblob_unpack(..., '>f4')
+```
+
+Test-only consolidation must not affect:
+
+* validation order;
+* error messages;
+* packed bytes;
+* JSON formatting;
+* JSON subtype;
+* length limits;
+* OOM behavior;
+* prepared-statement reuse.
+
+---
+
+### Build Verification
+
+Perform all required configurations.
+
+#### Normal Build
+
+Build the normal amalgamation and release targets.
+
+Verify:
+
+* no Tcl dependency is introduced;
+* no test-only command symbol is present;
+* no test-only operation strings are present where practical to inspect;
+* public SQL behavior is unchanged;
+* no new warnings appear.
+
+#### Test Build
+
+Build `testfixture` with:
+
+```text
+SQLITE_TEST
+SQLITE_DEBUG
+FP16_USE_NATIVE_CONVERSION=0
+```
+
+Run:
+
+```text
+test/pblob.test
+test/pblob_lowlevel.test
+```
+
+Run all prior focused `pblob` tests.
+
+#### JSON-Disabled Test Build
+
+Build with:
+
+```text
+SQLITE_TEST
+SQLITE_OMIT_JSON
+```
+
+Verify:
+
+* no production `pblob` functions are registered;
+* `test_pblob` is either absent or returns a clearly controlled unavailable result according to the chosen compile-guard structure;
+* no JSON or FP16 symbols remain unresolved;
+* no warnings appear.
+
+Preferred behavior: do not register `test_pblob` when `SQLITE_OMIT_JSON` is active.
+
+#### Strict-Warning Build
+
+Compile both normal and test configurations with the practical strict-warning profile.
+
+Treat warnings in test-only code as failures.
+
+#### Sanitizer Build
+
+Run `pblob_lowlevel.test` and public `pblob` tests under ASan and UBSan where supported.
+
+The malformed JSONB operations must fail cleanly without sanitizer findings.
+
+---
+
+### Prohibited Work
+
+Do not:
+
+* add new production SQL functions;
+* change the public SQL API;
+* change accepted formats;
+* change packed representations;
+* change conversion paths;
+* change public error semantics except to fix a proven Stage 12 regression;
+* create `src/test_pblob.c`;
+* create `pblob_test.c`;
+* create `pblob.h`;
+* remove `static` from production helpers;
+* expose production helpers through DLL exports;
+* register low-level helpers as SQL functions;
+* accept arbitrary raw addresses from Tcl;
+* expose general memory read or write operations;
+* modify `json.c`;
+* modify the vendored FP16 implementation;
+* refactor unrelated SQLite test infrastructure.
+
+Do not proceed to full test-suite organization, vector-generation cleanup, or release integration beyond what this stage requires.
+
+---
+
+### Expected Deliverables
+
+Provide:
+
+1. Updated `pblob.c` containing the consolidated `SQLITE_TEST` interface.
+2. Updated testfixture registration for `test_pblob`.
+3. New or updated:
+
+   ```text
+   test/pblob_lowlevel.test
+   ```
+4. Updated prior tests that used temporary hooks.
+5. Exact build commands executed.
+6. Exact test commands executed.
+7. Results for:
+
+   * normal build;
+   * test build;
+   * JSON-disabled test build;
+   * strict-warning build;
+   * sanitizer build.
+8. A concise list of modified files.
+9. A concise list of removed temporary test hooks.
+10. Confirmation that:
+
+    * all test-only C code remains in `pblob.c`;
+    * no `src/test_pblob.c` or other test C module was added;
+    * production helpers remain `static`;
+    * `test_pblob` is available only in test builds;
+    * exhaustive binary16 classification passes;
+    * independent binary16 conversion comparison passes;
+    * exhaustive binary16 JSON round-trip passes;
+    * malformed internal JSONB tests fail safely;
+    * public SQL behavior remains unchanged;
+    * no public C API or header was added.
+
+---
+
+### Acceptance Criteria
+
+Stage 13 is complete only when:
+
+* one consolidated `test_pblob` Tcl command replaces temporary low-level hooks;
+* the command exists only under `SQLITE_TEST`;
+* all test-only C implementation remains inside `pblob.c`;
+* no additional C source module is created;
+* all production helpers remain `static`;
+* endian operations call the production endian helpers;
+* classification operations call the production predicates;
+* signed-byte testing covers all 256 byte values;
+* checked-size testing exercises the active SQLite length limit;
+* JSONB extraction operations call the production extraction helpers;
+* malformed internal JSONB operations fail without memory-safety defects;
+* `fp16-mode` confirms portable conversion;
+* exhaustive binary16 classification reports:
+
+  ```text
+  63488 finite
+  2 infinity
+  2046 NaN
+  ```
+* every binary16 pattern belongs to exactly one classification;
+* all 63,488 finite binary16 values match the independent conversion oracle;
+* all 63,488 finite binary16 values survive the JSON unpack/pack round trip with identical bits;
+* no production build contains the test command or test-only oracle;
+* all public SQL tests remain passing;
+* normal build succeeds;
+* test build succeeds;
+* JSON-disabled build succeeds;
+* strict-warning build is clean;
+* sanitizer runs report no defects;
+* no public C API or header exists.
+
+Stop after satisfying these criteria. Do not proceed to Stage 14.
+
+---
+---
+
+## 📗 Stage 14: Complete SQL, Vector, Limit, and Fault Tests
+
+Implement only Stage 14 of the packed numeric BLOB extension.
+
+This stage begins from the completed Stage 13 state, where:
+
+* `pblob.c` is the only production and test-specific C module for the extension;
+* all five formats are functional in both directions;
+* validation, bounds, ownership, errors, limits, and cleanup have been audited;
+* a consolidated `test_pblob` Tcl command exists only under `SQLITE_TEST`;
+* exhaustive binary16 classification, conversion, and JSON round-trip operations exist;
+* focused public SQL and low-level tests exist;
+* independent vector generation may still be incomplete, fragmented, or mixed into earlier tests;
+* focused length-limit and OOM tests exist but have not yet been organized into their final modules.
+
+Stage 14 must complete and organize the comprehensive test suite.
+
+Do not change public SQL semantics unless a newly added test exposes a genuine defect. Every defect fixed in this stage must receive a regression test.
+
+### Objective
+
+Create the final focused test structure for the extension.
+
+The completed suite must cover:
+
+* public SQL contract;
+* exact packed bytes;
+* independent reference vectors;
+* all supported endian variants;
+* integer boundaries;
+* binary16 and binary32 boundary values;
+* signed zero;
+* subnormals;
+* rounding;
+* overflow and underflow;
+* non-finite rejection;
+* malformed JSON;
+* malformed internal JSONB;
+* invalid packed lengths;
+* SQLite length limits;
+* OOM and fault injection;
+* prepared-statement reuse;
+* result subtype;
+* expression and schema integration;
+* large inputs;
+* exhaustive binary16 behavior;
+* deterministic repeated execution;
+* release-build smoke behavior.
+
+The suite must be divided by concern so failures are easy to identify.
+
+### Scope
+
+This stage is limited to:
+
+1. Finalizing the public SQL test module.
+2. Finalizing the low-level test module.
+3. Adding committed independent reference vectors.
+4. Adding a dedicated length-limit test module.
+5. Adding a dedicated fault-injection test module.
+6. Adding an aggregate runner.
+7. Completing the independent vector generator.
+8. Adding prepared-statement and schema-integration coverage.
+9. Removing duplicated or obsolete tests.
+10. Running every focused test module independently and together.
+11. Preserving the single-C-module requirement.
+
+Do not redesign `pblob.c`.
+
+---
+
+### Final Test Layout
+
+Use this final focused structure:
+
+```text
+test/pblob.test
+test/pblob_lowlevel.test
+test/pblob_vectors.test
+test/pblob_limits.test
+test/pblob_fault.test
+test/pblob_all.test
+tool/gen_pblob_vectors.py
+```
+
+A committed generated vector-data file may also be added, for example:
+
+```text
+test/pblob_vectors_data.tcl
+```
+
+or:
+
+```text
+test/pblob_vectors.data
+```
+
+Use the project’s established convention.
+
+Do not add another C test module.
+
+All test-only C support must remain in:
+
+```text
+pblob.c
+```
+
+under:
+
+```c
+#ifdef SQLITE_TEST
+```
+
+---
+
+### Test Module Responsibilities
+
+The modules must have clear, non-overlapping primary responsibilities.
+
+#### `test/pblob.test`
+
+Public SQL contract and ordinary functional behavior:
+
+* registration;
+* arity;
+* NULL propagation;
+* storage-class validation;
+* exact format parsing;
+* malformed JSON;
+* root-array validation;
+* element-type validation;
+* ordinary exact pack and unpack examples;
+* empty values;
+* JSON subtype;
+* prepared-statement reuse;
+* schema and expression integration;
+* representative large arrays;
+* public error precedence.
+
+#### `test/pblob_lowlevel.test`
+
+Private helper and exhaustive test operations through:
+
+```text
+test_pblob
+```
+
+Including:
+
+* endian primitives;
+* unaligned access;
+* bit classification;
+* full signed-byte decoding;
+* checked-size arithmetic;
+* JSONB numeric extraction;
+* malformed internal JSONB;
+* portable FP16 mode;
+* exhaustive binary16 classification;
+* exhaustive binary16 conversion;
+* exhaustive binary16 JSON round trip.
+
+#### `test/pblob_vectors.test`
+
+Committed independent numeric vectors:
+
+* `int8`;
+* binary16 packing;
+* binary16 unpacking;
+* binary32 packing;
+* binary32 unpacking;
+* both endian forms;
+* boundary values;
+* rounding values;
+* random finite patterns;
+* invalid non-finite words.
+
+#### `test/pblob_limits.test`
+
+SQLite limit behavior:
+
+* packed BLOB output limits;
+* unpacked JSON text limits;
+* exact and near-boundary behavior;
+* limit restoration;
+* statement recovery after limit failures.
+
+#### `test/pblob_fault.test`
+
+SQLite fault injection and allocation failure:
+
+* JSON parsing;
+* numeric payload duplication;
+* output BLOB allocation;
+* `JsonString` growth;
+* late failure after partial processing;
+* recovery after OOM.
+
+#### `test/pblob_all.test`
+
+Focused aggregate runner that sources or executes all other `pblob` modules.
+
+It must not duplicate their test bodies.
+
+---
+
+### Public SQL Contract Tests
+
+Finalize tests proving the only public functions are:
+
+```sql
+pblob_pack(X, FORMAT)
+pblob_unpack(X, FORMAT)
+```
+
+Verify:
+
+* each has arity 2;
+* no one-argument or variable-arity form exists;
+* no `.load` is required;
+* no aliases exist;
+* functions are available on newly opened connections;
+* functions are unavailable under `SQLITE_OMIT_JSON`.
+
+Retain wrong-arity tests for:
+
+```text
+0 arguments
+1 argument
+3 arguments
+```
+
+for both functions.
+
+---
+
+### NULL Propagation Matrix
+
+Test every relevant NULL combination.
+
+For `pblob_pack()`:
+
+```sql
+pblob_pack(NULL, 'int8')
+pblob_pack('[]', NULL)
+pblob_pack(NULL, NULL)
+pblob_pack(NULL, 1)
+pblob_pack(1, NULL)
+pblob_pack(NULL, x'00')
+```
+
+For `pblob_unpack()`:
+
+```sql
+pblob_unpack(NULL, 'int8')
+pblob_unpack(x'', NULL)
+pblob_unpack(NULL, NULL)
+pblob_unpack(NULL, 1)
+pblob_unpack(1, NULL)
+pblob_unpack(NULL, x'00')
+```
+
+Every call containing either SQL NULL must return SQL NULL.
+
+These tests must prove NULL propagation takes precedence over all other errors.
+
+---
+
+### Strict Type Tests
+
+For `pblob_pack()` verify:
+
+```text
+argument 0 must be TEXT
+argument 1 must be TEXT
+```
+
+Reject:
+
+```text
+INTEGER
+REAL
+BLOB
+JSONB
+```
+
+as the first argument.
+
+For `pblob_unpack()` verify:
+
+```text
+argument 0 must be BLOB
+argument 1 must be TEXT
+```
+
+Reject:
+
+```text
+TEXT
+INTEGER
+REAL
+```
+
+as the first argument.
+
+Confirm `jsonb('[]')` remains rejected by `pblob_pack()` because it is a BLOB.
+
+Confirm arbitrary BLOB content, including JSONB bytes, remains acceptable as raw input to `pblob_unpack()` when its length and values are valid for the selected packed format.
+
+---
+
+### Format Parsing Tests
+
+Accept only:
+
+```text
+int8
+<f2
+>f2
+<f4
+>f4
+```
+
+Reject:
+
+```text
+INT8
+Int8
+i8
+s8
+f2
+f4
+float16
+float32
+fp16
+fp32
+<f16
+>f16
+<f32
+>f32
+=f2
+=f4
+@f2
+@f4
+native
+```
+
+Reject whitespace variants:
+
+```text
+" int8"
+"int8 "
+"\tint8"
+"int8\n"
+" <f2"
+"<f2 "
+```
+
+Reject embedded-NUL variants through bound Tcl values:
+
+```text
+"int8\0"
+"<f2\0"
+"<f2\0junk"
+">f4\0suffix"
+```
+
+Test both functions.
+
+---
+
+### Error-Precedence Tests
+
+Add an explicit matrix proving the public validation order.
+
+For packing:
+
+```text
+wrong first type + wrong format type
+valid first type + wrong format type
+valid first type + unsupported format
+malformed JSON + valid format
+valid non-array JSON
+array with wrong element type
+array with out-of-range element
+```
+
+For unpacking:
+
+```text
+wrong first type + wrong format type
+valid BLOB + wrong format type
+valid BLOB + unsupported format
+invalid length
+valid length containing non-finite float word
+```
+
+Assert exact stable errors for extension-defined cases.
+
+Do not over-specify SQLite core malformed-JSON wording if it varies by build configuration. Test the error category or stable relevant portion where necessary.
+
+---
+
+### `int8` Functional Tests
+
+Retain exact packing vectors:
+
+```text
+[]                           -> empty BLOB
+[-128,-1,0,1,127]           -> 80FF00017F
+[-128,-127,-1,0,1,126,127]  -> 8081FF00017E7F
+```
+
+Retain exact unpacking vectors:
+
+```text
+empty BLOB       -> []
+80FF00017F       -> [-128,-1,0,1,127]
+```
+
+Test the complete packing domain:
+
+```text
+-128 through 127
+```
+
+Test the complete unpacking byte domain:
+
+```text
+00 through FF
+```
+
+Verify:
+
+```text
+pack(unpack(blob,'int8'),'int8') == blob
+```
+
+for arbitrary deterministic BLOBs.
+
+Reject:
+
+* `-129`;
+* `128`;
+* floating lexical forms;
+* null;
+* booleans;
+* text;
+* nested containers.
+
+---
+
+### Binary16 Public Tests
+
+Retain representative public tests for both endian forms.
+
+At minimum include:
+
+```text
+positive zero
+negative zero
+smallest positive subnormal
+largest positive subnormal
+smallest positive normal
+0.5
+1.0
+-1.0
+2.0
+maximum positive finite
+maximum negative finite
+```
+
+Verify:
+
+* exact packing bytes;
+* semantic unpack values;
+* repacked bit identity;
+* endian conversion;
+* odd-length rejection;
+* infinity rejection;
+* NaN rejection;
+* first invalid element index.
+
+The exhaustive binary16 domain remains in `pblob_lowlevel.test`.
+
+Do not repeat all 65,536 patterns in Tcl vector tests.
+
+---
+
+### Binary32 Public Tests
+
+Include representative tests for:
+
+```text
+positive zero
+negative zero
+smallest positive subnormal
+largest positive subnormal
+smallest positive normal
+0.5
+1.0
+-1.0
+2.0
+maximum positive finite
+maximum negative finite
+```
+
+Verify:
+
+* exact packing bytes;
+* semantic unpack values;
+* repacked bit identity;
+* endian conversion;
+* invalid lengths 1, 2, and 3 modulo 4;
+* infinity rejection;
+* multiple NaN representations;
+* first invalid element index.
+
+Include deterministic random finite binary32 patterns from the committed independent vector set.
+
+---
+
+### Independent Vector Generator
+
+Complete:
+
+```text
+tool/gen_pblob_vectors.py
+```
+
+The script must generate committed vector data independently of `pblob.c`.
+
+It must not:
+
+* invoke SQLite;
+* invoke `pblob_pack()`;
+* invoke `pblob_unpack()`;
+* read previously generated implementation output as its oracle.
+
+The script must generate:
+
+```text
+int8 exact vectors
+binary16 pack vectors
+binary16 unpack vectors
+binary32 pack vectors
+binary32 unpack vectors
+invalid binary16 words
+invalid binary32 words
+rounding-boundary cases
+deterministic random finite raw-word cases
+```
+
+---
+
+### Generator Determinism
+
+The generator must be deterministic.
+
+Define:
+
+```text
+fixed random seed
+fixed output ordering
+fixed numeric formatting policy
+fixed endian encoding
+fixed line endings where practical
+```
+
+Running the script twice with the same runtime and dependencies must produce byte-identical output.
+
+Include a generated-file header recording:
+
+```text
+generator filename
+generator schema version
+Python version
+dependency versions
+random seed
+FP16 oracle method
+generation timestamp omitted or normalized
+```
+
+Do not include a changing timestamp that makes reproducibility difficult.
+
+---
+
+### Binary32 Oracle
+
+For binary32 vectors, use a clearly independent method such as Python’s:
+
+```python
+struct.pack()
+struct.unpack()
+```
+
+Model the required packing path:
+
+```text
+input numeric value
+-> Python binary64
+-> IEEE binary32
+-> raw bits
+```
+
+For unpack vectors, start from raw finite binary32 words and derive the corresponding Python float value.
+
+Do not use native byte order implicitly.
+
+Always specify:
+
+```text
+<
+>
+```
+
+or explicitly manipulate raw integer words.
+
+---
+
+### Binary16 Oracle
+
+For binary16 vectors, model the required path:
+
+```text
+numeric value
+-> binary64
+-> binary32
+-> binary16
+```
+
+Do not silently use direct binary64-to-binary16 conversion if that could differ.
+
+Preferred approaches:
+
+1. Implement an independent integer binary32-to-binary16 conversion in Python.
+2. Use a verified library path only after explicitly narrowing to binary32 first.
+3. Cross-check generated canonical vectors against a second independent implementation during generator development.
+
+The committed test data is the test oracle. The generator does not run during normal test execution.
+
+---
+
+### Rounding Vector Coverage
+
+Generate targeted rounding vectors for binary16 and binary32.
+
+Include:
+
+```text
+exact representable values
+halfway values
+just below halfway
+just above halfway
+ties resolving to even
+normal/subnormal transition
+subnormal/zero transition
+maximum finite/infinity transition
+positive and negative forms
+```
+
+For binary16, include known double-rounding-sensitive cases for:
+
+```text
+binary64 -> binary32 -> binary16
+```
+
+For binary32, model:
+
+```text
+binary64 -> binary32
+```
+
+Commit the resulting exact raw words.
+
+---
+
+### Deterministic Random Vectors
+
+Generate a fixed deterministic sample of finite raw words.
+
+Recommended minimum:
+
+```text
+binary16: 256 finite raw words
+binary32: 512 finite raw words
+```
+
+Include both signs and all relevant exponent classes.
+
+For binary16, exhaustive coverage already exists, so the random committed sample primarily validates public SQL and endian handling.
+
+For binary32, sample:
+
+```text
+zeros
+subnormals
+small normals
+ordinary normals
+large normals
+maximum-range values
+both signs
+```
+
+Exclude non-finite patterns from the finite vector set.
+
+Generate separate invalid sets for infinity and NaN.
+
+---
+
+### Vector Data Format
+
+Use a simple committed format that Tcl can consume deterministically.
+
+For example:
+
+```tcl
+set pblob_f16_vectors {
+  {name zero value 0.0 bits 0000}
+  ...
+}
+```
+
+or a structured line-oriented text format.
+
+The format must encode:
+
+```text
+case name
+source numeric text where applicable
+raw word
+little-endian bytes
+big-endian bytes
+expected classification
+expected validity
+```
+
+Do not require Python during the test run.
+
+---
+
+### Vector File Verification
+
+Add a generator verification mode such as:
+
+```text
+--check
+```
+
+It must:
+
+1. Regenerate output in memory or in a temporary file.
+2. Compare it to the committed vector data.
+3. Exit nonzero if they differ.
+4. Leave the committed file unchanged.
+
+Also support an explicit update mode such as:
+
+```text
+--write
+```
+
+Do not overwrite committed vector data during ordinary test runs.
+
+---
+
+### Length-Limit Test Module
+
+Create:
+
+```text
+test/pblob_limits.test
+```
+
+Test packed BLOB output limits for:
+
+```text
+int8 width 1
+f2 width 2
+f4 width 4
+```
+
+For each width:
+
+* set a reduced connection length limit;
+* test output below the limit;
+* test output at the limit where feasible;
+* test output above the limit;
+* verify correct error;
+* restore the original limit.
+
+Use `try/finally`-style Tcl cleanup conventions where available so limits are restored even when an assertion fails.
+
+---
+
+### Unpacked JSON Length Limits
+
+For each unpack format:
+
+```text
+int8
+<f2
+>f2
+<f4
+>f4
+```
+
+construct input whose resulting compact JSON:
+
+* fits;
+* approaches the configured limit;
+* exceeds the configured limit.
+
+Verify:
+
+* fitting result is valid JSON;
+* oversized result fails cleanly;
+* no partial result is returned;
+* no JSON subtype is associated with an error result;
+* subsequent ordinary calls succeed;
+* the original limit is restored.
+
+Do not assume a fixed text expansion ratio.
+
+Use actual controlled values and measured expected output lengths.
+
+---
+
+### Fault Test Module
+
+Create:
+
+```text
+test/pblob_fault.test
+```
+
+Use SQLite’s established fault-injection mechanism.
+
+Cover allocation failures in:
+
+```text
+JSON text parsing
+JSON text to internal JSONB conversion
+numeric payload duplication
+pack output allocation
+JsonString initial allocation
+JsonString growth
+late JsonString growth
+result finalization where applicable
+```
+
+Test each public format family:
+
+```text
+int8 pack
+int8 unpack
+f2 pack
+f2 unpack
+f4 pack
+f4 unpack
+```
+
+Both endian variants need not duplicate every identical allocator path, but at least one path per endian-specific implementation must be covered where code differs.
+
+---
+
+### Fault-Test Requirements
+
+For every injected failure verify:
+
+```text
+an error is returned
+no partial BLOB is returned
+no partial JSON is returned
+no stale JSON subtype remains
+all owned state is released
+the prepared statement remains reusable
+a subsequent valid execution succeeds
+```
+
+Do not assert only that “an error occurred.”
+
+Where the harness supports leak detection, integrate it.
+
+Do not treat non-OOM conversion errors as successful fault-injection coverage.
+
+---
+
+### Prepared-Statement Tests
+
+Complete prepared-statement reuse tests for:
+
+```sql
+SELECT pblob_pack(?1, ?2);
+SELECT pblob_unpack(?1, ?2);
+```
+
+Alternate among:
+
+```text
+valid empty input
+valid small input
+valid large input
+wrong type
+bad format
+malformed JSON
+non-array JSON
+invalid element type
+out-of-range element
+invalid BLOB length
+non-finite packed value
+valid input after error
+```
+
+Verify:
+
+* no stale result;
+* no stale parse;
+* no stale output allocation;
+* no stale element index;
+* no stale subtype;
+* correct recovery after large output;
+* correct recovery after OOM where supported.
+
+---
+
+### Expression Integration Tests
+
+Test direct use in expressions:
+
+```sql
+length(pblob_pack(...))
+hex(pblob_pack(...))
+typeof(pblob_pack(...))
+
+json_valid(pblob_unpack(...))
+json_type(pblob_unpack(...))
+json_array_length(pblob_unpack(...))
+json_extract(pblob_unpack(...), '$[0]')
+```
+
+Test nesting:
+
+```sql
+pblob_pack(pblob_unpack(blob, format), format)
+pblob_unpack(pblob_pack(json, format), format)
+```
+
+Test JSON composition:
+
+```sql
+json_array(pblob_unpack(...))
+json_object('values', pblob_unpack(...))
+```
+
+Verify unpacked JSON is inserted as an array, not quoted text.
+
+---
+
+### Schema Integration Tests
+
+Because both functions are registered as deterministic and innocuous, test use in schema expressions where SQLite permits such functions.
+
+Include representative cases such as:
+
+```text
+generated columns
+CHECK constraints
+expression indexes
+views
+triggers
+```
+
+Only test constructs supported by the selected SQLite source and build configuration.
+
+Examples:
+
+```sql
+CREATE TABLE t(
+  source TEXT,
+  packed BLOB GENERATED ALWAYS AS (
+    pblob_pack(source, 'int8')
+  ) STORED
+);
+```
+
+and:
+
+```sql
+CREATE INDEX t_unpack_idx
+ON t(json_array_length(pblob_unpack(packed, 'int8')));
+```
+
+Where schema usage is rejected by SQLite for reasons unrelated to `pblob`, document and test the actual supported subset rather than forcing an unsupported case.
+
+---
+
+### Deterministic-Function Tests
+
+Verify repeated calls with identical inputs return identical results.
+
+For each format, execute:
+
+```text
+same pack input many times
+same unpack input many times
+same input across separate prepared statements
+same input across separate connections
+```
+
+Compare exact BLOB bytes or exact JSON text where formatting is stable.
+
+At minimum verify semantic and bit identity for floating output.
+
+---
+
+### Innocuous-Function Tests
+
+Where the test harness supports trusted-schema controls, verify the functions remain usable under the intended innocuous-function policy.
+
+Test the selected SQLite behavior with:
+
+```text
+trusted_schema ON
+trusted_schema OFF
+```
+
+for supported schema contexts.
+
+Do not change registration flags merely to make an unsupported schema construct pass.
+
+---
+
+### Large-Input Tests
+
+Test representative element counts:
+
+```text
+0
+1
+2
+128
+256
+768
+1024
+1536
+4096
+16384
+```
+
+Use larger counts only when runtime remains practical.
+
+For packing verify:
+
+```text
+exact output length
+correct first element
+correct middle element
+correct last element
+deterministic repeated output
+```
+
+For unpacking verify:
+
+```text
+valid JSON
+correct array length
+correct first value
+correct middle value
+correct last value
+repacking identity
+```
+
+Avoid constructing huge expected JSON strings directly in Tcl when semantic checks are sufficient.
+
+---
+
+### Public Error Message Tests
+
+Assert exact extension-defined messages for:
+
+```text
+wrong first argument type
+wrong format type
+unsupported format
+expected array
+wrong element type
+int8 range error
+float16 range error
+float32 range error
+invalid f2 length
+invalid f4 length
+non-finite f2 unpack element
+non-finite f4 unpack element
+malformed internal JSON representation through test hook
+```
+
+Ensure zero-based element indexes are correct.
+
+Do not require exact full text for SQLite core OOM, malformed JSON, or length-limit messages where platform or build variations exist.
+
+---
+
+### Remove Duplicate Tests
+
+Review all earlier-stage tests and remove duplication that no longer adds coverage.
+
+Examples:
+
+* low-level endian tests duplicated in `pblob.test`;
+* exhaustive binary16 tests repeated in vector tests;
+* identical NULL matrices repeated in several modules;
+* old placeholder tests;
+* tests using temporary command names removed in Stage 13.
+
+Retain a small smoke subset in `pblob.test` even when detailed coverage exists elsewhere.
+
+Do not remove tests solely to reduce runtime without preserving equivalent coverage.
+
+---
+
+### Aggregate Runner
+
+Create:
+
+```text
+test/pblob_all.test
+```
+
+It must run:
+
+```text
+pblob.test
+pblob_lowlevel.test
+pblob_vectors.test
+pblob_limits.test
+pblob_fault.test
+```
+
+Use the test harness’s standard mechanism for sourcing or invoking test files.
+
+The aggregate runner must:
+
+* preserve test isolation;
+* report which module failed;
+* not silently skip unavailable modules;
+* avoid recursively running itself;
+* not duplicate test bodies.
+
+Where fault tests require a separate harness mode, invoke them according to SQLite convention rather than merely sourcing them incorrectly.
+
+---
+
+### Independent Module Execution
+
+Each test module must run independently.
+
+Verify:
+
+```text
+pblob.test
+pblob_lowlevel.test
+pblob_vectors.test
+pblob_limits.test
+pblob_fault.test
+```
+
+do not rely on side effects from a previously run module.
+
+Each module must:
+
+* create its own required tables;
+* restore modified limits;
+* restore pragmas;
+* clean up prepared statements;
+* avoid relying on test order;
+* use unique test names.
+
+---
+
+### Test Naming
+
+Use consistent test names, for example:
+
+```text
+pblob-public-*
+pblob-lowlevel-*
+pblob-vectors-*
+pblob-limits-*
+pblob-fault-*
+```
+
+Names must be unique across modules.
+
+Do not retain obsolete stage-number-based names if they obscure final test purpose.
+
+---
+
+### Test Runtime
+
+Keep the normal focused suite practical.
+
+The exhaustive binary16 tests may be the most expensive portion, but should remain implemented primarily in C.
+
+Avoid:
+
+* 65,536 separate Tcl test cases;
+* large repeated SQL string construction;
+* unnecessary database reopen loops;
+* running the vector generator from ordinary tests.
+
+Record approximate test runtime for each module.
+
+Do not remove exhaustive coverage solely because it is slower than ordinary SQL tests.
+
+---
+
+### Test Data Integrity
+
+Add checks that committed vector data is internally consistent.
+
+Verify:
+
+* little-endian bytes reverse each raw word correctly;
+* big-endian bytes equal canonical raw-word order;
+* finite vectors are classified finite;
+* invalid vectors are actually infinity or NaN;
+* vector names are unique;
+* expected lengths match element counts.
+
+These checks must not use the production conversion result as the sole oracle.
+
+---
+
+### Release Shell Smoke File
+
+Add a concise SQL smoke script if the project uses such artifacts, for example:
+
+```text
+test/pblob_smoke.sql
+```
+
+It should test:
+
+```text
+pack/unpack int8
+pack/unpack <f2
+pack/unpack >f2
+pack/unpack <f4
+pack/unpack >f4
+empty inputs
+signed zero
+one non-finite rejection
+JSON subtype composition
+```
+
+This file must be runnable by the normal release `sqlite3.exe`.
+
+Do not require `testfixture` commands in it.
+
+If the project does not retain standalone smoke SQL files, document equivalent shell commands instead.
+
+---
+
+### Build Verification
+
+Perform all required configurations.
+
+#### Normal Build
+
+Build normal:
+
+```text
+sqlite3.exe
+sqlite3.dll
+```
+
+Run release-shell smoke tests.
+
+Verify:
+
+* every format direction works;
+* no test-only Tcl command is present;
+* no vector generator dependency exists;
+* no new warnings appear.
+
+#### Test Build
+
+Build `testfixture` with:
+
+```text
+SQLITE_TEST
+SQLITE_DEBUG
+FP16_USE_NATIVE_CONVERSION=0
+```
+
+Run each focused module independently.
+
+Then run:
+
+```text
+test/pblob_all.test
+```
+
+#### Strict-Warning Build
+
+Compile normal and test configurations with the practical strict-warning profile.
+
+Treat warnings in:
+
+```text
+pblob.c
+test-only pblob code
+vector generator
+```
+
+as failures where applicable.
+
+#### Sanitizer Build
+
+Run:
+
+```text
+pblob.test
+pblob_lowlevel.test
+pblob_vectors.test
+pblob_limits.test
+```
+
+under ASan and UBSan where supported.
+
+Run fault tests under sanitizers only where the harness and sanitizer configuration are compatible.
+
+Document incompatibility rather than claiming success.
+
+#### JSON-Disabled Build
+
+Build with:
+
+```text
+SQLITE_OMIT_JSON
+```
+
+Verify:
+
+* no public `pblob` functions;
+* no `test_pblob` command;
+* focused modules skip only through an explicit supported-feature guard or are not invoked;
+* no unresolved symbols;
+* no warnings.
+
+---
+
+### Prohibited Work
+
+Do not:
+
+* add new packed formats;
+* add new production SQL functions;
+* change accepted format strings;
+* change public conversion semantics;
+* add BLOB headers or metadata;
+* add native-endian behavior;
+* accept JSONB input for `pblob_pack()`;
+* return JSONB from `pblob_unpack()`;
+* create another C module;
+* create `pblob.h`;
+* remove `static` from production helpers;
+* run Python during ordinary Tcl test execution;
+* generate expected data from `pblob.c`;
+* make tests depend on prior test-module execution;
+* weaken exhaustive binary16 coverage;
+* modify `json.c`;
+* modify the vendored FP16 implementation;
+* refactor unrelated SQLite tests.
+
+---
+
+### Expected Deliverables
+
+Provide:
+
+1. Finalized:
+
+   ```text
+   test/pblob.test
+   test/pblob_lowlevel.test
+   test/pblob_vectors.test
+   test/pblob_limits.test
+   test/pblob_fault.test
+   test/pblob_all.test
+   ```
+2. Finalized:
+
+   ```text
+   tool/gen_pblob_vectors.py
+   ```
+3. Committed generated vector data.
+4. Optional release smoke SQL file where consistent with the project.
+5. Any necessary `pblob.c` fixes exposed by new tests.
+6. Exact vector generation command.
+7. Exact vector verification command.
+8. Exact build commands.
+9. Exact test commands.
+10. Results for every focused module and aggregate runner.
+11. Approximate runtime for each module.
+12. A concise list of modified and added files.
+13. A concise list of defects found by the expanded suite.
+14. Confirmation that:
+
+    * normal tests do not require Python;
+    * all vector data is independent of `pblob.c`;
+    * all test-only C code remains in `pblob.c`;
+    * every test module runs independently;
+    * limits and pragmas are restored;
+    * fault tests verify cleanup and recovery;
+    * exhaustive binary16 coverage remains active;
+    * all public format directions remain functional;
+    * no public API or header was added.
+
+---
+
+### Acceptance Criteria
+
+Stage 14 is complete only when:
+
+* the final focused test-module structure exists;
+* each module has a clear primary responsibility;
+* every module runs independently;
+* `pblob_all.test` runs the complete focused suite;
+* public SQL contract coverage is complete;
+* strict type and format tests are complete;
+* NULL and error-precedence matrices pass;
+* exact `int8`, binary16, and binary32 vectors pass;
+* both endian variants are covered;
+* committed vectors are generated independently of `pblob.c`;
+* vector generation is deterministic;
+* vector verification mode detects stale committed data;
+* normal test execution does not require Python;
+* binary16 exhaustive classification still covers all 65,536 words;
+* every finite binary16 word survives JSON unpack/pack bit-identically;
+* deterministic finite binary32 raw-word samples survive round trips;
+* non-finite binary16 and binary32 patterns are rejected;
+* signed zero and subnormals are preserved;
+* packed-output length limits are covered for widths 1, 2, and 4;
+* unpacked JSON length limits are covered for all formats;
+* fault injection covers every extension-owned allocation class;
+* OOM never returns partial output or stale subtype;
+* prepared statements recover after all tested error classes;
+* schema and expression integration tests pass in supported contexts;
+* release-shell smoke tests pass;
+* all prior-stage tests remain passing;
+* normal build succeeds;
+* test build succeeds;
+* strict-warning build is clean;
+* sanitizer runs report no extension defects;
+* JSON-disabled build succeeds;
+* no second C module, public C API, or public header exists.
+
+Stop after satisfying these criteria. Do not proceed to Stage 15.
+
 
