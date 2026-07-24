@@ -15318,4 +15318,2445 @@ Stage 14 is complete only when:
 
 Stop after satisfying these criteria. Do not proceed to Stage 15.
 
+---
+---
+
+## 📗 Stage 15: Full Integration, Release, and Portability Validation
+
+Implement only Stage 15 of the packed numeric BLOB extension.
+
+This stage begins from the completed Stage 14 state, where:
+
+* `pblob.c` is the only production and test-specific C module;
+* all five formats are functional in both directions;
+* the implementation has completed validation and cleanup audit;
+* the consolidated `test_pblob` command exists only under `SQLITE_TEST`;
+* the final focused test modules exist;
+* independent committed vectors exist;
+* exhaustive binary16 tests pass;
+* focused limit, fault, prepared-statement, schema-integration, and release-smoke tests exist;
+* no public C API or public header exists.
+
+Stage 15 is the final integration and build-validation stage.
+
+Do not add new functionality.
+
+### Objective
+
+Prove that the completed extension integrates correctly with the full SQLite build and test environment.
+
+This stage must validate:
+
+* clean amalgamation generation;
+* correct source ordering;
+* normal release shell and DLL builds;
+* testfixture integration;
+* complete focused `pblob` tests;
+* full SQLite regression tests;
+* JSON-disabled builds;
+* portable FP16 enforcement;
+* strict-warning builds;
+* sanitizer builds;
+* repeated clean builds;
+* release-binary smoke behavior;
+* absence of test-only symbols from production artifacts;
+* absence of accidental public exports;
+* reproducibility of generated vector data;
+* no regressions outside the extension.
+
+No implementation change is acceptable unless required to fix an integration defect exposed during this stage.
+
+### Scope
+
+This stage is limited to:
+
+1. Performing clean builds from the project’s normal source entry points.
+2. Verifying amalgamation generation and source placement.
+3. Building normal release artifacts.
+4. Building the SQLite test harness.
+5. Running all focused `pblob` tests.
+6. Running the selected full SQLite regression suite.
+7. Building with `SQLITE_OMIT_JSON`.
+8. Building with strict warning configurations.
+9. Running supported sanitizer builds.
+10. Verifying production binary contents and exports.
+11. Verifying deterministic vector generation.
+12. Recording exact commands and results.
+13. Fixing only defects exposed by these integration checks.
+
+Do not reorganize the test suite or redesign `pblob.c`.
+
+---
+
+### Clean-Tree Requirement
+
+Begin from a clean or reproducibly reset build state.
+
+Remove or isolate:
+
+```text
+generated amalgamation files
+object files
+libraries
+executables
+test databases
+temporary vector output
+stale Tcl test artifacts
+compiler intermediate files
+```
+
+Use the project’s established clean target where available.
+
+Do not rely on incremental builds as the only validation.
+
+At least one complete validation cycle must begin from a clean source and build tree.
+
+Record whether the source tree contained unrelated pre-existing modifications.
+
+Do not delete user-maintained source files or unrelated outputs.
+
+---
+
+### Amalgamation Generation
+
+Run the project’s normal amalgamation-generation process.
+
+Verify the generated amalgamation contains `pblob.c` content:
+
+```text
+after json.c
+before any dispatcher or source fragment that calls sqlite3PblobInit()
+```
+
+Confirm that private `json.c` definitions used by `pblob.c` are visible in the same translation unit.
+
+Verify no separate compilation of `pblob.c` is accidentally required for the normal amalgamation build.
+
+Inspect the generated source for:
+
+```text
+module documentation
+PblobFormat definitions
+pblobPackFunc
+pblobUnpackFunc
+sqlite3PblobInit
+```
+
+Do not depend only on successful linking to infer source ordering.
+
+---
+
+### Amalgamation Source-Order Test
+
+Add or retain a build-time verification that fails if `pblob.c` is moved before `json.c`.
+
+An acceptable verification may:
+
+* inspect the generated amalgamation;
+* inspect the source-list order;
+* depend on private types unavailable before `json.c`;
+* use an explicit source-generation assertion.
+
+Do not add a fragile line-number check.
+
+Verify the source-generation process includes `pblob.c` exactly once.
+
+---
+
+### Normal Release Build
+
+Build the project’s normal release artifacts, including at least:
+
+```text
+sqlite3.exe
+sqlite3.dll
+```
+
+and any associated import or static library normally produced by the project.
+
+Use the project’s intended production compiler flags.
+
+Do not define:
+
+```text
+SQLITE_TEST
+SQLITE_DEBUG
+```
+
+unless they are part of a separate debug validation build.
+
+The release build must retain:
+
+```text
+FP16_USE_NATIVE_CONVERSION=0
+```
+
+for the extension.
+
+Verify:
+
+* compile succeeds;
+* link succeeds;
+* no unresolved symbols;
+* no duplicate symbols;
+* no new warnings;
+* no dependence on testfixture or Tcl;
+* no loadable-extension entry point is required.
+
+---
+
+### Release Shell Smoke Tests
+
+Run the release shell against the Stage 14 smoke SQL or equivalent direct SQL commands.
+
+Test all directions:
+
+```text
+pack int8
+unpack int8
+pack <f2
+unpack <f2
+pack >f2
+unpack >f2
+pack <f4
+unpack <f4
+pack >f4
+unpack >f4
+```
+
+At minimum verify:
+
+```sql
+SELECT hex(pblob_pack('[-128,-1,0,1,127]', 'int8'));
+SELECT pblob_unpack(x'80FF00017F', 'int8');
+
+SELECT hex(pblob_pack('[1.0,2.0]', '<f2'));
+SELECT pblob_unpack(x'003C0040', '<f2');
+
+SELECT hex(pblob_pack('[1.0,2.0]', '>f2'));
+SELECT pblob_unpack(x'3C004000', '>f2');
+
+SELECT hex(pblob_pack('[1.0,2.0]', '<f4'));
+SELECT pblob_unpack(x'0000803F00000040', '<f4');
+
+SELECT hex(pblob_pack('[1.0,2.0]', '>f4'));
+SELECT pblob_unpack(x'3F80000040000000', '>f4');
+```
+
+Expected packed values:
+
+```text
+int8: 80FF00017F
+<f2:  003C0040
+>f2:  3C004000
+<f4:  0000803F00000040
+>f4:  3F80000040000000
+```
+
+Also verify:
+
+```text
+empty pack returns zero-length BLOB
+empty unpack returns []
+negative zero survives repacking
+non-finite raw input is rejected
+unpacked result composes as JSON
+```
+
+No `.load` command may be used.
+
+---
+
+### DLL Integration
+
+Verify the functions are available through a database connection opened against the produced `sqlite3.dll`.
+
+Use either:
+
+* the project’s normal shell linked against the DLL;
+* a minimal existing test client;
+* an established SQLite API test harness.
+
+Verify:
+
+* a new connection sees both functions automatically;
+* multiple independent connections see both functions;
+* closing and reopening a connection does not require manual registration;
+* registration failures are not silently ignored.
+
+Do not create a new supported application API solely for this test.
+
+---
+
+### Production Export Audit
+
+Inspect the produced DLL export table.
+
+Confirm no new public extension-specific symbol is exported, including:
+
+```text
+sqlite3PblobInit
+pblobPackFunc
+pblobUnpackFunc
+pblobJsonbInteger
+pblobJsonbNumber
+test_pblob
+```
+
+Only the project’s intended SQLite public exports should remain.
+
+If `sqlite3PblobInit` is visible at object level but not exported from the DLL, that is acceptable.
+
+Do not add export annotations.
+
+---
+
+### Production Symbol Audit
+
+Where supported, inspect object or binary symbols.
+
+Verify:
+
+* all helper symbols remain local or internal;
+* no `test_pblob` operation strings or test-only oracle symbols appear in production artifacts;
+* no Tcl symbols are linked into the release shell or DLL because of this extension;
+* no loadable-extension entry point was introduced;
+* no `pblob.h`-derived public symbols exist.
+
+Account for compiler optimization and symbol stripping when interpreting results.
+
+Do not claim absence based solely on inability to inspect a stripped binary; document the method used.
+
+---
+
+### Release Dependency Audit
+
+Verify the production artifacts do not acquire an unintended runtime dependency on:
+
+```text
+Tcl
+Python
+NumPy
+testfixture
+a separate FP16 DLL
+a separate pblob library
+```
+
+The vendored FP16 implementation must remain compiled into the amalgamation path as intended.
+
+Use the platform’s dependency inspection tool where practical.
+
+Record the actual new or unchanged runtime dependencies.
+
+---
+
+### Testfixture Build
+
+Build the SQLite test harness using the project’s established test configuration.
+
+Required definitions include:
+
+```text
+SQLITE_TEST
+SQLITE_DEBUG
+FP16_USE_NATIVE_CONVERSION=0
+```
+
+Use `SQLITE_ENABLE_API_ARMOR` only if it is already part of the selected project test configuration or is being validated as an additional build variant.
+
+Do not introduce it as a mandatory requirement without source-tree justification.
+
+Verify:
+
+* `test_pblob` is registered;
+* all required Tcl test commands are available;
+* no duplicate registration occurs;
+* exhaustive test operations run;
+* all test-only code remains absent from release artifacts.
+
+---
+
+### Focused Test Modules
+
+Run each focused module independently:
+
+```text
+test/pblob.test
+test/pblob_lowlevel.test
+test/pblob_vectors.test
+test/pblob_limits.test
+test/pblob_fault.test
+```
+
+Then run:
+
+```text
+test/pblob_all.test
+```
+
+For every module record:
+
+```text
+pass/fail
+test count
+runtime
+skipped tests
+known platform exclusions
+```
+
+A module that silently skips because of missing registration is a failure unless the skip is explicitly required by the build configuration.
+
+---
+
+### Independent Vector Verification
+
+Run the vector generator in verification mode:
+
+```text
+tool/gen_pblob_vectors.py --check
+```
+
+or the final equivalent command.
+
+Verify:
+
+* committed vector data matches regenerated data;
+* no file changes occur;
+* the command exits successfully;
+* the generator does not invoke SQLite;
+* the generator uses the recorded deterministic seed and schema version.
+
+Then run the verification a second time.
+
+Both runs must produce identical results.
+
+Do not update committed vectors during this validation unless a proven generator or vector defect is found.
+
+---
+
+### Full SQLite Regression Suite
+
+Run the selected source tree’s established full or primary regression target.
+
+Use the actual target appropriate to the project and platform.
+
+Examples may include:
+
+```text
+test
+fulltest
+devtest
+releasetest
+```
+
+Use only targets present in the selected source tree.
+
+At minimum, run the broadest practical regression suite normally used for this project’s release validation.
+
+Record:
+
+```text
+exact target
+test count where reported
+runtime
+failures
+skips
+platform limitations
+```
+
+Any unrelated pre-existing failure must be clearly distinguished from a new failure caused by the extension.
+
+Do not classify a new regression as unrelated without evidence.
+
+---
+
+### Regression Isolation
+
+If the full suite fails:
+
+1. Reproduce the failure.
+2. Determine whether it occurs without the `pblob` integration.
+3. Determine whether it depends on:
+
+   * source order;
+   * registration flags;
+   * JSON internals;
+   * memory limits;
+   * subtype handling;
+   * build defines;
+   * test-only code.
+4. Add a focused regression test where applicable.
+5. Fix only the demonstrated defect.
+6. Rerun:
+
+   * the focused failing test;
+   * all `pblob` tests;
+   * the full regression target.
+
+Do not make speculative broad changes.
+
+---
+
+### JSON-Disabled Release Build
+
+Perform a clean release build with:
+
+```text
+SQLITE_OMIT_JSON
+```
+
+Verify:
+
+* build succeeds;
+* link succeeds;
+* `pblob_pack` is unavailable;
+* `pblob_unpack` is unavailable;
+* `test_pblob` is absent;
+* no unresolved JSON or FP16 symbols exist;
+* no unused-static warnings occur;
+* no extension registration call remains active.
+
+The preferred behavior is that FP16 code required only by `pblob` is excluded or inactive under the JSON guard.
+
+Document whether the vendored header is pre-expanded regardless of the guard, but ensure no active extension behavior remains.
+
+---
+
+### JSON-Disabled Test Build
+
+Where the project supports it, build the test harness with:
+
+```text
+SQLITE_TEST
+SQLITE_OMIT_JSON
+```
+
+Verify:
+
+* `test_pblob` is not registered;
+* focused `pblob` modules either:
+
+  * are not invoked; or
+  * skip through an explicit feature guard;
+* no crash or unresolved symbol occurs;
+* unrelated SQLite tests remain functional.
+
+Do not make the test command partially available without JSON internals unless that is a deliberate and documented design.
+
+---
+
+### Portable FP16 Verification
+
+Verify the normative build has:
+
+```text
+FP16_USE_NATIVE_CONVERSION == 0
+```
+
+Use multiple checks:
+
+1. Preprocessor or compile-time assertion.
+2. `test_pblob fp16-mode` in the test build.
+3. Build command inspection.
+4. Binary16 exact-vector tests.
+
+The compile-time configuration is the authoritative proof.
+
+Do not rely only on matching output vectors.
+
+---
+
+### Accidental Native-Mode Negative Test
+
+Perform one deliberate build attempt with:
+
+```text
+FP16_USE_NATIVE_CONVERSION=1
+```
+
+only if the Stage 10 compile-time guard is intended to reject it.
+
+Expected:
+
+```text
+compile-time failure with a clear diagnostic
+```
+
+This negative build is optional if project tooling cannot conveniently perform expected-failure tests, but the compile-time guard itself remains mandatory.
+
+Do not weaken the guard merely to make this build succeed.
+
+---
+
+### Strict-Warning Release Build
+
+Build the release configuration using the strictest practical warning profile supported by the selected compiler.
+
+Audit at least:
+
+```text
+unused functions
+unused variables
+signed/unsigned comparisons
+narrowing conversions
+constant truncation
+incorrect format strings
+uninitialized values
+unreachable code
+pointer conversion
+shift width
+implicit fallthrough
+```
+
+Treat warnings originating from `pblob.c` as failures.
+
+Do not globally disable a warning to hide an extension defect.
+
+Document unavoidable warnings from unrelated upstream SQLite code separately.
+
+---
+
+### Strict-Warning Test Build
+
+Build the `SQLITE_TEST` configuration under the same practical warning profile.
+
+Include test-only code in the audit:
+
+```text
+Tcl command dispatch
+malformed JSONB constructors
+independent FP16 oracle
+digest code
+exhaustive loops
+```
+
+Warnings in test-only `pblob.c` code are failures.
+
+Verify all operation selectors are handled and no command path lacks a return.
+
+---
+
+### Debug Build
+
+Build with the project’s normal debug configuration.
+
+Verify:
+
+* assertions remain enabled where intended;
+* defensive runtime checks still handle malformed data in release paths;
+* no assertion fires during the full focused suite;
+* exhaustive binary16 tests pass;
+* prepared-statement reuse passes;
+* malformed internal JSONB tests produce controlled errors.
+
+Assertions must not be the sole protection against malformed internal state.
+
+---
+
+### AddressSanitizer Build
+
+Where supported, build with AddressSanitizer.
+
+Run at least:
+
+```text
+pblob.test
+pblob_lowlevel.test
+pblob_vectors.test
+pblob_limits.test
+```
+
+Run `pblob_fault.test` only if the fault harness is compatible with ASan.
+
+Exercise:
+
+```text
+large packing arrays
+large unpacking BLOBs
+malformed internal JSONB
+invalid packed lengths
+non-finite words
+prepared-statement reuse
+exhaustive binary16 conversion
+```
+
+No leak, over-read, overwrite, use-after-free, or double-free is acceptable.
+
+Document unsupported Windows/MSVC sanitizer combinations rather than claiming they passed.
+
+---
+
+### UndefinedBehaviorSanitizer Build
+
+Where supported, build with UndefinedBehaviorSanitizer.
+
+Exercise:
+
+```text
+all endian helpers
+all bit-classification helpers
+signed-byte conversion
+checked-size arithmetic
+JSONB offset arithmetic
+binary16 conversion tests
+binary32 conversion tests
+large loop bounds
+```
+
+No signed overflow, invalid shift, alignment violation, or out-of-bounds arithmetic is acceptable.
+
+Run the focused suite and exhaustive binary16 tests.
+
+---
+
+### Additional Sanitizers
+
+Where available and practical, consider:
+
+```text
+integer sanitizer
+alignment sanitizer
+leak sanitizer
+```
+
+These are supplementary and not required when unsupported.
+
+Do not substitute supplementary sanitizers for ASan and UBSan where those are supported.
+
+Record exactly which sanitizer configurations ran.
+
+---
+
+### Repeated Clean Build
+
+Perform at least two clean normal builds from the same source state.
+
+Verify:
+
+* generated amalgamation output is byte-identical where the build is intended to be deterministic;
+* vector files remain unchanged;
+* release smoke results are identical;
+* no generated file depends on stale build artifacts.
+
+If amalgamation output includes intentionally variable content, compare semantically relevant sections and document the variation.
+
+Do not accept a build that succeeds only after an incremental predecessor.
+
+---
+
+### Parallel Build Validation
+
+If the build system supports parallel execution, perform one supported parallel build.
+
+Verify:
+
+* source generation dependencies are correct;
+* `pblob.c` inclusion does not race with amalgamation generation;
+* generated FP16-bundled content is ready before compilation;
+* no intermittent missing-file failure occurs.
+
+Do not require unsupported parallelism from `nmake`.
+
+Use only the project’s supported mechanism.
+
+---
+
+### Multiple-Connection Test
+
+Using the test harness or a small existing API test, open multiple database connections.
+
+For each connection verify:
+
+```text
+pblob_pack exists
+pblob_unpack exists
+identical inputs produce identical results
+closing one connection does not affect others
+length limits remain connection-local
+```
+
+Test a reduced `SQLITE_LIMIT_LENGTH` on one connection and default limits on another.
+
+Verify the extension does not use mutable global conversion state.
+
+---
+
+### Threading Validation
+
+Where the selected SQLite build supports threaded use, run the project’s existing relevant thread tests with the extension enabled.
+
+At minimum verify:
+
+* no mutable static buffers in `pblob.c`;
+* no global cached result state;
+* no global `JsonString`;
+* no global current-format state;
+* vendored FP16 calls are stateless.
+
+Do not create a new concurrency model or promise thread guarantees beyond SQLite’s configured mode.
+
+---
+
+### Database Schema Integration Validation
+
+Rerun Stage 14 schema tests in the release-capable build configuration.
+
+Verify supported use in:
+
+```text
+generated columns
+CHECK constraints
+expression indexes
+views
+triggers
+```
+
+Test under the selected trusted-schema settings.
+
+Confirm registration flags permit the intended usage without weakening safety.
+
+Do not force schema contexts that SQLite itself disallows.
+
+---
+
+### Determinism Validation
+
+For each format, repeat identical calls many times:
+
+```text
+within one statement
+across statement resets
+across separately prepared statements
+across connections
+across clean builds
+```
+
+Compare:
+
+* exact packed BLOB bytes;
+* exact unpacked JSON text where stable;
+* semantic and repacked bit identity otherwise.
+
+No output may depend on uninitialized memory, host byte order, allocation address, or connection history.
+
+---
+
+### Locale Validation
+
+Where practical, run release smoke tests under at least one non-default numeric locale.
+
+Verify floating JSON output remains valid and uses:
+
+```text
+.
+```
+
+as the decimal separator.
+
+The implementation must depend on SQLite’s locale-independent JSON formatting, not process-locale `printf()` behavior.
+
+Do not alter global locale permanently within the test process.
+
+---
+
+### Host Endianness Review
+
+A big-endian runtime may not be available.
+
+Regardless, perform static and test review proving:
+
+* all packed I/O uses explicit byte helpers;
+* no `memcpy(float)` representation is emitted directly;
+* no integer pointer cast reads packed data;
+* no host-order branch exists;
+* `<` and `>` formats are defined exclusively by helper calls.
+
+If an actual big-endian test environment is available, run the focused suite there and record results.
+
+Do not claim runtime big-endian validation when none occurred.
+
+---
+
+### Compiler Matrix
+
+Where practical for the project, validate more than one compiler.
+
+For a Windows-focused build, examples may include:
+
+```text
+MSVC
+Clang-cl
+MinGW GCC
+```
+
+Use only toolchains supported by the source tree and environment.
+
+At minimum, the primary supported compiler must pass all required builds.
+
+Secondary compiler failures caused by unsupported project configurations must be documented precisely.
+
+Do not broaden scope into making the entire SQLite tree support a previously unsupported compiler.
+
+---
+
+### Architecture Matrix
+
+Where available, validate the primary architecture and any additional supported architecture, such as:
+
+```text
+x64
+x86
+ARM64
+```
+
+At minimum verify compile-time assumptions remain valid:
+
+```text
+CHAR_BIT == 8
+sizeof(uint16_t) == 2
+sizeof(uint32_t) == 4
+sizeof(float) == 4
+FLT_RADIX == 2
+FLT_MANT_DIG == 24
+FLT_MAX_EXP == 128
+```
+
+Do not weaken these assumptions for an unsupported target.
+
+---
+
+### Release Optimization Validation
+
+Build with normal release optimization and link-time optimization where the project normally uses it.
+
+Verify:
+
+* no helper is incorrectly removed when referenced;
+* no strict-aliasing issue emerges;
+* exhaustive vector tests still pass;
+* negative zero remains preserved;
+* malformed internal tests remain safe;
+* test-only code remains excluded.
+
+Optimization must not change packed bytes or JSON semantics.
+
+---
+
+### Binary Size Review
+
+Record the approximate size effect of adding the extension to:
+
+```text
+sqlite3.c
+sqlite3.exe
+sqlite3.dll
+```
+
+Use comparable before/after artifacts if available.
+
+This is informational, not a fixed acceptance threshold.
+
+Distinguish:
+
+* source-size increase;
+* executable-size increase;
+* debug-symbol increase.
+
+Do not remove required validation or tests solely to reduce binary size.
+
+---
+
+### Performance Smoke Review
+
+Run a non-benchmark timing sanity check for representative inputs:
+
+```text
+small array
+4096-element array
+16384-element array
+binary16 exhaustive test command
+```
+
+The purpose is to detect catastrophic algorithmic mistakes such as:
+
+```text
+quadratic output construction
+per-element SQL preparation
+per-element heap allocation
+reparsing the entire array for every element
+```
+
+Do not turn this stage into a formal optimization project.
+
+Record approximate timings and environment.
+
+Only fix obvious regressions or violations of the intended single-pass design.
+
+---
+
+### Source Review
+
+Perform a final source review confirming:
+
+```text
+one production module
+no pblob.h
+no public C API
+all helpers static except required internal initializer
+no loadable-extension boilerplate
+no independent JSON parser
+no independent JSON writer
+no independent decimal parser
+no alternate FP16 converter
+no native FP16 conversion
+explicit endian handling
+checked arithmetic
+single-shot pack allocation
+JsonString unpack output
+```
+
+Confirm comments match implemented behavior and no longer describe future stages.
+
+---
+
+### Test-Only Isolation Review
+
+Verify all test-only sections are guarded by:
+
+```c
+#ifdef SQLITE_TEST
+```
+
+and, where necessary:
+
+```c
+#ifndef SQLITE_OMIT_JSON
+```
+
+Confirm release preprocessing excludes:
+
+```text
+Tcl includes
+test_pblob registration
+malformed JSONB builders
+independent FP16 oracle
+exhaustive loops
+test digests
+test operation strings
+```
+
+Do not rely only on linker dead-code elimination.
+
+---
+
+### Generated-File Review
+
+Verify generated files are current:
+
+```text
+amalgamation source
+committed vector data
+any bundled FP16 source fragments
+```
+
+Run all available `--check` or equivalent verification modes.
+
+No generated file may require an uncommitted local manual edit.
+
+Document the generation commands.
+
+---
+
+### Build Command Accuracy
+
+Use exact commands valid for the selected source tree and platform.
+
+Do not provide guessed target names.
+
+If a documented target is unavailable:
+
+* inspect the actual build files;
+* use the closest established target;
+* record the substitution.
+
+For Windows `nmake`, record all relevant variables such as:
+
+```text
+TOP
+TCLDIR
+OPTS
+CFLAGS
+LDFLAGS
+```
+
+where used.
+
+Do not omit environment prerequisites required to reproduce the build.
+
+---
+
+### Failure Reporting
+
+For every failed build or test, record:
+
+```text
+configuration
+exact command
+exit code
+first relevant diagnostic
+root cause
+fix applied
+regression test added
+rerun result
+```
+
+Do not report only the final successful run if defects were found.
+
+Do not conceal unsupported configurations.
+
+---
+
+### Final Integration Report
+
+Create a concise integration report containing:
+
+```text
+SQLite source revision
+pblob source revision or commit
+vendored FP16 revision
+primary compiler and version
+secondary compilers tested
+architectures tested
+build configurations
+amalgamation generation result
+focused test results
+full SQLite regression result
+JSON-disabled result
+strict-warning result
+sanitizer results
+release smoke result
+vector verification result
+production export audit
+runtime dependency audit
+known limitations
+```
+
+Do not include unsupported claims.
+
+---
+
+### Defect Handling
+
+If Stage 15 exposes an implementation defect:
+
+1. Add or identify a reproducing test.
+2. Make the smallest correction.
+3. Run the focused reproducer.
+4. Run all `pblob` modules.
+5. Run the affected build matrix entries.
+6. Rerun the full SQLite regression suite when the change affects production code.
+
+Do not proceed with a known unresolved defect that violates acceptance criteria.
+
+---
+
+### Prohibited Work
+
+Do not:
+
+* add new formats;
+* add new public SQL functions;
+* add optional parameters;
+* add format aliases;
+* change packed layout;
+* add BLOB headers or metadata;
+* change binary16 conversion semantics;
+* enable native FP16 conversion;
+* accept JSONB input for packing;
+* return JSONB from unpacking;
+* create another C module;
+* create `pblob.h`;
+* export the internal initializer;
+* add loadable-extension entry points;
+* reorganize unrelated SQLite build logic;
+* modify `json.c`;
+* modify the vendored FP16 implementation;
+* rewrite the test suite structure established in Stage 14;
+* optimize beyond fixing an obvious integration defect.
+
+---
+
+### Expected Deliverables
+
+Provide:
+
+1. Any minimal source or test fixes required by Stage 15 findings.
+2. Exact clean commands.
+3. Exact amalgamation-generation commands.
+4. Exact normal release build commands.
+5. Exact testfixture build commands.
+6. Exact JSON-disabled build commands.
+7. Exact strict-warning build commands.
+8. Exact sanitizer build commands.
+9. Exact focused test commands.
+10. Exact full SQLite regression command.
+11. Exact vector verification commands.
+12. Release-shell smoke commands and output.
+13. Production export and dependency audit commands.
+14. Per-configuration results.
+15. Focused test-module runtimes.
+16. Full regression runtime.
+17. A concise list of modified files.
+18. A concise list of defects found and fixed.
+19. The final integration report.
+20. Confirmation that:
+
+    * amalgamation source ordering is correct;
+    * release shell and DLL builds succeed;
+    * functions auto-register on new connections;
+    * all focused tests pass;
+    * the full SQLite regression suite passes or any unrelated pre-existing failures are proven and documented;
+    * JSON-disabled builds succeed;
+    * portable FP16 mode is enforced;
+    * strict-warning builds are clean;
+    * supported sanitizer builds report no defects;
+    * vector data is current and reproducible;
+    * release artifacts contain no test-only interface;
+    * no accidental public exports or dependencies were added;
+    * no public C API or header exists.
+
+---
+
+### Acceptance Criteria
+
+Stage 15 is complete only when:
+
+* a clean amalgamation build succeeds;
+* `pblob.c` content appears exactly once after `json.c`;
+* normal release shell and DLL builds succeed;
+* all ten supported function/format directions work in release artifacts;
+* no `.load` or application registration call is required;
+* functions are available on every new connection;
+* all focused test modules pass independently;
+* `pblob_all.test` passes;
+* committed vectors pass generator verification;
+* repeated vector verification is deterministic;
+* exhaustive binary16 tests pass;
+* the selected full SQLite regression suite passes;
+* any unrelated pre-existing failure is reproduced without the extension and documented;
+* `SQLITE_OMIT_JSON` release build succeeds;
+* `SQLITE_OMIT_JSON` test build succeeds where supported;
+* neither public function exists in JSON-disabled builds;
+* `test_pblob` exists only in `SQLITE_TEST` builds;
+* portable FP16 conversion is enforced at compile time and verified in tests;
+* release and test strict-warning builds introduce no `pblob.c` warnings;
+* supported ASan and UBSan runs report no extension defects;
+* release artifacts contain no Tcl or Python dependency;
+* release artifacts contain no test-only command or oracle code;
+* no extension-specific public DLL export is introduced;
+* all packed bytes are deterministic across repeated clean builds;
+* all floating output remains locale-independent;
+* no source-order or parallel-build race exists;
+* production source remains one C module;
+* no `pblob.h`, public C API, loadable-extension entry point, or second C module exists.
+
+Stop after satisfying these criteria. Do not proceed to Stage 16.
+
+---
+---
+
+## 📗 Stage 16: Final Review and Cleanup
+
+Implement only Stage 16 of the packed numeric BLOB extension.
+
+This stage begins from the completed Stage 15 state, where:
+
+* `pblob.c` is the only production and test-specific C module;
+* all five formats are functional in both directions;
+* amalgamation generation and source ordering are verified;
+* release shell and DLL builds succeed;
+* focused and full SQLite regression suites pass;
+* JSON-disabled builds succeed;
+* portable FP16 conversion is enforced;
+* strict-warning and supported sanitizer builds pass;
+* committed vectors are reproducible;
+* release artifacts contain no test-only interfaces or accidental public exports;
+* no public C API or public header exists.
+
+Stage 16 is the final review and merge-preparation stage.
+
+Do not add functionality.
+
+### Objective
+
+Prepare the completed implementation for final submission or merge.
+
+This stage must:
+
+* perform a final source review;
+* confirm the implementation matches the approved design;
+* remove obsolete comments and scaffolding;
+* normalize naming and local style;
+* confirm generated files are current;
+* confirm tests and build instructions are reproducible;
+* produce a concise implementation report;
+* produce a concise reviewer checklist;
+* produce the final patch or commit sequence;
+* leave the tree clean and ready for review.
+
+Only minimal corrections discovered during final review are permitted.
+
+### Scope
+
+This stage is limited to:
+
+1. Final source and API review.
+2. Final code-style and comment cleanup.
+3. Final dead-code and symbol review.
+4. Final test inventory review.
+5. Final generated-file verification.
+6. Final build-command verification.
+7. Final documentation and integration-note preparation.
+8. Final patch or commit organization.
+9. Final clean-tree verification.
+10. Minimal fixes for defects discovered during this review.
+
+Do not redesign or optimize the implementation.
+
+---
+
+### Final Source Inventory
+
+Confirm the intended extension source inventory.
+
+Production and test-specific C code:
+
+```text
+pblob.c
+```
+
+Public SQL and Tcl tests:
+
+```text
+test/pblob.test
+test/pblob_lowlevel.test
+test/pblob_vectors.test
+test/pblob_limits.test
+test/pblob_fault.test
+test/pblob_all.test
+```
+
+Independent vector generation:
+
+```text
+tool/gen_pblob_vectors.py
+```
+
+Committed generated vector data:
+
+```text
+the final selected vector-data file
+```
+
+Optional release smoke script:
+
+```text
+test/pblob_smoke.sql
+```
+
+Confirm there is no unintended file such as:
+
+```text
+pblob.h
+pblob_test.c
+src/test_pblob.c
+test_pblob.c
+pblob_internal.h
+```
+
+Remove obsolete temporary files created during staged development.
+
+Do not delete unrelated project files.
+
+---
+
+### Final Public API Review
+
+Confirm the only public SQL interface is:
+
+```sql
+pblob_pack(json_array, format)
+pblob_unpack(blob, format)
+```
+
+Confirm both functions:
+
+* have arity 2;
+* auto-register on every connection;
+* require no `.load`;
+* have no aliases;
+* expose no optional arguments;
+* expose no public C wrapper.
+
+Supported formats must remain exactly:
+
+```text
+int8
+<f2
+>f2
+<f4
+>f4
+```
+
+Confirm there is no accepted native-endian, shorthand, or case-insensitive alias.
+
+---
+
+### Packed Representation Review
+
+Confirm the packed representation remains raw and headerless.
+
+For each format:
+
+```text
+int8:
+  1 byte per element
+
+<f2:
+  IEEE binary16, little-endian
+
+>f2:
+  IEEE binary16, big-endian
+
+<f4:
+  IEEE binary32, little-endian
+
+>f4:
+  IEEE binary32, big-endian
+```
+
+Confirm the implementation adds no:
+
+* type marker;
+* element count;
+* version field;
+* checksum;
+* alignment padding;
+* metadata;
+* byte-order marker.
+
+The format argument is the only interpretation metadata.
+
+---
+
+### Source-Ordering Review
+
+Confirm `pblob.c` is placed:
+
+```text
+after json.c
+```
+
+in the amalgamation source order.
+
+Verify this ordering is required and documented because `pblob.c` uses private `json.c` types and helpers in the same translation unit.
+
+Confirm the source appears exactly once.
+
+Confirm the auto-extension dispatcher can reference the internal initializer at the selected location.
+
+Do not replace this design with a public header or exported internal symbols.
+
+---
+
+### Module Documentation Review
+
+Review the top-level `pblob.c` comment.
+
+It must accurately state:
+
+* extension purpose;
+* public SQL functions;
+* supported formats;
+* raw headerless representation;
+* amalgamation-only design;
+* dependency on private `json.c` internals;
+* dependency on vendored FP16;
+* portable FP16 requirement;
+* absence of a public C API;
+* required source ordering.
+
+Remove wording that refers to:
+
+```text
+future implementation
+placeholder behavior
+later stages
+planned formats
+temporary test hooks
+```
+
+Do not document unsupported behavior.
+
+---
+
+### Compile Guard Review
+
+Verify the implementation is correctly guarded by:
+
+```c
+#ifndef SQLITE_OMIT_JSON
+...
+#endif
+```
+
+Verify test-only code is additionally guarded by:
+
+```c
+#ifdef SQLITE_TEST
+...
+#endif
+```
+
+Confirm JSON-disabled builds do not retain:
+
+* SQL registration;
+* production callbacks;
+* test commands;
+* JSON references;
+* active FP16 conversion code required only by the extension.
+
+Use the narrowest practical guard structure consistent with source bundling.
+
+---
+
+### FP16 Configuration Review
+
+Confirm the normative source forces:
+
+```c
+FP16_USE_NATIVE_CONVERSION == 0
+```
+
+before inclusion of the vendored FP16 implementation.
+
+Verify there is a clear compile-time failure if native conversion is enabled unexpectedly.
+
+Confirm production code uses only:
+
+```c
+fp16_ieee_from_fp32_value()
+fp16_ieee_to_fp32_value()
+fp32_to_bits()
+fp32_from_bits()
+```
+
+as intended.
+
+Confirm there is no use of:
+
+```text
+_Float16
+__fp16
+F16C
+AVX-512 FP16
+ARM half intrinsics
+another half library
+manual production FP16 conversion
+```
+
+---
+
+### Platform Assumption Review
+
+Confirm compile-time checks cover:
+
+```text
+CHAR_BIT == 8
+sizeof(uint16_t) == 2
+sizeof(uint32_t) == 4
+sizeof(float) == 4
+FLT_RADIX == 2
+FLT_MANT_DIG == 24
+FLT_MAX_EXP == 128
+```
+
+Verify diagnostics are understandable on unsupported platforms.
+
+Do not weaken these assumptions without an approved design change.
+
+---
+
+### Private Symbol Review
+
+Confirm all production helpers are:
+
+```c
+static
+```
+
+except the internal initializer where source integration requires non-static visibility.
+
+Review all extension-specific symbols, including:
+
+```text
+pblobPackFunc
+pblobUnpackFunc
+pblobParseFormat
+pblobPutU16Le
+pblobPutU16Be
+pblobGetU16Le
+pblobGetU16Be
+pblobPutU32Le
+pblobPutU32Be
+pblobGetU32Le
+pblobGetU32Be
+pblobF16IsFinite
+pblobF16IsInf
+pblobF16IsNaN
+pblobF32IsFinite
+pblobF32IsInf
+pblobF32IsNaN
+pblobDecodeInt8
+pblobCheckedSize
+pblobJsonbInteger
+pblobJsonbNumber
+```
+
+Confirm none is exported from the DLL.
+
+Do not introduce a header to declare private symbols.
+
+---
+
+### Type and Naming Review
+
+Review private types:
+
+```c
+PblobKind
+PblobByteOrder
+PblobFormat
+```
+
+Confirm names are consistent and concise.
+
+Verify enum values and structure fields clearly represent:
+
+```text
+numeric kind
+byte order
+element width
+```
+
+Remove obsolete enum values or fields only if genuinely unused.
+
+Do not rename stable public SQL functions or format strings.
+
+Avoid broad stylistic renaming that obscures the reviewed history.
+
+---
+
+### Helper Contract Review
+
+Review each private helper for a concise contract.
+
+For helpers that receive `sqlite3_context *`, confirm the convention is documented and consistent:
+
+```text
+0 = success
+nonzero = error already reported
+```
+
+Review:
+
+* required inputs;
+* output initialization;
+* accepted ranges;
+* ownership;
+* failure behavior;
+* whether an SQL error is set.
+
+Remove misleading comments.
+
+Do not add comments that merely translate individual statements into English.
+
+---
+
+### Callback Structure Review
+
+Review `pblobPackFunc()` and `pblobUnpackFunc()` for clarity.
+
+Confirm the callbacks visibly follow:
+
+```text
+NULL handling
+type validation
+format parsing
+shared preparation
+format dispatch
+cleanup
+```
+
+Prefer private format-specific helpers over deeply nested duplicated logic.
+
+Do not refactor working code solely to reduce line count.
+
+The callback should remain easy to audit for validation order and ownership.
+
+---
+
+### Validation-Order Review
+
+Confirm final validation order remains exactly as tested.
+
+For packing:
+
+```text
+NULL
+first argument type
+format type
+format value
+JSON parse
+root array
+output size
+element type
+numeric extraction
+target validation
+result
+```
+
+For unpacking:
+
+```text
+NULL
+first argument type
+format type
+format value
+packed length
+raw classification
+conversion
+JSON result
+```
+
+Ensure no final cleanup refactoring changed error precedence.
+
+---
+
+### JSON Integration Review
+
+Confirm packing uses:
+
+```c
+jsonParseFuncArg()
+jsonParseFree()
+jsonbPayloadSize()
+jsonbArrayCount()
+```
+
+Confirm unpacking uses:
+
+```c
+JsonString
+jsonStringInit()
+jsonAppendChar()
+jsonPrintf()
+jsonReturnString()
+jsonStringReset()
+JSON_SUBTYPE
+```
+
+Confirm there is no independent:
+
+* JSON parser;
+* array parser;
+* JSON serializer;
+* decimal parser.
+
+Do not replace private SQLite internals with public JSON SQL calls.
+
+---
+
+### Integer Conversion Review
+
+Confirm `int8` packing:
+
+* accepts only integer JSONB node types;
+* uses `pblobJsonbInteger()`;
+* rejects values outside `-128..127`;
+* performs no wrapping or clamping.
+
+Confirm `int8` unpacking:
+
+* accepts every byte;
+* uses `pblobDecodeInt8()`;
+* has no `char` signedness dependency.
+
+Confirm exact full-domain tests remain active.
+
+---
+
+### Binary32 Conversion Review
+
+Confirm packing path:
+
+```text
+JSON number
+-> double
+-> float
+-> fp32_to_bits()
+-> endian output
+```
+
+Confirm unpacking path:
+
+```text
+endian input
+-> raw bits
+-> finite classification
+-> fp32_from_bits()
+-> double
+-> JSON formatting
+```
+
+Confirm:
+
+* non-finite values are rejected;
+* underflow is accepted;
+* signed zero is preserved;
+* no direct decimal-to-binary32 parser exists.
+
+---
+
+### Binary16 Conversion Review
+
+Confirm packing path:
+
+```text
+JSON number
+-> double
+-> float
+-> finite binary32 check
+-> fp16_ieee_from_fp32_value()
+-> finite binary16 check
+-> endian output
+```
+
+Confirm unpacking path:
+
+```text
+endian input
+-> raw binary16 bits
+-> finite classification
+-> fp16_ieee_to_fp32_value()
+-> double
+-> JSON formatting
+```
+
+Confirm:
+
+* portable FP16 is mandatory;
+* direct binary64-to-binary16 conversion is not used;
+* subnormals and signed zero are preserved;
+* infinity and NaN are rejected.
+
+---
+
+### Endian Review
+
+Confirm all packed reads and writes use explicit byte helpers.
+
+There must be no:
+
+```c
+*(uint16_t *)
+*(uint32_t *)
+```
+
+access over packed buffers.
+
+Confirm no packed data is emitted or read using native-order `memcpy()`.
+
+Verify endian helper tests include unaligned buffers.
+
+---
+
+### Size and Bounds Review
+
+Review all size arithmetic.
+
+Confirm:
+
+* multiplication is checked before execution;
+* only widths 1, 2, and 4 are accepted;
+* current `SQLITE_LIMIT_LENGTH` is enforced;
+* array offsets cannot overflow;
+* node boundaries are checked before access;
+* BLOB loops cannot overrun the final element;
+* payload lengths are checked before narrowing to `int`;
+* result APIs receive validated lengths.
+
+Do not retain redundant unchecked parallel calculations.
+
+---
+
+### Ownership Review
+
+For pack paths, confirm:
+
+* one exact output allocation;
+* no per-element output allocation;
+* output is freed on every error;
+* ownership transfers exactly once;
+* zero-length output is handled without false OOM.
+
+For unpack paths, confirm:
+
+* `JsonString` is initialized once;
+* early failures reset owned state;
+* finalization transfers ownership correctly;
+* subtype is assigned only after success;
+* no partial result survives failure.
+
+Prefer explicit cleanup labels where they make ownership easier to verify.
+
+---
+
+### Error Message Review
+
+Review all extension-defined errors for consistency.
+
+Confirm messages are:
+
+* function-specific;
+* stable;
+* concise;
+* safe with embedded-NUL format input;
+* consistent in capitalization and punctuation;
+* zero-based for element indexes.
+
+Confirm no temporary or internal helper wording leaks through public errors where a format-specific public error is required.
+
+Do not expose raw arbitrary format bytes in messages.
+
+---
+
+### Dead-Code Review
+
+Remove any remaining:
+
+* placeholder messages;
+* unreachable branches;
+* obsolete stage comments;
+* unused helper prototypes;
+* unused constants;
+* unused test operations;
+* duplicate error-formatting code;
+* temporary assertions no longer useful;
+* abandoned alternative implementations.
+
+Do not remove defensive runtime checks merely because tests currently cannot trigger them.
+
+---
+
+### Test-Only Code Review
+
+Review the `test_pblob` operation dispatcher.
+
+Confirm:
+
+* one Tcl command is registered;
+* operation names are stable;
+* every operation validates argument count;
+* malformed input returns `TCL_ERROR`;
+* no operation exposes raw pointers;
+* no operation reimplements production logic unnecessarily;
+* independent oracle code is clearly test-only;
+* exhaustive loops execute in C;
+* test-only code is excluded from release preprocessing.
+
+Remove obsolete operation aliases.
+
+---
+
+### Test Inventory Review
+
+Confirm the final test modules exist and have distinct responsibilities:
+
+```text
+pblob.test
+pblob_lowlevel.test
+pblob_vectors.test
+pblob_limits.test
+pblob_fault.test
+pblob_all.test
+```
+
+Confirm:
+
+* every module runs independently;
+* `pblob_all.test` contains no duplicate test bodies;
+* test names are unique;
+* limits and pragmas are restored;
+* temporary databases and statements are cleaned up;
+* fault tests recover after injected failures;
+* vector tests do not require Python.
+
+Do not collapse the modules back into one large test file.
+
+---
+
+### Vector Generator Review
+
+Review:
+
+```text
+tool/gen_pblob_vectors.py
+```
+
+Confirm:
+
+* deterministic output;
+* fixed random seed;
+* no timestamp variation;
+* explicit endian handling;
+* independent numeric oracles;
+* correct binary64-to-binary32-to-binary16 modeling;
+* `--check` mode;
+* explicit write/update mode;
+* nonzero exit on stale data;
+* clear main docstring;
+* ASCII-safe source where required by project policy.
+
+Run:
+
+```text
+--check
+```
+
+twice.
+
+Both runs must leave the tree unchanged.
+
+---
+
+### Generated File Review
+
+Confirm all generated artifacts are current:
+
+```text
+SQLite amalgamation
+committed vector data
+bundled FP16 fragments where applicable
+```
+
+Run every available generation check.
+
+Verify no generated file contains a manual edit that would be lost on regeneration.
+
+Do not commit temporary generated comparison files.
+
+---
+
+### Build Instruction Review
+
+Review all recorded build commands from Stage 15.
+
+Confirm they are:
+
+* exact;
+* valid for the selected source tree;
+* valid for Windows CMD and `nmake` where applicable;
+* free of PowerShell-only syntax;
+* explicit about required variables;
+* reproducible from a clean tree.
+
+Document relevant variables such as:
+
+```text
+TOP
+TCLDIR
+OPTS
+CFLAGS
+LDFLAGS
+```
+
+only when actually used.
+
+Do not publish guessed targets or placeholders.
+
+---
+
+### Final Smoke Commands
+
+Prepare a concise final smoke sequence for the release shell.
+
+It must test:
+
+```text
+int8 pack/unpack
+f2 little-endian pack/unpack
+f2 big-endian pack/unpack
+f4 little-endian pack/unpack
+f4 big-endian pack/unpack
+empty results
+negative zero
+non-finite rejection
+JSON subtype composition
+```
+
+Use a SQL file for Windows shell validation rather than fragile nested `echo` commands containing `<` and `>`.
+
+Avoid CMD escaping ambiguity.
+
+---
+
+### Final Regression Commands
+
+Record the exact commands for:
+
+```text
+focused public tests
+low-level tests
+vector tests
+limit tests
+fault tests
+aggregate pblob tests
+full SQLite regression
+JSON-disabled build
+strict-warning build
+sanitizer build
+vector verification
+release smoke
+```
+
+Do not include commands that were not actually run.
+
+---
+
+### Final Test Results
+
+Produce a concise final table or structured summary containing:
+
+```text
+configuration
+command
+result
+test count where available
+runtime
+skips
+notes
+```
+
+Include:
+
+* normal release build;
+* testfixture build;
+* focused tests;
+* aggregate test;
+* full SQLite regression;
+* JSON-disabled build;
+* strict-warning build;
+* ASan;
+* UBSan;
+* vector verification;
+* release smoke;
+* export audit;
+* dependency audit.
+
+Clearly mark unsupported or unavailable configurations.
+
+Do not report them as passed.
+
+---
+
+### Final Defect Record
+
+List every defect found during Stages 12–16.
+
+For each defect record:
+
+```text
+symptom
+root cause
+fix
+regression test
+affected files
+validation result
+```
+
+If no defect was found in Stage 16, state that explicitly.
+
+Do not omit defects merely because they were fixed before the final run.
+
+---
+
+### Final Design-Conformance Checklist
+
+Produce a checklist confirming:
+
+```text
+one C module
+no public header
+no public C API
+amalgamation-only
+after json.c
+uses private JSON internals
+TEXT-only pack input
+BLOB-only unpack input
+five exact formats
+raw headerless layout
+portable FP16
+explicit endian helpers
+finite-only float formats
+signed-zero preservation
+subnormal support
+JSON-subtyped unpack output
+deterministic and innocuous registration
+JSON-disabled exclusion
+test-only hooks excluded from release
+```
+
+Every item must be supported by source or test evidence.
+
+---
+
+### Commit or Patch Organization
+
+Prepare a clean final patch sequence.
+
+Preferred logical grouping:
+
+```text
+Patch 1
+Production implementation and amalgamation integration
+
+Patch 2
+Test-only low-level interface
+
+Patch 3
+Public and low-level Tcl tests
+
+Patch 4
+Independent vectors and generator
+
+Patch 5
+Limit, fault, aggregate, and smoke tests
+
+Patch 6
+Final integration notes and generated-file updates
+```
+
+If the repository prefers one squashed commit, provide a corresponding single commit message.
+
+Do not preserve the original 16 development stages as 16 required final commits unless the project explicitly wants them.
+
+The final history should be reviewable rather than mechanically mirroring development.
+
+---
+
+### Commit Message
+
+Prepare a professional commit message.
+
+The subject should be concise, for example:
+
+```text
+Add packed numeric BLOB SQL functions
+```
+
+The body should summarize:
+
+* `pblob_pack()` and `pblob_unpack()`;
+* supported formats;
+* raw packed representation;
+* JSON integration;
+* portable FP16 dependency;
+* test coverage.
+
+Do not include unsupported performance claims.
+
+Do not mention temporary staged placeholders.
+
+---
+
+### Reviewer Notes
+
+Prepare concise reviewer notes identifying the highest-risk areas:
+
+```text
+private json.c dependency and source order
+JSONB numeric payload extraction
+signed 64-bit and JSON5 hexadecimal handling
+binary64-to-binary32-to-binary16 path
+non-finite rejection
+JSON floating formatting and round-trip identity
+size and ownership handling
+test-only malformed JSONB infrastructure
+```
+
+For each area, point reviewers to the relevant source helper and test module.
+
+Do not repeat the entire implementation plan.
+
+---
+
+### Final Tree Cleanliness
+
+After all generation, builds, and tests:
+
+* remove temporary databases;
+* remove temporary vector outputs;
+* remove sanitizer logs not intended for commit;
+* remove compiler scratch files;
+* remove generated comparison files;
+* retain only intended generated artifacts.
+
+Run the repository’s status command.
+
+Classify every remaining modified or untracked file as:
+
+```text
+intended
+generated and current
+unrelated pre-existing
+unexpected
+```
+
+No unexpected file may remain.
+
+Do not discard unrelated user changes.
+
+---
+
+### Final Reproducibility Check
+
+From the final source state:
+
+1. Clean the build.
+2. Regenerate required artifacts.
+3. Run vector verification.
+4. Build release artifacts.
+5. Build testfixture.
+6. Run focused aggregate tests.
+7. Run release smoke tests.
+8. Confirm repository status contains no unexpected generated differences.
+
+This is the final validation cycle.
+
+Do not rely solely on earlier Stage 15 results.
+
+---
+
+### Minimal Fix Policy
+
+If final review exposes a defect:
+
+1. Add or identify a reproducing test.
+2. Make the smallest correction.
+3. Run the focused reproducer.
+4. Run `pblob_all.test`.
+5. Run the affected build variants.
+6. Run the full SQLite regression suite if production code changed.
+7. Repeat final clean-tree verification.
+
+Do not perform opportunistic refactoring after the final test cycle.
+
+---
+
+### Prohibited Work
+
+Do not:
+
+* add new formats;
+* add new production SQL functions;
+* add optional arguments;
+* add format aliases;
+* change packed layout;
+* add metadata or headers;
+* change floating conversion paths;
+* enable native FP16;
+* accept JSONB for packing;
+* return JSONB from unpacking;
+* create another C module;
+* create `pblob.h`;
+* export internal symbols;
+* add a loadable-extension entry point;
+* redesign the test structure;
+* modify `json.c`;
+* modify vendored FP16;
+* refactor unrelated SQLite code;
+* introduce a new build system;
+* add unverified performance claims.
+
+---
+
+### Expected Deliverables
+
+Provide:
+
+1. Any minimal final source or test corrections.
+2. Final cleaned `pblob.c`.
+3. Final test inventory.
+4. Final generated-file verification result.
+5. Final vector verification result.
+6. Final exact build commands.
+7. Final exact test commands.
+8. Final release smoke SQL and results.
+9. Final full regression result.
+10. Final JSON-disabled result.
+11. Final strict-warning and sanitizer results.
+12. Final export and dependency audit results.
+13. Final defect record.
+14. Final design-conformance checklist.
+15. Final reviewer notes.
+16. Final commit or patch organization.
+17. Final commit message.
+18. Final modified-file list.
+19. Final clean-tree status classification.
+20. Confirmation that:
+
+    * no unsupported feature was added;
+    * no placeholder or obsolete code remains;
+    * all generated files are current;
+    * all required tests pass;
+    * all commands are reproducible;
+    * release artifacts contain no test-only code;
+    * no public C API or header exists;
+    * the tree is ready for merge.
+
+---
+
+### Acceptance Criteria
+
+Stage 16 is complete only when:
+
+* final source comments describe implemented behavior accurately;
+* no temporary stage wording remains;
+* no placeholder or dead code remains;
+* all production helpers have appropriate private visibility;
+* public SQL API remains exactly two functions with five exact formats;
+* packed representation remains raw and headerless;
+* portable FP16 remains enforced;
+* all validation, bounds, ownership, and error paths remain covered;
+* final test modules are complete and independent;
+* committed vector data passes deterministic verification;
+* generated amalgamation and other generated files are current;
+* exact release and test commands are documented;
+* a final clean build succeeds;
+* `pblob_all.test` passes from the final clean state;
+* the full selected SQLite regression suite passes;
+* release smoke tests pass;
+* JSON-disabled builds pass;
+* strict-warning builds remain clean;
+* supported sanitizer builds remain clean;
+* release artifacts contain no test-only symbols or dependencies;
+* no accidental public export exists;
+* reviewer notes identify the principal risk areas;
+* the final patch or commit sequence is reviewable;
+* the repository contains no unexpected modified or untracked files;
+* no second C module, public C API, public header, or loadable-extension entry point exists.
+
+Stop after satisfying these criteria. The implementation is ready for merge.
+
 

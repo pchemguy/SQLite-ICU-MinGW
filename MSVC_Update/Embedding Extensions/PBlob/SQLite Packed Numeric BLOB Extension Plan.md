@@ -50,25 +50,25 @@ Each stage must leave the tree in a compilable state. Once SQL functions are reg
 
 ### Stage overview
 
-| Stage | Primary deliverable                                       |
-| ----- | --------------------------------------------------------- |
-| 0     | Confirm integration points and exact SQLite internals     |
-| 1     | Create a compiling `pblob.c` skeleton                     |
-| 2     | Register SQL functions with placeholder behavior          |
-| 3     | Format parsing and common argument handling               |
-| 4     | Endian and bit-level primitives                           |
-| 5     | JSONB numeric extraction helpers                          |
-| 6     | `int8` packing                                            |
-| 7     | `int8` unpacking                                          |
-| 8     | Binary32 packing                                          |
-| 9     | Binary32 unpacking                                        |
-| 10    | Binary16 packing                                          |
-| 11    | Binary16 unpacking                                        |
-| 12    | Validation, error, limit, and cleanup audit               |
-| 13    | Consolidate test-only low-level hooks                     |
-| 14    | Complete SQL, vector, limit, and fault tests              |
-| 15    | Run full integration, release, and portability validation |
-| 16    | Final review and cleanup                                  |
+| Stage | Primary deliverable                                   |
+| ----- | ----------------------------------------------------- |
+| 0     | Confirm integration points and exact SQLite internals |
+| 1     | Create a compiling `pblob.c` skeleton                 |
+| 2     | Register SQL functions with placeholder behavior      |
+| 3     | Format parsing and common argument handling           |
+| 4     | Endian and bit-level primitives                       |
+| 5     | JSONB numeric extraction helpers                      |
+| 6     | `int8` packing                                        |
+| 7     | `int8` unpacking                                      |
+| 8     | Binary32 packing                                      |
+| 9     | Binary32 unpacking                                    |
+| 10    | Binary16 packing                                      |
+| 11    | Binary16 unpacking                                    |
+| 12    | Validation, error, limit, and cleanup audit           |
+| 13    | Consolidate test-only low-level hooks                 |
+| 14    | Complete SQL, vector, limit, and fault tests          |
+| 15    | Full integration, release, and portability validation |
+| 16    | Final review and cleanup                              |
 
 Do not combine all stages into one large implementation patch.
 
@@ -1200,7 +1200,7 @@ Add schema-integration tests.
 
 ---
 
-### Stage 15 — Full integration and build validation
+### Stage 15 — Integration and build validation
 
 #### Goal
 
