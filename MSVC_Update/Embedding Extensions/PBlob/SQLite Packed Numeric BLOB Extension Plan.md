@@ -63,8 +63,8 @@ Each stage must leave the tree in a compilable state. Once SQL functions are reg
 | 8     | Binary32 packing                                          |
 | 9     | Binary32 unpacking                                        |
 | 10    | Binary16 packing                                          |
-| 11    | Implement binary16 unpacking                              |
-| 12    | Complete validation and edge-case behavior                |
+| 11    | Binary16 unpacking                                        |
+| 12    | Validation, error, limit, and cleanup audit               |
 | 13    | Add test-only low-level hooks                             |
 | 14    | Complete SQL, vector, limit, and fault tests              |
 | 15    | Run full integration, release, and portability validation |
@@ -991,7 +991,7 @@ Do not claim direct correctly rounded binary64-to-binary16 conversion.
 
 ---
 
-### Stage 11 — Implement binary16 unpacking
+### Stage 11 — Binary16 unpacking
 
 #### Goal
 
@@ -1033,7 +1033,7 @@ Reject odd BLOB lengths.
 
 ---
 
-### Stage 12 — Complete validation and edge-case behavior
+### Stage 12 — Validation, error, limit, and cleanup audit
 
 #### Goal
 

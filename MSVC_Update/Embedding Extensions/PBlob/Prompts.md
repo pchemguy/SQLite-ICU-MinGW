@@ -8329,4 +8329,4338 @@ Stage 9 is complete only when:
 
 Stop after satisfying these criteria. Do not proceed to Stage 10.
 
+---
+---
+
+## 📗 Stage 10: Binary16 Packing
+
+Implement only Stage 10 of the packed numeric BLOB extension.
+
+This stage begins from the completed Stage 9 state, where:
+
+* `pblob.c` is compiled into the SQLite amalgamation after `json.c`;
+* `pblob_pack()` and `pblob_unpack()` are auto-registered;
+* NULL propagation, strict storage-class validation, and exact format parsing are implemented;
+* endian helpers, binary16 and binary32 classification helpers, signed-byte decoding, and checked packed-size calculation are implemented;
+* `pblobJsonbInteger()` and `pblobJsonbNumber()` are implemented and tested;
+* `int8` packing and unpacking are production-complete;
+* binary32 packing and unpacking are production-complete;
+* `<f2` and `>f2` packing remain placeholders;
+* `<f2` and `>f2` unpacking remain placeholders;
+* the portable FP16 implementation is already included with native conversion disabled.
+
+Implement only binary16 packing for:
+
+```sql
+pblob_pack(json_array, '<f2')
+pblob_pack(json_array, '>f2')
+```
+
+Do not implement binary16 unpacking in this stage.
+
+### Objective
+
+Make these two SQL workflows production-complete:
+
+```sql
+pblob_pack(json_array, '<f2') -> little-endian IEEE binary16 BLOB
+pblob_pack(json_array, '>f2') -> big-endian IEEE binary16 BLOB
+```
+
+The implementation must:
+
+* accept SQL TEXT JSON arrays;
+* accept JSON integer and floating numeric nodes;
+* reuse `pblobJsonbNumber()` for extraction;
+* convert through the required path:
+
+  ```text
+  JSON numeric value -> double -> float -> IEEE binary16
+  ```
+* use the vendored FP16 conversion routine;
+* keep native FP16 conversion disabled;
+* reject non-finite source values;
+* reject finite values that overflow to binary32 before binary16 conversion;
+* reject finite values that convert to binary16 infinity;
+* preserve positive and negative zero;
+* permit underflow to binary16 subnormal or zero;
+* emit exact IEEE binary16 bytes in the requested byte order;
+* allocate the exact output size once;
+* return a raw headerless BLOB;
+* report the first invalid element using a zero-based index;
+* preserve all existing `int8` and binary32 behavior;
+* leave binary16 unpacking as a placeholder.
+
+### Scope
+
+This stage is limited to:
+
+1. Extending `pblob_pack()` dispatch for `<f2` and `>f2`.
+2. Reusing the existing production JSON parsing and array traversal workflow.
+3. Accepting all SQLite JSON numeric node types.
+4. Extracting values with `pblobJsonbNumber()`.
+5. Narrowing `double` to binary32 `float`.
+6. Rejecting non-finite binary32 intermediates.
+7. Converting with `fp16_ieee_from_fp32_value()`.
+8. Rejecting non-finite binary16 results.
+9. Writing explicit little-endian or big-endian bytes.
+10. Adding binary16 packing tests.
+11. Adding focused reference-vector, limit, OOM, and prepared-statement tests.
+12. Preserving all previous-stage tests.
+
+Do not implement any binary16 unpacking behavior.
+
+---
+
+### Public Behavior Introduced in This Stage
+
+The following calls must now succeed:
+
+```sql
+SELECT hex(pblob_pack('[1.0,2.0]', '<f2'));
+SELECT hex(pblob_pack('[1.0,2.0]', '>f2'));
+```
+
+Expected:
+
+```text
+003C0040
+3C004000
+```
+
+The following remain placeholders:
+
+```text
+pblob_unpack(..., '<f2')
+pblob_unpack(..., '>f2')
+```
+
+All `int8` and binary32 workflows must remain unchanged.
+
+---
+
+### `pblob_pack()` Dispatch
+
+Update `pblobPackFunc()` so that, after common validation and format parsing:
+
+```text
+PBLOB_INT8 -> existing int8 packing path
+PBLOB_F32  -> existing binary32 packing path
+PBLOB_F16  -> new binary16 packing path
+```
+
+Do not dispatch using raw format strings after `pblobParseFormat()` has populated `PblobFormat`.
+
+For `PBLOB_F16`, require:
+
+```text
+pFormat.nByte == 2
+pFormat.eOrder == PBLOB_ORDER_LE or PBLOB_ORDER_BE
+```
+
+Treat any inconsistent internal format descriptor as a defensive internal error.
+
+---
+
+### Shared Pack Workflow
+
+Reuse the established production infrastructure for:
+
+* JSON parsing;
+* root-array validation;
+* element counting;
+* checked packed-size calculation;
+* root payload discovery;
+* sequential array traversal;
+* exact output allocation;
+* cleanup;
+* malformed internal JSON checks.
+
+Do not duplicate the complete callback.
+
+A suitable private structure may be:
+
+```c
+static int pblobPackInt8(...);
+static int pblobPackF16(...);
+static int pblobPackF32(...);
+```
+
+or an equivalent shared element loop with format-specific conversion helpers.
+
+All production helpers must remain `static`.
+
+Do not create `pblob.h`.
+
+---
+
+### FP16 Configuration
+
+The normative build must continue to force:
+
+```c
+#define FP16_USE_NATIVE_CONVERSION 0
+```
+
+before including the vendored FP16 header.
+
+Add a compile-time check where practical:
+
+```c
+#if FP16_USE_NATIVE_CONVERSION
+# error "pblob requires portable FP16 conversion"
+#endif
+```
+
+or an equivalent static assertion compatible with the vendored header.
+
+Do not:
+
+* enable compiler-native half conversion;
+* use `_Float16`;
+* use `__fp16`;
+* use F16C intrinsics;
+* use AVX-512 FP16;
+* use ARM half-conversion intrinsics;
+* add a second half-float converter.
+
+The portable FP16 implementation is the normative source of binary16 rounding behavior.
+
+---
+
+### JSON Parsing and Root Validation
+
+Use the existing production path:
+
+```c
+jsonParseFuncArg(ctx, argv[0], 0)
+```
+
+Require:
+
+```c
+JSONB_ARRAY
+```
+
+at the root.
+
+Use:
+
+```c
+jsonbArrayCount()
+jsonbPayloadSize()
+```
+
+for count and traversal.
+
+Do not accept caller-supplied JSONB BLOB input.
+
+Do not introduce a separate JSON parser or numeric parser for binary16.
+
+---
+
+### Output Size
+
+For binary16:
+
+```text
+output bytes = element count * 2
+```
+
+Call the existing checked-size helper with:
+
+```text
+nByte = 2
+```
+
+The helper must enforce:
+
+* multiplication overflow protection;
+* the current `SQLITE_LIMIT_LENGTH`.
+
+Do not duplicate size or limit logic in the binary16 branch.
+
+A zero-element array must return a zero-length BLOB.
+
+---
+
+### Accepted JSONB Element Types
+
+For `<f2` and `>f2`, accept:
+
+```c
+JSONB_INT
+JSONB_INT5
+JSONB_FLOAT
+JSONB_FLOAT5
+```
+
+Reject:
+
+```text
+JSONB_NULL
+JSONB_TRUE
+JSONB_FALSE
+all JSON text node types
+JSONB_ARRAY
+JSONB_OBJECT
+```
+
+Accepted examples:
+
+```json
+[0]
+[1]
+[-1]
+[1.0]
+[-1.0]
+[0.5]
+[1e3]
+[0x7f]
+[-0x80]
+[1,2.5,0x10,-3]
+```
+
+Rejected examples:
+
+```json
+[null]
+[true]
+[false]
+["1"]
+[[]]
+[{}]
+```
+
+Recommended public error:
+
+```text
+pblob_pack: element N must be numeric for format <f2
+```
+
+or:
+
+```text
+pblob_pack: element N must be numeric for format >f2
+```
+
+The first invalid zero-based element index must be reported.
+
+---
+
+### Numeric Extraction
+
+For every accepted numeric node, call:
+
+```c
+pblobJsonbNumber()
+```
+
+Do not:
+
+* parse the numeric payload again;
+* route integer nodes through `pblobJsonbInteger()`;
+* use `strtof()`;
+* use `strtod()`;
+* use SQL numeric coercion;
+* duplicate JSON5 hexadecimal handling.
+
+The helper returns `double`.
+
+The binary16 packing path is responsible for target conversion and range validation.
+
+---
+
+### Required Conversion Path
+
+The normative conversion path is:
+
+```text
+SQLite JSON numeric payload
+-> pblobJsonbNumber()
+-> double
+-> float
+-> fp16_ieee_from_fp32_value()
+-> uint16_t binary16 bits
+```
+
+Implement conceptually:
+
+```c
+double d;
+float f;
+uint16_t bits;
+
+f = (float)d;
+bits = fp16_ieee_from_fp32_value(f);
+```
+
+This means binary16 conversion is explicitly:
+
+```text
+binary64 -> binary32 -> binary16
+```
+
+Do not claim or implement direct correctly rounded binary64-to-binary16 conversion.
+
+Do not:
+
+* parse decimal text directly to binary16;
+* manually construct half-float exponent or fraction fields;
+* use a different library;
+* convert through binary32 text.
+
+Document the required two-step narrowing in a concise source comment.
+
+---
+
+### Source Finiteness Check
+
+Before narrowing to `float`, reject non-finite `double` values.
+
+Use established SQLite or project finite checks.
+
+Recommended public error:
+
+```text
+pblob_pack: element N is not finite
+```
+
+This applies to SQLite-supported JSON5 infinity values if `pblobJsonbNumber()` returns a non-finite result.
+
+NaN spellings converted by `json.c` to JSON null must fail earlier as nonnumeric element types.
+
+Do not permit non-finite source values to reach the FP16 converter.
+
+---
+
+### Binary32 Intermediate Check
+
+After:
+
+```c
+float f = (float)d;
+```
+
+obtain binary32 bits:
+
+```c
+uint32_t f32bits = fp32_to_bits(f);
+```
+
+Check:
+
+```c
+pblobF32IsFinite(f32bits)
+```
+
+If the binary32 intermediate is non-finite, reject the value.
+
+Recommended public error:
+
+```text
+pblob_pack: element N is outside the finite float32 range
+```
+
+This check is mandatory even though the target is binary16.
+
+Reason:
+
+* the normative conversion path passes through binary32;
+* a finite `double` may overflow to binary32 infinity;
+* non-finite input must not be passed to the binary16 converter.
+
+Do not convert a binary32 infinity into binary16 infinity and report only the later failure.
+
+---
+
+### Binary16 Conversion
+
+For a finite binary32 intermediate, call:
+
+```c
+uint16_t bits = fp16_ieee_from_fp32_value(f);
+```
+
+Do not call a native or alternate conversion path.
+
+The result must be interpreted as raw IEEE binary16 bits.
+
+Do not convert the returned bits back to `float` merely to validate ordinary finite values.
+
+---
+
+### Binary16 Target Finiteness Check
+
+After conversion, require:
+
+```c
+pblobF16IsFinite(bits)
+```
+
+If false, reject the element.
+
+This catches finite binary32 values that overflow the finite binary16 range.
+
+Recommended public error:
+
+```text
+pblob_pack: element N is outside the finite float16 range
+```
+
+Do not emit:
+
+```text
+7C00
+FC00
+```
+
+for positive or negative infinity.
+
+Do not clamp or saturate to:
+
+```text
+7BFF
+FBFF
+```
+
+---
+
+### Underflow Behavior
+
+Finite values that convert to:
+
+* a binary16 subnormal;
+* positive zero;
+* negative zero;
+
+must be accepted.
+
+Do not reject underflow merely because precision or magnitude is lost.
+
+Do not flush subnormals to zero manually.
+
+The vendored portable FP16 converter defines the normative rounding and underflow behavior.
+
+---
+
+### Signed Zero
+
+Signed zero must be preserved through:
+
+```text
+double -> float -> binary16
+```
+
+Required raw values:
+
+```text
++0.0 -> 0000
+-0.0 -> 8000
+```
+
+Little-endian:
+
+```text
++0.0 -> 0000
+-0.0 -> 0080
+```
+
+Big-endian:
+
+```text
++0.0 -> 0000
+-0.0 -> 8000
+```
+
+Test supported negative-zero lexical forms:
+
+```text
+-0
+-0.0
+-0e0
+```
+
+Do not manually set the sign bit unless the extracted numeric value and binary32 intermediate retain negative zero.
+
+The exact behavior of lexical integer `-0` must follow the selected SQLite JSON parser.
+
+---
+
+### Endian Encoding
+
+For each finite binary16 word:
+
+```text
+<f2 -> pblobPutU16Le()
+>f2 -> pblobPutU16Be()
+```
+
+Do not:
+
+* write in host byte order;
+* use pointer casts;
+* use unaligned integer stores;
+* use `memcpy()` as the endian policy;
+* use platform byte-swap functions.
+
+Required example:
+
+```text
+1.0 bits = 3C00
+
+<f2 -> 00 3C
+>f2 -> 3C 00
+```
+
+---
+
+### Array Traversal
+
+Use the same defensive traversal rules as existing pack workflows.
+
+For each element:
+
+1. Verify the current node offset is inside the root payload.
+2. Obtain header and payload size with `jsonbPayloadSize()`.
+3. Verify the complete node fits inside the root payload.
+4. Validate the JSONB node type.
+5. Extract `double` with `pblobJsonbNumber()`.
+6. Reject non-finite source.
+7. Narrow to binary32.
+8. reject non-finite binary32 intermediate.
+9. convert to binary16.
+10. reject non-finite binary16 result.
+11. write two bytes in requested order.
+12. advance to the next node.
+
+After processing the counted elements, require:
+
+```text
+iNode == iEnd
+processed count == jsonbArrayCount() result
+```
+
+Any disagreement must report:
+
+```text
+pblob_pack: malformed internal JSON representation
+```
+
+Do not recurse into nested containers.
+
+---
+
+### Result Ownership
+
+Use the same exact single-allocation strategy as existing pack paths.
+
+For nonempty output:
+
+```c
+sqlite3_result_blob64(ctx, pOut, nOut, sqlite3_free);
+```
+
+On failure before result ownership transfer:
+
+```c
+sqlite3_free(pOut);
+```
+
+Always release:
+
+```c
+jsonParseFree(pParse);
+```
+
+Do not return a partial BLOB when an element fails after previous elements were written.
+
+---
+
+### Error Precedence
+
+Preserve this order:
+
+```text
+NULL propagation
+-> first argument storage class
+-> format storage class
+-> exact format value
+-> JSON parsing
+-> root array validation
+-> checked output size
+-> element type validation
+-> numeric extraction
+-> source finiteness
+-> binary32 intermediate finiteness
+-> binary16 target finiteness
+-> byte output
+```
+
+Examples:
+
+```sql
+SELECT pblob_pack('bad JSON', 'bad');
+```
+
+Expected: unsupported-format error.
+
+```sql
+SELECT pblob_pack('bad JSON', '<f2');
+```
+
+Expected: malformed JSON.
+
+```sql
+SELECT pblob_pack('{}', '<f2');
+```
+
+Expected: expected-array error.
+
+```sql
+SELECT pblob_pack('[null]', '<f2');
+```
+
+Expected: nonnumeric-element error.
+
+```sql
+SELECT pblob_pack('[1e999]', '<f2');
+```
+
+Expected: non-finite source or float32-range error according to actual extraction behavior.
+
+```sql
+SELECT pblob_pack('[70000]', '<f2');
+```
+
+Expected: finite float16 range error.
+
+---
+
+### Primary Exact Binary16 Vectors
+
+Add exact-byte tests for both byte orders.
+
+#### Zero and Signed Zero
+
+Values:
+
+```text
++0.0
+-0.0
+```
+
+Expected bits:
+
+```text
+0000
+8000
+```
+
+Expected `<f2`:
+
+```text
+00000080
+```
+
+Expected `>f2`:
+
+```text
+00008000
+```
+
+#### Basic Values
+
+Values:
+
+```text
+1.0
+-1.0
+2.0
+0.5
+```
+
+Expected bits:
+
+```text
+3C00
+BC00
+4000
+3800
+```
+
+Expected `<f2`:
+
+```text
+003C00BC00400038
+```
+
+Expected `>f2`:
+
+```text
+3C00BC0040003800
+```
+
+#### Required Minimal Vector
+
+```sql
+SELECT hex(
+  pblob_pack('[1.0,2.0]', '<f2')
+);
+```
+
+Expected:
+
+```text
+003C0040
+```
+
+```sql
+SELECT hex(
+  pblob_pack('[1.0,2.0]', '>f2')
+);
+```
+
+Expected:
+
+```text
+3C004000
+```
+
+---
+
+### Canonical IEEE Binary16 Vectors
+
+Include at least:
+
+| Value                       | Bits   |
+| --------------------------- | ------ |
+| positive zero               | `0000` |
+| negative zero               | `8000` |
+| smallest positive subnormal | `0001` |
+| largest positive subnormal  | `03FF` |
+| smallest positive normal    | `0400` |
+| `0.5`                       | `3800` |
+| `1.0`                       | `3C00` |
+| `-1.0`                      | `BC00` |
+| `2.0`                       | `4000` |
+| maximum positive finite     | `7BFF` |
+| maximum negative finite     | `FBFF` |
+
+Test both little-endian and big-endian representations.
+
+Expected decimal inputs must be generated independently and must model the specified binary64-to-binary32-to-binary16 path.
+
+---
+
+### Rounding Tests
+
+Add representative binary16 rounding tests.
+
+Include values:
+
+* exactly representable in binary16;
+* halfway between adjacent binary16 values;
+* immediately below halfway;
+* immediately above halfway;
+* around `1.0`;
+* around powers of two;
+* around the normal/subnormal boundary;
+* positive and negative variants.
+
+The expected result must model:
+
+```text
+decimal text
+-> binary64
+-> binary32
+-> vendored binary16 conversion
+```
+
+Do not use direct decimal-to-binary16 results as the oracle when the two-step path could differ.
+
+Include ties that verify round-to-nearest-even behavior implemented by the vendored FP16 converter.
+
+---
+
+### Double-Rounding Cases
+
+Because the normative path includes binary32 narrowing before binary16 conversion, add targeted cases where direct binary64-to-binary16 conversion could differ from:
+
+```text
+binary64 -> binary32 -> binary16
+```
+
+The test oracle must follow the required two-step path.
+
+Commit at least several such vectors if the independent generator can locate them.
+
+The implementation must match the specified path, not an idealized direct conversion.
+
+---
+
+### Subnormal Tests
+
+Test at least:
+
+```text
+smallest positive binary16 subnormal
+second positive subnormal
+largest positive subnormal
+negative counterparts
+```
+
+Verify exact output bits.
+
+Also test values that round:
+
+* from normal to largest subnormal;
+* from subnormal to minimum normal;
+* to positive zero;
+* to negative zero.
+
+Do not reject finite subnormal outputs.
+
+---
+
+### Underflow-to-Zero Tests
+
+Test finite values whose binary16 result is:
+
+```text
+0000
+8000
+```
+
+Include values:
+
+* below half the smallest positive subnormal;
+* exactly at relevant rounding boundaries;
+* negative equivalents.
+
+Expected behavior must come from the portable FP16 reference path.
+
+Signed zero must be verified through exact bytes.
+
+---
+
+### Maximum-Finite and Overflow Tests
+
+Accept exact maximum finite binary16:
+
+```text
+7BFF
+FBFF
+```
+
+Reject finite values that convert to:
+
+```text
+7C00
+FC00
+```
+
+Test:
+
+* maximum finite;
+* largest value rounding to maximum finite;
+* smallest value rounding to infinity;
+* values clearly outside range;
+* positive and negative forms.
+
+Do not hard-code only a rough decimal threshold such as `65504`.
+
+Use independently generated boundary vectors.
+
+---
+
+### Binary32 Intermediate Overflow Tests
+
+Test finite decimal values that overflow during:
+
+```text
+double -> float
+```
+
+before binary16 conversion.
+
+Expected: float32 intermediate range error.
+
+These are distinct from ordinary binary16 overflow cases.
+
+The test should prove the implementation checks the binary32 intermediate before calling the binary16 converter.
+
+---
+
+### JSON5 Numeric Tests
+
+Test SQLite-supported forms:
+
+```text
+[+1]
+[.5]
+[1.]
+[0x7f]
+[-0x80]
+[1,]
+[/*comment*/1.5]
+```
+
+Expected bytes must match equivalent canonical values.
+
+Test:
+
+```text
+Infinity
+-Infinity
+NaN
+QNaN
+SNaN
+```
+
+Expected:
+
+* infinity forms are rejected as non-finite;
+* NaN forms mapped to JSON null are rejected as nonnumeric elements.
+
+Do not add custom JSON5 handling.
+
+---
+
+### Wrong-Type Tests
+
+Reject:
+
+```json
+[null]
+[true]
+[false]
+["1"]
+[[]]
+[{}]
+```
+
+Test mixed arrays:
+
+```json
+[1,2.5,null,3]
+[1,"2",3]
+[1,[2],3]
+```
+
+Verify the first invalid zero-based element index.
+
+---
+
+### Empty Array Tests
+
+For both binary16 formats:
+
+```sql
+SELECT typeof(pblob_pack('[]','<f2'));
+SELECT length(pblob_pack('[]','<f2'));
+SELECT hex(pblob_pack('[]','<f2'));
+
+SELECT typeof(pblob_pack('[]','>f2'));
+SELECT length(pblob_pack('[]','>f2'));
+SELECT hex(pblob_pack('[]','>f2'));
+```
+
+Expected:
+
+```text
+blob
+0
+''
+```
+
+---
+
+### Large Array Tests
+
+Test element counts:
+
+```text
+0
+1
+2
+128
+256
+768
+1024
+1536
+4096
+```
+
+For each successful case verify:
+
+```text
+length(result) == element count * 2
+typeof(result) == blob
+```
+
+Use deterministic numeric patterns that remain finite in binary16.
+
+For representative large arrays verify:
+
+* first word;
+* middle word;
+* last word;
+* repeated calls produce identical output.
+
+---
+
+### SQLite Length-Limit Tests
+
+Temporarily lower:
+
+```text
+SQLITE_LIMIT_LENGTH
+```
+
+Test:
+
+```text
+nElem * 2 == limit
+nElem * 2 > limit
+```
+
+Expected:
+
+```text
+at limit -> success
+over limit -> result-too-large error
+```
+
+Restore the original limit after each test.
+
+This must exercise `pblobCheckedSize()` rather than duplicate its logic.
+
+---
+
+### Prepared-Statement Reuse
+
+Prepare:
+
+```sql
+SELECT pblob_pack(?1, '<f2');
+```
+
+Execute repeatedly with:
+
+```text
+[]
+[0]
+[1.0,-1.0]
+large valid array
+[null]
+[70000]
+[2.0]
+```
+
+Verify:
+
+* no stale output;
+* errors do not corrupt later success;
+* a prior large allocation does not affect later small output;
+* range and type errors leave the statement reusable.
+
+Also prepare:
+
+```sql
+SELECT pblob_pack(?1, ?2);
+```
+
+and alternate:
+
+```text
+int8
+<f4
+>f4
+<f2
+>f2
+bad
+<f2
+```
+
+Verify dispatch remains correct.
+
+---
+
+### Focused OOM Tests
+
+Use SQLite fault injection where supported.
+
+Exercise OOM during:
+
+1. JSON parsing.
+2. temporary numeric payload duplication in `pblobJsonbNumber()`.
+3. exact output BLOB allocation.
+4. processing after earlier elements have already been written.
+
+Verify:
+
+* no partial BLOB is returned;
+* the output allocation is freed;
+* `JsonParse` is released;
+* a subsequent valid call succeeds.
+
+Do not broaden this into the final complete fault matrix.
+
+---
+
+### Independent Binary16 Reference Vectors
+
+Extend the independent reference-vector generator for binary16 packing.
+
+The generator must model exactly:
+
+```text
+decimal input
+-> IEEE binary64
+-> IEEE binary32
+-> portable IEEE binary16 conversion
+-> selected byte order
+```
+
+It must not:
+
+* call SQLite;
+* call `pblob_pack()`;
+* consume bytes emitted by the implementation under test;
+* silently use direct binary64-to-binary16 conversion.
+
+Preferred oracle choices:
+
+1. Compile and run a small independent program using the same vendored FP16 public conversion API but not `pblob.c`.
+2. Implement the portable FP16 algorithm independently in the generator.
+3. Use a verified external numeric library only after proving it models the required binary32 intermediate.
+
+Record:
+
+```text
+generator version
+runtime/compiler version
+FP16 source revision
+portable-path status
+rounding mode assumptions
+endianness handling
+```
+
+Commit generated vectors as static test data.
+
+Normal tests must not require the generator.
+
+---
+
+### Portable-Path Verification
+
+Add a test-build assertion or diagnostic proving:
+
+```text
+FP16_USE_NATIVE_CONVERSION == 0
+```
+
+The normal test suite must fail if the build unexpectedly enables native conversion.
+
+Do not infer portable mode solely from runtime results.
+
+---
+
+### Regression Tests
+
+All Stage 2–9 tests must remain passing, including:
+
+* registration and arity;
+* NULL propagation;
+* strict storage classes;
+* exact format parsing;
+* embedded-NUL rejection;
+* endian and classification helpers;
+* numeric extraction helpers;
+* complete `int8` tests;
+* complete binary32 packing tests;
+* complete binary32 unpacking tests;
+* binary32 round-trip, cross-endian, subtype, limit, OOM, and prepared-statement tests.
+
+Verify binary16 unpacking remains a placeholder.
+
+---
+
+### Test Module Changes
+
+Extend:
+
+```text
+test/pblob.test
+```
+
+with public binary16 packing tests.
+
+Extend:
+
+```text
+tool/gen_pblob_vectors.py
+```
+
+or the selected independent vector generator.
+
+Extend committed vector data as required.
+
+Use existing test-only infrastructure for portable-path, OOM, and limit checks.
+
+Do not implement binary16 unpacking tests beyond confirming the placeholder remains.
+
+Do not register a public debug SQL function.
+
+---
+
+### Build Verification
+
+Perform all required configurations.
+
+#### Normal Build
+
+Verify:
+
+* `<f2` and `>f2` packing compile and link;
+* exact vectors pass;
+* portable FP16 mode is active;
+* all existing behavior remains unchanged;
+* no new warnings appear;
+* no test-only interface is present.
+
+#### Test Build
+
+Build `testfixture` or the project equivalent with:
+
+```text
+SQLITE_TEST
+FP16_USE_NATIVE_CONVERSION=0
+```
+
+Run:
+
+* exact binary16 vectors;
+* signed-zero tests;
+* rounding tests;
+* double-rounding tests;
+* subnormal tests;
+* underflow-to-zero tests;
+* maximum-finite tests;
+* overflow tests;
+* binary32 intermediate overflow tests;
+* JSON5 tests;
+* wrong-type tests;
+* large-array tests;
+* limit tests;
+* prepared-statement tests;
+* focused OOM tests;
+* all previous-stage tests.
+
+#### JSON-Disabled Build
+
+Build with:
+
+```text
+SQLITE_OMIT_JSON
+```
+
+Verify:
+
+* build and link succeed;
+* no `pblob` SQL functions are registered;
+* no JSONB or FP16 packing references remain unresolved;
+* no warnings are introduced;
+* FP16 code is not unnecessarily active outside the JSON guard.
+
+---
+
+### Prohibited Work
+
+Do not implement:
+
+* binary16 unpacking;
+* binary16 BLOB-length validation;
+* `fp16_ieee_to_fp32_value()` in production;
+* binary16 JSON output;
+* binary16 non-finite unpack rejection;
+* direct binary64-to-binary16 conversion;
+* native half conversion;
+* `_Float16`;
+* `__fp16`;
+* hardware FP16 intrinsics;
+* another half-float library;
+* saturation to maximum finite;
+* infinity or NaN output;
+* format inference;
+* BLOB headers or metadata;
+* JSONB input acceptance for `pblob_pack()`;
+* public C APIs;
+* public headers.
+
+Do not modify:
+
+* `json.c`;
+* the vendored FP16 implementation;
+* unrelated SQLite code.
+
+Do not add new production SQL functions.
+
+---
+
+### Expected Deliverables
+
+Provide:
+
+1. Updated `pblob.c`.
+2. Updated `test/pblob.test`.
+3. Updated independent binary16 packing vectors and generator.
+4. Any narrowly scoped test-only changes required for portable-path, limit, or OOM testing.
+5. Exact build commands executed.
+6. Exact test commands executed.
+7. Results for:
+
+   * normal build;
+   * test build;
+   * JSON-disabled build.
+8. A concise list of modified files.
+9. Confirmation that:
+
+   * only `<f2` and `>f2` packing became newly functional;
+   * conversion follows `double -> float -> binary16`;
+   * `fp16_ieee_from_fp32_value()` is used;
+   * portable FP16 mode is forced;
+   * non-finite source values are rejected;
+   * non-finite binary32 intermediates are rejected;
+   * non-finite binary16 results are rejected;
+   * underflow is accepted;
+   * signed zero is preserved;
+   * endian output uses explicit byte helpers;
+   * output allocation is exact and single-shot;
+   * binary16 unpacking remains a placeholder;
+   * no public API or header was added.
+
+---
+
+### Acceptance Criteria
+
+Stage 10 is complete only when:
+
+* `pblob_pack(...,'<f2')` emits exact little-endian IEEE binary16 bytes;
+* `pblob_pack(...,'>f2')` emits exact big-endian IEEE binary16 bytes;
+* integer and floating JSON numeric nodes are accepted;
+* nonnumeric elements are rejected with the first zero-based index;
+* extraction uses `pblobJsonbNumber()`;
+* conversion follows the required `double -> float -> binary16` path;
+* portable FP16 conversion is forced and verified;
+* `fp16_ieee_from_fp32_value()` is used;
+* signed zero is preserved;
+* finite subnormal and zero-underflow results are accepted;
+* finite values that overflow binary16 are rejected;
+* finite values that overflow the binary32 intermediate are rejected;
+* non-finite source values are rejected;
+* no infinity or NaN binary16 bytes are emitted;
+* exact independent vectors pass;
+* rounding and double-rounding tests pass;
+* output size is exactly `element count * 2`;
+* SQLite length limits are enforced;
+* OOM paths release all owned state;
+* prepared-statement reuse is correct;
+* all Stage 2–9 tests remain passing;
+* binary16 unpacking remains a placeholder;
+* normal build succeeds;
+* test build succeeds;
+* JSON-disabled build succeeds;
+* no new warnings appear;
+* no public C API or header exists.
+
+Stop after satisfying these criteria. Do not proceed to Stage 11.
+
+---
+---
+
+## 📗 Stage 11: Binary16 Unpacking
+
+Implement only Stage 11 of the packed numeric BLOB extension.
+
+This stage begins from the completed Stage 10 state, where:
+
+* `pblob.c` is compiled into the SQLite amalgamation after `json.c`;
+* `pblob_pack()` and `pblob_unpack()` are auto-registered;
+* NULL propagation, strict storage-class validation, and exact format parsing are implemented;
+* endian helpers, binary16 and binary32 classification helpers, signed-byte decoding, and checked packed-size calculation are implemented;
+* `pblobJsonbInteger()` and `pblobJsonbNumber()` are implemented and tested;
+* `int8` packing and unpacking are production-complete;
+* binary32 packing and unpacking are production-complete;
+* binary16 packing for `<f2` and `>f2` is production-complete;
+* binary16 unpacking remains a placeholder;
+* portable FP16 conversion is forced with `FP16_USE_NATIVE_CONVERSION=0`.
+
+Implement only binary16 unpacking for:
+
+```sql
+pblob_unpack(blob, '<f2')
+pblob_unpack(blob, '>f2')
+```
+
+Do not change the public semantics of any already implemented format.
+
+### Objective
+
+Make these two SQL workflows production-complete:
+
+```sql
+pblob_unpack(blob, '<f2') -> JSON text
+pblob_unpack(blob, '>f2') -> JSON text
+```
+
+The implementation must:
+
+* accept only SQL BLOB input;
+* require the BLOB length to be divisible by two;
+* read every element using explicit endian helpers;
+* reject every IEEE binary16 infinity and NaN bit pattern;
+* convert finite binary16 values using the vendored portable FP16 implementation;
+* use the required conversion path:
+
+  ```text
+  binary16 bits -> binary32 float -> binary64 double
+  ```
+* preserve positive and negative zero;
+* preserve every finite binary16 value exactly through promotion;
+* emit compact valid JSON text;
+* assign SQLite’s JSON subtype;
+* report the first invalid element using a zero-based index;
+* allow every finite binary16 subnormal and normal value;
+* preserve all existing `int8`, binary32, and binary16 packing behavior.
+
+After this stage, all five supported formats must be functional in both directions.
+
+### Scope
+
+This stage is limited to:
+
+1. Extending `pblob_unpack()` dispatch for `<f2` and `>f2`.
+2. Validating binary16 BLOB length.
+3. Reading binary16 words with explicit endian helpers.
+4. Rejecting non-finite raw binary16 values.
+5. Converting with `fp16_ieee_to_fp32_value()`.
+6. Promoting the resulting binary32 `float` to `double`.
+7. Formatting finite values through SQLite’s JSON formatter.
+8. Preserving signed zero.
+9. Returning JSON-subtyped TEXT.
+10. Adding binary16 unpacking, round-trip, exhaustive, limit, OOM, and prepared-statement tests.
+11. Preserving all previous-stage tests.
+
+Do not add new formats or public APIs.
+
+---
+
+### Public Behavior Introduced in This Stage
+
+The following calls must now succeed:
+
+```sql
+SELECT pblob_unpack(x'003C0040', '<f2');
+SELECT pblob_unpack(x'3C004000', '>f2');
+```
+
+Expected semantic result:
+
+```text
+[1.0,2.0]
+[1.0,2.0]
+```
+
+Exact numeric spelling must follow SQLite’s established JSON formatter.
+
+After this stage, no supported format may retain a placeholder branch.
+
+---
+
+### `pblob_unpack()` Dispatch
+
+Update `pblobUnpackFunc()` so that, after common validation and format parsing:
+
+```text
+PBLOB_INT8 -> existing int8 unpacking path
+PBLOB_F16  -> new binary16 unpacking path
+PBLOB_F32  -> existing binary32 unpacking path
+```
+
+Do not compare raw format strings after `pblobParseFormat()` succeeds.
+
+For `PBLOB_F16`, require:
+
+```text
+pFormat.nByte == 2
+pFormat.eOrder == PBLOB_ORDER_LE or PBLOB_ORDER_BE
+```
+
+Treat any inconsistent internal format descriptor as a defensive internal error.
+
+Remove the temporary binary16 unpack placeholder only after both endian paths are implemented.
+
+---
+
+### Shared Unpack Workflow
+
+Reuse the established unpacking infrastructure for:
+
+* BLOB retrieval;
+* format dispatch;
+* `JsonString` initialization;
+* compact array punctuation;
+* result finalization;
+* subtype assignment;
+* cleanup;
+* OOM handling.
+
+Do not duplicate the entire SQL callback.
+
+A suitable private organization is:
+
+```c
+static int pblobUnpackInt8(...);
+static int pblobUnpackF16(...);
+static int pblobUnpackF32(...);
+```
+
+or an equivalent shared element loop.
+
+All production helpers must remain `static`.
+
+Do not create `pblob.h`.
+
+---
+
+### BLOB Retrieval
+
+Use the existing validated BLOB path:
+
+```c
+const u8 *pBlob = sqlite3_value_blob(argv[0]);
+int nBlob = sqlite3_value_bytes(argv[0]);
+```
+
+or the exact selected-source types.
+
+Required behavior:
+
+* zero-length BLOB is valid;
+* NULL pointer with zero length is valid;
+* the input is not copied;
+* the BLOB is treated as raw binary16 words;
+* no JSONB interpretation occurs.
+
+Do not call `sqlite3_value_text()` on the BLOB.
+
+---
+
+### BLOB Length Validation
+
+For binary16:
+
+```text
+element width = 2 bytes
+```
+
+Require:
+
+```text
+nBlob % 2 == 0
+```
+
+If the BLOB length is odd, return a stable function-specific error.
+
+Recommended messages:
+
+```text
+pblob_unpack: BLOB length is not divisible by 2 for format <f2
+pblob_unpack: BLOB length is not divisible by 2 for format >f2
+```
+
+Length validation must occur:
+
+* after NULL propagation;
+* after first-argument type validation;
+* after format validation;
+* before `JsonString` initialization where practical;
+* before reading any element.
+
+Do not decode a prefix of an odd-length BLOB.
+
+---
+
+### Element Count
+
+For binary16:
+
+```text
+element count = nBlob / 2
+```
+
+Use a type that safely represents the result.
+
+Do not call `pblobCheckedSize()` for input division.
+
+No output-size precomputation is required; `JsonString` handles dynamic textual output growth.
+
+---
+
+### Endian Decoding
+
+For each element:
+
+```text
+<f2 -> pblobGetU16Le()
+>f2 -> pblobGetU16Be()
+```
+
+Required examples:
+
+```text
+bytes 00 3C under <f2 -> bits 3C00
+bytes 3C 00 under >f2 -> bits 3C00
+```
+
+Do not use:
+
+* host byte order;
+* pointer casts;
+* unaligned `uint16_t` loads;
+* `memcpy()` as the endian policy;
+* platform byte-swap APIs.
+
+Element byte offsets are:
+
+```text
+0
+2
+4
+6
+...
+```
+
+---
+
+### Raw Binary16 Classification
+
+Before conversion, classify each raw word using:
+
+```c
+pblobF16IsFinite()
+pblobF16IsInf()
+pblobF16IsNaN()
+```
+
+Reject every non-finite pattern.
+
+Required rejected classes:
+
+```text
+positive infinity
+negative infinity
+quiet NaN
+signaling NaN
+positive NaN payloads
+negative NaN payloads
+```
+
+Recommended public errors:
+
+```text
+pblob_unpack: element N is infinity
+pblob_unpack: element N is NaN
+```
+
+A combined stable error is also acceptable:
+
+```text
+pblob_unpack: element N is not a finite float16 value
+```
+
+The first invalid zero-based element index must be reported.
+
+Do not:
+
+* convert infinity or NaN to JSON null;
+* emit `Infinity`;
+* emit `NaN`;
+* pass non-finite words to the FP16 converter before classification;
+* silently canonicalize NaN payloads.
+
+---
+
+### Required Conversion Path
+
+For each finite binary16 word:
+
+```c
+float f = fp16_ieee_to_fp32_value(bits);
+double d = (double)f;
+```
+
+This path is normative:
+
+```text
+binary16 raw bits
+-> vendored portable FP16 converter
+-> binary32 float
+-> exact binary64 promotion
+```
+
+Do not:
+
+* manually decode sign, exponent, and significand into `double`;
+* use `_Float16`;
+* use `__fp16`;
+* use hardware half-float instructions;
+* use union type-punning;
+* pointer-cast raw words;
+* convert through decimal text;
+* add another FP16 implementation.
+
+The binary32-to-binary64 promotion must remain an ordinary exact C conversion.
+
+---
+
+### Portable FP16 Requirement
+
+The build must continue to force:
+
+```c
+FP16_USE_NATIVE_CONVERSION == 0
+```
+
+The Stage 10 compile-time or test-time verification must remain active.
+
+Do not weaken or remove it.
+
+Binary16 unpacking must use:
+
+```c
+fp16_ieee_to_fp32_value()
+```
+
+from the vendored portable implementation.
+
+Do not select a platform-dependent native path at runtime or compile time.
+
+---
+
+### Conversion Validation
+
+All raw words accepted by `pblobF16IsFinite()` should convert to finite binary32 values.
+
+The implementation may defensively verify:
+
+```c
+pblobF32IsFinite(fp32_to_bits(f))
+```
+
+after conversion.
+
+If this check is included, a failure must be treated as an internal conversion error, because every finite IEEE binary16 value is exactly representable as finite IEEE binary32.
+
+Do not use this defensive check to reject subnormals or signed zero.
+
+---
+
+### JSON Numeric Formatting
+
+Promote the converted `float` to `double` and append using SQLite’s JSON-aware formatter.
+
+Use the exact project convention, expected to be equivalent to:
+
+```c
+jsonPrintf(100, &out, "%!0.17g", d);
+```
+
+Requirements:
+
+* output must be valid JSON;
+* output must be compact;
+* every finite binary16 value must serialize so that repacking through the specified binary32-to-binary16 path reproduces the original bits;
+* signed zero must remain distinguishable;
+* formatting must be locale-independent.
+
+Do not use:
+
+```c
+printf()
+sprintf()
+snprintf()
+sqlite3_mprintf()
+strfromf()
+```
+
+Do not emit hexadecimal floating-point syntax.
+
+---
+
+### Floating-Point JSON Syntax
+
+Decoded binary16 values remain floating-point values even when mathematically integral.
+
+Use SQLite’s established floating JSON formatter.
+
+Do not deliberately emit integer syntax for values such as:
+
+```text
+1.0
+2.0
+-1.0
+```
+
+Do not cast to `sqlite3_int64` merely because the value is integral.
+
+The required invariant is:
+
+```text
+pblob_pack(pblob_unpack(blob, format), format)
+```
+
+reproduces every finite binary16 word exactly.
+
+---
+
+### Signed Zero
+
+Signed zero must be preserved.
+
+Raw patterns:
+
+```text
+0000 -> positive zero
+8000 -> negative zero
+```
+
+Big-endian tests:
+
+```sql
+SELECT pblob_unpack(x'0000', '>f2');
+SELECT pblob_unpack(x'8000', '>f2');
+```
+
+Little-endian tests:
+
+```sql
+SELECT pblob_unpack(x'0000', '<f2');
+SELECT pblob_unpack(x'0080', '<f2');
+```
+
+Verify negative zero through exact repacking:
+
+```sql
+SELECT hex(
+  pblob_pack(
+    pblob_unpack(x'8000', '>f2'),
+    '>f2'
+  )
+);
+```
+
+Expected:
+
+```text
+8000
+```
+
+Also test little-endian:
+
+```text
+0080
+```
+
+Do not rely only on displayed JSON text.
+
+---
+
+### Finite Subnormal Values
+
+All finite binary16 subnormals are valid.
+
+Required examples:
+
+```text
+0001
+0002
+03FF
+8001
+8002
+83FF
+```
+
+The implementation must:
+
+* accept them;
+* preserve sign;
+* emit valid JSON numbers;
+* reproduce the exact original bits when repacked.
+
+Do not flush binary16 subnormals to zero.
+
+The portable converter must determine their exact binary32 values.
+
+---
+
+### Normal Values
+
+Accept every binary16 normal value whose exponent field is not all ones.
+
+Required examples include:
+
+```text
+0400
+3C00
+BC00
+4000
+7BFF
+8400
+FBFF
+```
+
+These include:
+
+* minimum positive normal;
+* `1.0`;
+* `-1.0`;
+* `2.0`;
+* maximum positive finite;
+* minimum negative normal;
+* maximum negative finite.
+
+---
+
+### JSON Output Construction
+
+Use existing `JsonString` infrastructure:
+
+```c
+JsonString out;
+
+jsonStringInit(&out, ctx);
+jsonAppendChar(&out, '[');
+/* append values */
+jsonAppendChar(&out, ']');
+jsonReturnString(...);
+```
+
+Use commas without spaces.
+
+A zero-length BLOB must return:
+
+```text
+[]
+```
+
+with:
+
+```text
+storage class: TEXT
+subtype: JSON_SUBTYPE
+```
+
+Do not manually concatenate text.
+
+---
+
+### Result Finalization and Subtype
+
+Finalize using the established `jsonReturnString()` path.
+
+After successful finalization, assign:
+
+```c
+sqlite3_result_subtype(ctx, JSON_SUBTYPE);
+```
+
+Retain:
+
+```c
+SQLITE_RESULT_SUBTYPE
+```
+
+in the SQL function registration flags.
+
+Do not assign the JSON subtype after an error.
+
+Test composition:
+
+```sql
+SELECT json_array(
+  pblob_unpack(x'3C004000', '>f2')
+);
+```
+
+Expected semantic result:
+
+```json
+[[1.0,2.0]]
+```
+
+It must not become:
+
+```json
+["[1.0,2.0]"]
+```
+
+Also test:
+
+```sql
+SELECT json_type(pblob_unpack(x'3C00', '>f2'));
+SELECT json_array_length(pblob_unpack(x'3C004000', '>f2'));
+```
+
+Expected:
+
+```text
+array
+2
+```
+
+---
+
+### Empty BLOB
+
+For both formats:
+
+```sql
+SELECT pblob_unpack(x'', '<f2');
+SELECT pblob_unpack(x'', '>f2');
+```
+
+Expected:
+
+```text
+[]
+[]
+```
+
+Also verify:
+
+```sql
+SELECT typeof(pblob_unpack(x'', '<f2'));
+SELECT json_valid(pblob_unpack(x'', '<f2'));
+SELECT json_array_length(pblob_unpack(x'', '<f2'));
+```
+
+Expected:
+
+```text
+text
+1
+0
+```
+
+Do not return SQL NULL or BLOB.
+
+---
+
+### Error Precedence
+
+Preserve this order:
+
+```text
+NULL propagation
+-> first argument storage class
+-> format storage class
+-> exact format value
+-> binary16 BLOB length validation
+-> per-element raw classification
+-> FP16 conversion
+-> JSON output construction
+```
+
+Examples:
+
+```sql
+SELECT pblob_unpack(NULL, 'bad');
+```
+
+Expected: SQL NULL.
+
+```sql
+SELECT pblob_unpack('0000', '>f2');
+```
+
+Expected: first-argument BLOB error.
+
+```sql
+SELECT pblob_unpack(x'0000', 1);
+```
+
+Expected: format-must-be-text error.
+
+```sql
+SELECT pblob_unpack(x'0000', 'bad');
+```
+
+Expected: unsupported-format error.
+
+```sql
+SELECT pblob_unpack(x'00', '<f2');
+```
+
+Expected: invalid binary16 length error.
+
+```sql
+SELECT pblob_unpack(x'7C00', '>f2');
+```
+
+Expected: non-finite element error at index 0.
+
+```sql
+SELECT pblob_unpack(x'3C00', '>f2');
+```
+
+Expected semantic result:
+
+```text
+[1.0]
+```
+
+---
+
+### Primary Exact Binary16 Unpack Tests
+
+Add tests for both endian forms.
+
+#### Basic Values
+
+Raw words:
+
+```text
+3C00
+BC00
+4000
+3800
+```
+
+Semantic values:
+
+```text
+1.0
+-1.0
+2.0
+0.5
+```
+
+Big-endian BLOB:
+
+```text
+3C00BC0040003800
+```
+
+Little-endian BLOB:
+
+```text
+003C00BC00400038
+```
+
+Where exact JSON spelling is stable, assert exact text.
+
+Otherwise verify:
+
+* valid JSON;
+* array length;
+* semantic numeric values;
+* exact repacked bytes.
+
+#### Required Minimal Vector
+
+```sql
+SELECT pblob_unpack(x'003C0040', '<f2');
+```
+
+Expected semantic result:
+
+```text
+[1.0,2.0]
+```
+
+```sql
+SELECT pblob_unpack(x'3C004000', '>f2');
+```
+
+Expected the same.
+
+---
+
+### Canonical Finite Bit Vectors
+
+Test at least:
+
+| Bits   | Meaning                     |
+| ------ | --------------------------- |
+| `0000` | positive zero               |
+| `8000` | negative zero               |
+| `0001` | smallest positive subnormal |
+| `8001` | smallest negative subnormal |
+| `03FF` | largest positive subnormal  |
+| `83FF` | largest negative subnormal  |
+| `0400` | smallest positive normal    |
+| `8400` | smallest negative normal    |
+| `3800` | `0.5`                       |
+| `3C00` | `1.0`                       |
+| `BC00` | `-1.0`                      |
+| `4000` | `2.0`                       |
+| `7BFF` | maximum positive finite     |
+| `FBFF` | maximum negative finite     |
+
+Test both endian encodings.
+
+For every vector verify:
+
+```text
+unpack succeeds
+json_valid(result) == 1
+array length is correct
+repacking reproduces the original bits
+```
+
+---
+
+### Non-Finite Rejection Tests
+
+Reject infinity:
+
+```text
+7C00
+FC00
+```
+
+Reject representative NaNs:
+
+```text
+7C01
+7D00
+7E00
+7FFF
+FC01
+FD00
+FE00
+FFFF
+```
+
+Test both endian forms.
+
+Test invalid values at nonzero indexes:
+
+```text
+[finite, infinity, finite]
+[finite, NaN, finite]
+```
+
+Verify the first invalid zero-based index.
+
+No partial JSON result may be returned.
+
+---
+
+### Invalid Length Tests
+
+Reject odd BLOB lengths:
+
+```text
+1
+3
+5
+7
+9
+```
+
+Test both `<f2` and `>f2`.
+
+Accept even lengths:
+
+```text
+0
+2
+4
+6
+8
+10
+```
+
+Length failure must occur before raw-value classification.
+
+No prefix may be decoded from an odd-length BLOB.
+
+---
+
+### Pack/Unpack Bit-Identity Tests
+
+For every committed finite binary16 vector, test:
+
+```sql
+SELECT hex(
+  pblob_pack(
+    pblob_unpack(?1, '<f2'),
+    '<f2'
+  )
+);
+```
+
+Expected: original little-endian BLOB.
+
+Repeat for `>f2`.
+
+Include:
+
+* zero;
+* negative zero;
+* positive and negative subnormals;
+* minimum normals;
+* ordinary normals;
+* maximum finite values;
+* mixed arrays;
+* independently generated random finite words.
+
+This identity is mandatory for every finite binary16 pattern tested.
+
+---
+
+### Cross-Endian Tests
+
+Test little-endian unpack followed by big-endian packing:
+
+```sql
+SELECT hex(
+  pblob_pack(
+    pblob_unpack(x'003C0040', '<f2'),
+    '>f2'
+  )
+);
+```
+
+Expected:
+
+```text
+3C004000
+```
+
+Test the reverse:
+
+```sql
+SELECT hex(
+  pblob_pack(
+    pblob_unpack(x'3C004000', '>f2'),
+    '<f2'
+  )
+);
+```
+
+Expected:
+
+```text
+003C0040
+```
+
+Extend this to signed zero, subnormal, minimum normal, and maximum finite vectors.
+
+---
+
+### Exhaustive Finite Binary16 Test
+
+The test build must exhaustively cover all 65,536 binary16 bit patterns.
+
+For every raw word from:
+
+```text
+0000 through FFFF
+```
+
+perform classification.
+
+Required totals:
+
+```text
+finite patterns: 63,488
+infinity patterns: 2
+NaN patterns: 2,046
+```
+
+For every finite word:
+
+1. Decode with `fp16_ieee_to_fp32_value()`.
+2. Promote to `double`.
+3. Serialize through the production or equivalent formatter.
+4. Parse and pack using the production binary16 packing path.
+5. Verify the original binary16 bits are reproduced.
+
+For every infinity or NaN word:
+
+* verify `pblob_unpack()` rejects it;
+* verify classification is correct.
+
+The exhaustive loop should be implemented in test-only C where practical for performance.
+
+Do not issue 65,536 separate SQL statements from Tcl unless measured performance is acceptable.
+
+---
+
+### Exhaustive Classification Counts
+
+Explicitly verify:
+
+```text
+positive infinity: 1
+negative infinity: 1
+positive NaNs: 1,023
+negative NaNs: 1,023
+positive finite values including +0: 31,744
+negative finite values including -0: 31,744
+```
+
+Ensure no bit pattern belongs to more than one category.
+
+---
+
+### Exhaustive Finite Conversion Oracle
+
+For each finite binary16 word, independently verify that:
+
+```text
+fp16_ieee_to_fp32_value(bits)
+```
+
+produces the expected binary32 bits.
+
+The expected mapping must not be generated by `pblob.c`.
+
+Acceptable approaches:
+
+1. A separate test-only reference implementation.
+2. Committed independently generated mapping or digest.
+3. Comparison with an established independent half-to-float implementation.
+4. Exhaustive digest comparison generated by the reference-vector tool.
+
+The production converter and independent oracle must not be the same code path presented under different wrappers.
+
+At minimum, calculate and commit stable digests over:
+
+```text
+input binary16 word
+decoded binary32 bits
+```
+
+for all finite inputs.
+
+Document the digest algorithm and byte ordering.
+
+---
+
+### JSON Formatting Round-Trip
+
+The most important public invariant is:
+
+```text
+finite binary16 bits
+-> unpack JSON
+-> pack binary16
+-> identical bits
+```
+
+The exhaustive test must verify this for every finite raw word.
+
+This validates:
+
+* FP16 decoding;
+* exact binary32-to-binary64 promotion;
+* JSON number formatting;
+* JSON reparsing;
+* binary64-to-binary32 narrowing;
+* binary32-to-binary16 conversion;
+* signed-zero preservation.
+
+Any failure must report the original raw word and intermediate values.
+
+---
+
+### Large BLOB Tests
+
+Test element counts:
+
+```text
+0
+1
+2
+128
+256
+768
+1024
+1536
+4096
+```
+
+Input length:
+
+```text
+element count * 2
+```
+
+Use deterministic finite binary16 patterns.
+
+For each successful case verify:
+
+```text
+json_valid(result) == 1
+json_array_length(result) == element count
+typeof(result) == text
+repacking reproduces the original BLOB
+```
+
+For representative arrays verify:
+
+* first value;
+* middle value;
+* last value.
+
+---
+
+### SQLite Length-Limit Tests
+
+Binary16 JSON output can be substantially larger than the input BLOB.
+
+Temporarily lower:
+
+```text
+SQLITE_LIMIT_LENGTH
+```
+
+Test outputs that:
+
+* fit below the limit;
+* are near the limit;
+* exceed the limit.
+
+Expected oversized behavior:
+
+* SQLite string-too-large error;
+* no partial JSON output;
+* no subtype assigned after failure;
+* subsequent valid calls succeed.
+
+Restore the prior limit after each test.
+
+Derive the boundary from actual compact output length rather than from a fixed multiplier of input length.
+
+---
+
+### Prepared-Statement Reuse
+
+Prepare:
+
+```sql
+SELECT pblob_unpack(?1, '<f2');
+```
+
+Execute repeatedly with:
+
+```text
+empty BLOB
+one finite value
+multiple finite values
+odd-length BLOB
+infinity
+NaN
+large finite BLOB
+one finite value
+```
+
+Verify:
+
+* errors do not corrupt later successful results;
+* no stale JSON text remains;
+* a prior large allocation does not affect a later small result;
+* subtype is correct after recovery from errors.
+
+Also prepare:
+
+```sql
+SELECT pblob_unpack(?1, ?2);
+```
+
+Alternate:
+
+```text
+int8
+<f2
+>f2
+<f4
+>f4
+bad
+<f2
+```
+
+Verify format dispatch and recovery.
+
+---
+
+### Focused OOM Tests
+
+Use SQLite fault injection where supported.
+
+Exercise OOM during:
+
+1. initial `JsonString` growth;
+2. later growth after multiple elements;
+3. formatting of a long subnormal or maximum-finite decimal;
+4. final result transfer where applicable.
+
+Verify:
+
+* no partial JSON result is returned;
+* `JsonString` storage is released;
+* subtype is not assigned after failure;
+* a subsequent valid call succeeds.
+
+Do not broaden unrelated code in this stage.
+
+---
+
+### Independent Binary16 Unpack Vectors
+
+Extend the independent vector suite to cover binary16 unpacking.
+
+Commit vectors for:
+
+* positive and negative zero;
+* subnormals;
+* normal boundaries;
+* ordinary values;
+* maximum finite values;
+* infinities;
+* NaNs;
+* both endian forms;
+* multiple-element arrays.
+
+Normal tests must use committed static vectors and must not require Python, NumPy, or the generator.
+
+The generator must record:
+
+```text
+runtime/compiler version
+FP16 oracle implementation
+portable-path status
+endianness handling
+digest algorithm
+```
+
+---
+
+### Regression Tests
+
+All Stage 2–10 tests must remain passing, including:
+
+* registration and arity;
+* NULL propagation;
+* strict storage classes;
+* exact format parsing;
+* embedded-NUL format rejection;
+* endian and bit-classification tests;
+* checked-size tests;
+* numeric extraction tests;
+* complete `int8` pack and unpack tests;
+* complete binary32 pack and unpack tests;
+* complete binary16 packing tests;
+* signed-zero, subnormal, rounding, overflow, limit, OOM, and prepared-statement tests.
+
+After Stage 11, no supported format may return a not-implemented placeholder.
+
+Add an explicit regression test that invokes all ten supported function/format directions:
+
+```text
+pack int8
+unpack int8
+pack <f2
+unpack <f2
+pack >f2
+unpack >f2
+pack <f4
+unpack <f4
+pack >f4
+unpack >f4
+```
+
+All must succeed for valid input.
+
+---
+
+### Test Module Changes
+
+Extend:
+
+```text
+test/pblob.test
+```
+
+with public binary16 unpacking tests.
+
+Extend test-only C infrastructure for exhaustive binary16 testing where necessary.
+
+Extend:
+
+```text
+tool/gen_pblob_vectors.py
+```
+
+or the selected independent vector generator.
+
+Update committed vector data.
+
+Do not register a public debug SQL function.
+
+Any exhaustive helper must remain test-only.
+
+---
+
+### Build Verification
+
+Perform all required configurations.
+
+#### Normal Build
+
+Verify:
+
+* `<f2` and `>f2` unpacking compile and link;
+* canonical and round-trip vectors pass;
+* JSON subtype composition works;
+* every supported format is functional;
+* no placeholder code remains for supported formats;
+* no new warnings appear;
+* no test-only interface is present.
+
+#### Test Build
+
+Build `testfixture` or the project equivalent with:
+
+```text
+SQLITE_TEST
+FP16_USE_NATIVE_CONVERSION=0
+```
+
+Run:
+
+* exact binary16 unpack vectors;
+* invalid-length tests;
+* signed-zero tests;
+* subnormal tests;
+* maximum-finite tests;
+* non-finite rejection tests;
+* bit-identity tests;
+* cross-endian tests;
+* exhaustive 65,536-pattern classification;
+* exhaustive finite round-trip tests;
+* independent conversion-oracle checks;
+* large-BLOB tests;
+* subtype tests;
+* limit tests;
+* prepared-statement tests;
+* focused OOM tests;
+* every previous-stage test.
+
+#### JSON-Disabled Build
+
+Build with:
+
+```text
+SQLITE_OMIT_JSON
+```
+
+Verify:
+
+* build and link succeed;
+* no `pblob` SQL functions are registered;
+* no `JsonString`, JSONB, or FP16 unpack references remain unresolved;
+* FP16 code is not unnecessarily active outside the JSON guard;
+* no warnings are introduced.
+
+---
+
+### Prohibited Work
+
+Do not:
+
+* add new packed formats;
+* add BLOB headers;
+* add metadata;
+* add automatic endian detection;
+* accept native-endian aliases;
+* output infinity or NaN;
+* map non-finite values to null;
+* manually decode binary16 into binary64;
+* use native half types;
+* use hardware half-conversion instructions;
+* add another FP16 implementation;
+* accept JSONB input for `pblob_pack()`;
+* return JSONB from `pblob_unpack()`;
+* expose test-only helpers in release builds;
+* add a public C API;
+* add `pblob.h`.
+
+Do not modify:
+
+* `json.c`;
+* the vendored FP16 implementation;
+* unrelated SQLite code.
+
+Do not register additional production SQL functions.
+
+---
+
+### Expected Deliverables
+
+Provide:
+
+1. Updated `pblob.c`.
+2. Updated `test/pblob.test`.
+3. Updated test-only binary16 exhaustive-test infrastructure.
+4. Updated independent binary16 unpack vectors and generator.
+5. Any narrowly scoped test-only limit or OOM changes.
+6. Exact build commands executed.
+7. Exact test commands executed.
+8. Results for:
+
+   * normal build;
+   * test build;
+   * JSON-disabled build.
+9. A concise list of modified files.
+10. Confirmation that:
+
+    * `<f2` and `>f2` unpacking became functional;
+    * odd BLOB lengths are rejected;
+    * endian reads use `pblobGetU16Le()` and `pblobGetU16Be()`;
+    * non-finite raw words are rejected before conversion;
+    * `fp16_ieee_to_fp32_value()` is used;
+    * portable FP16 mode remains forced;
+    * decoded `float` values are promoted exactly to `double`;
+    * output uses `JsonString`;
+    * output receives `JSON_SUBTYPE`;
+    * signed zero and subnormals are preserved;
+    * exhaustive binary16 tests pass;
+    * all supported format directions are now functional;
+    * no public API or header was added.
+
+---
+
+### Acceptance Criteria
+
+Stage 11 is complete only when:
+
+* `pblob_unpack(...,'<f2')` correctly reads little-endian binary16 values;
+* `pblob_unpack(...,'>f2')` correctly reads big-endian binary16 values;
+* zero-length BLOBs return `[]`;
+* odd BLOB lengths are rejected;
+* every finite binary16 raw word is accepted;
+* positive and negative zero are preserved;
+* every positive and negative subnormal is preserved;
+* minimum normals and maximum finite values are accepted;
+* all two infinity patterns are rejected;
+* all 2,046 NaN patterns are rejected;
+* the first invalid zero-based element index is reported;
+* conversion uses `fp16_ieee_to_fp32_value()` followed by exact promotion to `double`;
+* portable FP16 conversion remains forced;
+* output is compact valid JSON TEXT with `JSON_SUBTYPE`;
+* every finite binary16 word survives unpack/pack with identical bits;
+* cross-endian conversion produces exact byte-swapped words;
+* exhaustive classification totals are correct;
+* the independent binary16 conversion oracle passes;
+* large outputs respect SQLite length limits;
+* OOM paths release all output state;
+* prepared-statement reuse is correct;
+* all Stage 2–10 tests remain passing;
+* no supported format retains placeholder behavior;
+* normal build succeeds;
+* test build succeeds;
+* JSON-disabled build succeeds;
+* no new warnings appear;
+* no public C API or header exists.
+
+Stop after satisfying these criteria. Do not proceed to Stage 12.
+
+---
+---
+
+## 📗 Stage 12: Validation, Error, Limit, and Cleanup Audit
+
+Implement only Stage 12 of the packed numeric BLOB extension.
+
+This stage begins from the completed Stage 11 state, where all supported format directions are functional:
+
+```text
+pblob_pack(..., 'int8')
+pblob_unpack(..., 'int8')
+
+pblob_pack(..., '<f2')
+pblob_unpack(..., '<f2')
+
+pblob_pack(..., '>f2')
+pblob_unpack(..., '>f2')
+
+pblob_pack(..., '<f4')
+pblob_unpack(..., '<f4')
+
+pblob_pack(..., '>f4')
+pblob_unpack(..., '>f4')
+```
+
+The implementation already includes:
+
+* strict SQL argument handling;
+* exact format parsing;
+* SQLite JSON parsing and JSONB traversal;
+* integer and numeric extraction helpers;
+* explicit endian helpers;
+* binary16 and binary32 finite-value handling;
+* exact packed-output allocation;
+* compact JSON output through `JsonString`;
+* JSON result subtype assignment;
+* focused functional, limit, OOM, and prepared-statement tests.
+
+Stage 12 is an audit and hardening stage.
+
+Do not add new formats, APIs, or ordinary conversion features.
+
+### Objective
+
+Perform a complete correctness and robustness audit of `pblob.c` against the design contract.
+
+This stage must:
+
+* verify and normalize validation order;
+* verify every public error path;
+* verify every allocation and ownership transition;
+* verify integer and size conversions;
+* verify malformed internal JSONB defenses;
+* verify SQLite length-limit enforcement;
+* verify empty-result handling;
+* verify non-finite handling;
+* verify signed-zero behavior;
+* remove temporary placeholder code and obsolete scaffolding;
+* normalize extension-defined errors;
+* eliminate duplicated or unreachable logic;
+* add targeted regression tests for every defect or ambiguity found;
+* preserve all established public semantics.
+
+The stage is complete only when the implementation has been audited as a whole rather than merely passing representative conversion tests.
+
+### Scope
+
+This stage is limited to:
+
+1. Auditing public callback control flow.
+2. Auditing helper contracts and return conventions.
+3. Auditing memory ownership and cleanup.
+4. Auditing integer arithmetic and length handling.
+5. Auditing JSONB traversal boundaries.
+6. Auditing empty arrays and empty BLOBs.
+7. Auditing non-finite values and signed zero.
+8. Normalizing extension-defined error messages.
+9. Removing dead, temporary, or duplicated code.
+10. Adding targeted tests for audit findings.
+11. Running strict-warning, sanitizer, and regression builds.
+12. Preserving all existing supported behavior.
+
+Do not add test-only exhaustive infrastructure beyond what is needed to verify audit findings. The broader final test-suite organization belongs to later stages.
+
+---
+
+### Public Contract Audit
+
+Verify the final public SQL contract is exactly:
+
+```sql
+pblob_pack(json_array, format) -> BLOB
+pblob_unpack(blob, format) -> JSON text
+```
+
+Supported formats must remain exactly:
+
+```text
+int8
+<f2
+>f2
+<f4
+>f4
+```
+
+Confirm there are no accepted aliases, including:
+
+```text
+INT8
+i8
+s8
+f2
+f4
+<f16
+>f16
+<f32
+>f32
+native
+=f2
+=f4
+```
+
+Confirm matching remains:
+
+* case-sensitive;
+* byte-length-sensitive;
+* whitespace-sensitive;
+* embedded-NUL-safe.
+
+Do not broaden the accepted public syntax.
+
+---
+
+### Registration Audit
+
+Verify both functions are registered exactly once with:
+
+```text
+name: pblob_pack
+arity: 2
+
+name: pblob_unpack
+arity: 2
+```
+
+Required flags:
+
+```c
+SQLITE_UTF8
+| SQLITE_DETERMINISTIC
+| SQLITE_INNOCUOUS
+| SQLITE_RESULT_SUBTYPE
+```
+
+Verify:
+
+* no variable-arity overload exists;
+* no aliases exist;
+* `SQLITE_DIRECTONLY` is not present;
+* no aggregate or window callbacks are registered;
+* no duplicate registration occurs through multiple initialization paths;
+* registration failure propagates correctly;
+* the functions remain unavailable under `SQLITE_OMIT_JSON`.
+
+Do not alter flags unless the audit proves the implementation does not match the design.
+
+---
+
+### Callback Validation Order
+
+Audit both callbacks for exact validation order.
+
+For `pblob_pack()`:
+
+```text
+SQL NULL propagation
+-> first argument storage class
+-> format storage class
+-> exact format parsing
+-> JSON parsing
+-> root-array validation
+-> element-count and output-size validation
+-> element traversal
+-> element type validation
+-> numeric extraction
+-> target-format validation
+-> result construction
+```
+
+For `pblob_unpack()`:
+
+```text
+SQL NULL propagation
+-> first argument storage class
+-> format storage class
+-> exact format parsing
+-> BLOB length divisibility where applicable
+-> element decoding
+-> raw-value classification
+-> conversion
+-> JSON result construction
+```
+
+Confirm no callback:
+
+* retrieves text or BLOB data before NULL propagation;
+* parses JSON before format validation;
+* initializes output state before a cheap validation that can fail;
+* emits a later-stage error instead of the required earlier-stage error;
+* performs element work before validating packed length.
+
+Add explicit precedence tests where coverage is incomplete.
+
+---
+
+### SQL NULL Audit
+
+Verify the contract:
+
+> If either argument is SQL NULL, return SQL NULL immediately without validating the other argument.
+
+Test all combinations for both functions:
+
+```sql
+pblob_pack(NULL, 'int8')
+pblob_pack('[]', NULL)
+pblob_pack(NULL, NULL)
+pblob_pack(NULL, 123)
+pblob_pack(123, NULL)
+
+pblob_unpack(NULL, 'int8')
+pblob_unpack(x'', NULL)
+pblob_unpack(NULL, NULL)
+pblob_unpack(NULL, 123)
+pblob_unpack(123, NULL)
+```
+
+Every case containing at least one SQL NULL must return SQL NULL.
+
+Do not allow a type, format, JSON, length, or conversion error to take precedence over NULL propagation.
+
+---
+
+### Storage-Class Audit
+
+Confirm `pblob_pack()` accepts only:
+
+```text
+argv[0] == SQLITE_TEXT
+argv[1] == SQLITE_TEXT
+```
+
+Confirm it rejects caller-supplied JSONB BLOB input even when valid.
+
+Confirm `pblob_unpack()` accepts only:
+
+```text
+argv[0] == SQLITE_BLOB
+argv[1] == SQLITE_TEXT
+```
+
+Do not coerce:
+
+* INTEGER;
+* FLOAT;
+* TEXT to BLOB;
+* BLOB to TEXT;
+* JSONB to TEXT;
+* numeric values to format names.
+
+Audit that storage-class checks use `sqlite3_value_type()` before retrieving converted representations.
+
+---
+
+### Format Descriptor Audit
+
+Verify every successful `pblobParseFormat()` call initializes all fields:
+
+```text
+int8:
+  eKind  = PBLOB_INT8
+  eOrder = PBLOB_ORDER_NONE
+  nByte  = 1
+
+<f2:
+  eKind  = PBLOB_F16
+  eOrder = PBLOB_ORDER_LE
+  nByte  = 2
+
+>f2:
+  eKind  = PBLOB_F16
+  eOrder = PBLOB_ORDER_BE
+  nByte  = 2
+
+<f4:
+  eKind  = PBLOB_F32
+  eOrder = PBLOB_ORDER_LE
+  nByte  = 4
+
+>f4:
+  eKind  = PBLOB_F32
+  eOrder = PBLOB_ORDER_BE
+  nByte  = 4
+```
+
+Add defensive checks for impossible internal combinations only where they improve correctness.
+
+Do not duplicate raw format-string comparisons in conversion branches.
+
+---
+
+### JSON Parsing Audit
+
+Verify `pblob_pack()` uses:
+
+```c
+jsonParseFuncArg(ctx, argv[0], 0)
+```
+
+and no independent JSON parser.
+
+Confirm:
+
+* malformed JSON errors remain those produced by SQLite JSON internals;
+* SQLite-supported JSON5 syntax follows `json.c`;
+* caller JSONB remains rejected at the SQL storage-class layer;
+* parse objects are released with `jsonParseFree()`;
+* no parse pointer is used after release;
+* no parse object leaks on root-type, size, element, range, or OOM errors.
+
+Do not replace core JSON syntax errors with extension-defined syntax messages.
+
+---
+
+### Root JSONB Audit
+
+Verify pack operations require the root node at offset zero to be:
+
+```c
+JSONB_ARRAY
+```
+
+Audit root-node boundary checks:
+
+```text
+pParse is non-NULL
+pParse->aBlob is non-NULL
+pParse->nBlob is nonzero for nonempty internal representation
+jsonbPayloadSize() succeeds
+root header and payload fit in nBlob
+root node occupies the complete internal representation
+```
+
+Confirm valid non-array roots are rejected before element traversal.
+
+Required rejected roots:
+
+```json
+null
+true
+false
+0
+1.0
+"abc"
+{}
+```
+
+---
+
+### Array Count and Traversal Audit
+
+Verify array element count uses:
+
+```c
+jsonbArrayCount()
+```
+
+Audit sequential traversal for all pack formats.
+
+For each element require:
+
+```text
+current offset is before payload end
+jsonbPayloadSize() returns a valid header
+header + payload arithmetic does not overflow
+node end does not exceed array payload end
+node type is validated before extraction
+element count and traversal count agree
+final offset equals payload end
+```
+
+Use integer types appropriate to `JsonParse` fields.
+
+Do not perform unchecked expressions such as:
+
+```c
+iNode + nHeader + nPayload
+```
+
+when overflow could invalidate the comparison.
+
+Prefer subtraction-based bounds checks or widened arithmetic.
+
+---
+
+### Numeric Extraction Audit
+
+Verify `pblobJsonbInteger()`:
+
+* accepts only `JSONB_INT` and `JSONB_INT5`;
+* returns exact signed `sqlite3_int64`;
+* handles `SMALLEST_INT64`;
+* rejects signed 64-bit overflow;
+* rejects positive hexadecimal high-bit values as signed integers;
+* uses `sqlite3DecOrHexToI64()`;
+* frees every duplicated payload.
+
+Verify `pblobJsonbNumber()`:
+
+* accepts all four numeric node types;
+* uses `sqlite3AtoF()` for applicable decimal forms;
+* adapts SQLite JSON5 hexadecimal semantics;
+* treats positive high-bit hexadecimal values as positive numeric values;
+* returns `double`;
+* does not perform target-format range checks;
+* frees every duplicated payload.
+
+Audit all casts from payload size to `int`.
+
+Add a defensive failure if a payload length cannot be passed safely to an internal API requiring `int`.
+
+---
+
+### `int8` Packing Audit
+
+Verify `int8` packing:
+
+* accepts only integer JSONB nodes;
+* rejects mathematically integral floating nodes such as `1.0` and `1e0`;
+* requires `-128..127`;
+* does not clamp;
+* does not wrap;
+* does not convert through `double`;
+* encodes one exact byte per element;
+* reports the first invalid zero-based element index;
+* returns a zero-length BLOB for `[]`.
+
+Required mapping:
+
+```text
+-128 -> 80
+-1   -> FF
+0    -> 00
+1    -> 01
+127  -> 7F
+```
+
+Verify no implementation-defined signed narrowing is used.
+
+---
+
+### `int8` Unpacking Audit
+
+Verify every input byte is accepted.
+
+Audit decoding:
+
+```text
+00..7F -> 0..127
+80..FF -> -128..-1
+```
+
+Confirm:
+
+* no `char` signedness dependency;
+* no BLOB length restriction;
+* zero-length BLOB returns `[]`;
+* output values use JSON integer syntax;
+* arbitrary BLOBs round-trip exactly through unpack then pack.
+
+---
+
+### Binary32 Packing Audit
+
+Verify binary32 packing follows exactly:
+
+```text
+JSON numeric
+-> double
+-> float
+-> fp32_to_bits()
+-> explicit endian output
+```
+
+Audit:
+
+* source `double` non-finite rejection;
+* binary32 result non-finite rejection;
+* acceptance of subnormal and zero underflow;
+* signed-zero preservation;
+* exact four-byte allocation per element;
+* no direct decimal-to-binary32 parser;
+* no host-endian stores;
+* no unaligned integer stores.
+
+Confirm no infinity or NaN bits are emitted.
+
+---
+
+### Binary32 Unpacking Audit
+
+Verify binary32 unpacking follows exactly:
+
+```text
+raw bits
+-> non-finite classification
+-> fp32_from_bits()
+-> exact float-to-double promotion
+-> SQLite JSON formatting
+```
+
+Audit:
+
+* BLOB length divisible by four;
+* non-finite classification before conversion;
+* all finite subnormals accepted;
+* both signed zeros preserved;
+* maximum finite values accepted;
+* no infinity or NaN converted to JSON;
+* first invalid element index reported;
+* pack-after-unpack reproduces original finite bits.
+
+---
+
+### Binary16 Packing Audit
+
+Verify binary16 packing follows exactly:
+
+```text
+JSON numeric
+-> double
+-> float
+-> finite binary32 intermediate
+-> fp16_ieee_from_fp32_value()
+-> finite binary16 result
+-> explicit endian output
+```
+
+Audit:
+
+* `FP16_USE_NATIVE_CONVERSION == 0`;
+* no native half type or intrinsic;
+* no direct binary64-to-binary16 conversion;
+* binary32 intermediate overflow rejection;
+* binary16 overflow rejection;
+* subnormal and zero underflow acceptance;
+* signed-zero preservation;
+* no infinity or NaN words emitted.
+
+---
+
+### Binary16 Unpacking Audit
+
+Verify binary16 unpacking follows exactly:
+
+```text
+raw bits
+-> binary16 non-finite classification
+-> fp16_ieee_to_fp32_value()
+-> exact float-to-double promotion
+-> SQLite JSON formatting
+```
+
+Audit:
+
+* odd BLOB lengths rejected before decoding;
+* all finite words accepted;
+* both infinity words rejected;
+* all NaN words rejected;
+* signed zero preserved;
+* subnormals preserved;
+* maximum finite values accepted;
+* finite unpack/pack bit identity holds.
+
+---
+
+### Endian Helper Audit
+
+Verify all endian helpers use explicit byte operations only.
+
+Confirm there are no:
+
+```c
+uint16_t *
+uint32_t *
+```
+
+casts over byte buffers.
+
+Confirm:
+
+* no host-endian assumptions;
+* no unaligned integer loads or stores;
+* all shifts operate on unsigned values;
+* all masks are unsigned;
+* endian behavior is identical on little-endian and big-endian hosts by construction.
+
+Retain unaligned-buffer tests.
+
+---
+
+### Binary Classification Audit
+
+Verify binary16 masks and predicates:
+
+```text
+exponent mask: 0x7C00
+fraction mask: 0x03FF
+```
+
+Verify binary32 masks and predicates:
+
+```text
+exponent mask: 0x7F800000
+fraction mask: 0x007FFFFF
+```
+
+For both formats confirm predicates are mutually consistent:
+
+```text
+finite XOR infinity XOR NaN
+```
+
+for every raw bit pattern.
+
+Retain exhaustive binary16 classification totals.
+
+---
+
+### Packed-Size Audit
+
+Audit `pblobCheckedSize()`.
+
+It must:
+
+* accept widths 1, 2, and 4 only;
+* reject invalid widths defensively;
+* detect multiplication overflow before multiplication;
+* enforce the current connection’s `SQLITE_LIMIT_LENGTH`;
+* avoid truncation through `int`;
+* return exact `sqlite3_uint64` size;
+* allocate nothing;
+* set an SQL error on failure.
+
+Verify output allocation APIs accept the validated size.
+
+Audit all conversions between:
+
+```text
+u32
+int
+sqlite3_int64
+sqlite3_uint64
+size_t
+```
+
+Do not assume the compiler will warn about every narrowing conversion.
+
+---
+
+### BLOB Retrieval Audit
+
+Verify unpack callbacks:
+
+* retrieve BLOB bytes only after type and format validation;
+* accept NULL pointer only when byte count is zero;
+* never read beyond `sqlite3_value_bytes()` length;
+* do not retain the pointer after the callback returns;
+* do not copy the input unnecessarily;
+* validate divisibility before reading wider elements.
+
+Audit loop bounds so the final element read cannot overflow the byte offset.
+
+---
+
+### Empty-Input Audit
+
+Verify all empty cases explicitly:
+
+```sql
+pblob_pack('[]', 'int8')
+pblob_pack('[]', '<f2')
+pblob_pack('[]', '>f2')
+pblob_pack('[]', '<f4')
+pblob_pack('[]', '>f4')
+```
+
+Each must return:
+
+```text
+storage class: BLOB
+length: 0
+hex: empty
+```
+
+Verify:
+
+```sql
+pblob_unpack(x'', 'int8')
+pblob_unpack(x'', '<f2')
+pblob_unpack(x'', '>f2')
+pblob_unpack(x'', '<f4')
+pblob_unpack(x'', '>f4')
+```
+
+Each must return:
+
+```text
+[]
+```
+
+with:
+
+```text
+storage class: TEXT
+JSON subtype
+```
+
+Audit zero-size allocation paths so a NULL pointer returned for a zero-byte allocation is never treated as OOM.
+
+---
+
+### Result BLOB Ownership Audit
+
+For every successful nonempty pack result, verify ownership transfer occurs exactly once through an API equivalent to:
+
+```c
+sqlite3_result_blob64(ctx, pOut, nOut, sqlite3_free);
+```
+
+Audit:
+
+* `pOut` is freed on every pre-transfer error;
+* `pOut` is not freed after ownership transfer;
+* a partial buffer is never returned;
+* no allocator family mismatch exists;
+* zero-length BLOB handling does not create a dangling pointer.
+
+Prefer a single cleanup block where it simplifies proof of ownership.
+
+---
+
+### `JsonString` Ownership Audit
+
+For every unpack path, verify:
+
+* `jsonStringInit()` is called once;
+* append errors are propagated;
+* `jsonReturnString()` transfers or finalizes ownership correctly;
+* `jsonStringReset()` is used on early failure where required;
+* the internal buffer is never freed manually through the wrong allocator;
+* subtype is assigned only after successful result construction;
+* no partial JSON result survives an OOM or length-limit failure.
+
+Audit all return paths after `JsonString` initialization.
+
+---
+
+### JSON Subtype Audit
+
+Verify every successful `pblob_unpack()` result receives:
+
+```c
+JSON_SUBTYPE
+```
+
+Confirm direct composition works for all formats:
+
+```sql
+json_array(pblob_unpack(...))
+json_object('values', pblob_unpack(...))
+json_type(pblob_unpack(...))
+json_array_length(pblob_unpack(...))
+```
+
+The unpacked array must not become a quoted JSON string.
+
+Do not require subtype persistence after storing the value in a table.
+
+---
+
+### Floating JSON Formatting Audit
+
+Verify floating unpack output uses SQLite’s JSON-aware formatter consistently for both binary16 and binary32.
+
+Audit:
+
+* locale independence;
+* valid JSON syntax;
+* signed-zero preservation;
+* sufficient precision for repacking;
+* no custom special-case integer formatting;
+* no hexadecimal float output;
+* no direct `printf()` family usage outside SQLite’s JSON formatter.
+
+The required invariant is bit identity after unpack and repack for every tested finite value.
+
+---
+
+### Non-Finite Error Audit
+
+Normalize public behavior so:
+
+* pack rejects non-finite extracted source values;
+* binary32 pack rejects non-finite target words;
+* binary16 pack rejects non-finite binary32 intermediates and binary16 results;
+* binary32 unpack rejects infinity and NaN raw words;
+* binary16 unpack rejects infinity and NaN raw words.
+
+Do not:
+
+* map non-finite values to JSON null;
+* emit non-standard JSON;
+* clamp infinity to maximum finite;
+* silently ignore NaN payloads.
+
+Ensure the first invalid zero-based element index is present in public errors.
+
+---
+
+### Error Message Normalization
+
+Review every extension-defined error.
+
+Messages must be:
+
+* stable;
+* concise;
+* function-specific;
+* grammatically consistent;
+* zero-based where an element index is reported;
+* independent of locale;
+* safe for format values containing embedded NUL bytes.
+
+Recommended message families:
+
+```text
+pblob_pack: first argument must be JSON text
+pblob_unpack: first argument must be a BLOB
+
+pblob_pack: format must be text
+pblob_unpack: format must be text
+
+pblob_pack: unsupported format
+pblob_unpack: unsupported format
+
+pblob_pack: expected a JSON array
+
+pblob_pack: element N must be an integer for format int8
+pblob_pack: element N must be numeric for format <f2
+pblob_pack: element N must be numeric for format >f2
+pblob_pack: element N must be numeric for format <f4
+pblob_pack: element N must be numeric for format >f4
+
+pblob_pack: element N is outside the int8 range
+pblob_pack: element N is not finite
+pblob_pack: element N is outside the finite float16 range
+pblob_pack: element N is outside the finite float32 range
+
+pblob_unpack: BLOB length is not divisible by 2 for format <f2
+pblob_unpack: BLOB length is not divisible by 2 for format >f2
+pblob_unpack: BLOB length is not divisible by 4 for format <f4
+pblob_unpack: BLOB length is not divisible by 4 for format >f4
+
+pblob_unpack: element N is not a finite float16 value
+pblob_unpack: element N is not a finite float32 value
+
+pblob_pack: malformed internal JSON representation
+```
+
+Equivalent wording is acceptable, but the implementation must use one consistent scheme.
+
+Do not include arbitrary raw format bytes in an error unless length-safe escaping is implemented.
+
+---
+
+### Internal Error Audit
+
+Differentiate public input errors from impossible internal-state errors.
+
+Internal errors include:
+
+* inconsistent `PblobFormat`;
+* traversal count disagreement;
+* malformed JSONB after successful internal parsing;
+* finite binary16 converting to non-finite binary32;
+* impossible helper width.
+
+Use a stable internal-error path.
+
+Do not use `assert()` as the only protection for malformed data or integer bounds that can affect release builds.
+
+Assertions may supplement, but not replace, runtime checks where safety depends on them.
+
+---
+
+### OOM Audit
+
+Enumerate every allocation site in `pblob.c`.
+
+At minimum include:
+
+* JSON parsing and conversion allocations;
+* numeric payload duplication;
+* packed-output allocation;
+* `JsonString` growth;
+* final result transfer where applicable.
+
+For each allocation site verify:
+
+```text
+failure sets an OOM result
+all previously owned resources are released
+no partial result is returned
+no subtype is assigned after failure
+subsequent calls remain functional
+```
+
+Add missing fault-injection tests for any untested allocation site.
+
+Do not collapse OOM into a generic conversion error.
+
+---
+
+### SQLite Length-Limit Audit
+
+Verify the current connection’s:
+
+```text
+SQLITE_LIMIT_LENGTH
+```
+
+is enforced for:
+
+* packed BLOB results;
+* unpacked JSON text results.
+
+For pack:
+
+* size must be rejected before output allocation where possible.
+
+For unpack:
+
+* `JsonString` must surface the SQLite length-limit failure cleanly.
+
+Test:
+
+```text
+below limit
+at limit where deterministically representable
+above limit
+```
+
+Restore the prior limit after every test, including test failures.
+
+Do not use a hard-coded global maximum as a substitute.
+
+---
+
+### Prepared-Statement and Cache Audit
+
+Retain and expand prepared-statement reuse tests.
+
+For both functions, alternate among:
+
+* empty values;
+* small valid values;
+* large valid values;
+* malformed JSON;
+* invalid format;
+* wrong type;
+* invalid BLOB length;
+* non-finite raw values;
+* valid calls after errors.
+
+Verify:
+
+* no stale parse state;
+* no stale output buffer;
+* no stale subtype;
+* no stale element index;
+* no result from a prior execution;
+* statement reuse remains correct after OOM and limit errors where supported.
+
+---
+
+### Dead-Code Removal
+
+Remove:
+
+* all temporary “not implemented” messages;
+* all unreachable placeholder branches;
+* obsolete `UNUSED_PARAMETER()` calls;
+* duplicate validation code superseded by shared helpers;
+* temporary Stage 4 or Stage 5 debug paths no longer used;
+* unused constants;
+* unused helper declarations;
+* comments describing future implementation that is now complete.
+
+Do not remove test-only infrastructure still required by existing tests.
+
+Do not perform unrelated stylistic refactoring.
+
+---
+
+### Helper Contract Review
+
+Every private helper should have a concise and accurate contract.
+
+Review:
+
+* inputs;
+* accepted value ranges;
+* ownership;
+* return convention;
+* whether an SQL error is set on failure;
+* whether outputs are initialized on success;
+* whether outputs are undefined on failure.
+
+Normalize helpers so they do not mix incompatible conventions such as:
+
+```text
+0 means failure in one helper
+0 means success in another helper
+```
+
+unless the distinction is strongly justified and documented.
+
+Prefer:
+
+```text
+0 = success
+nonzero = error already reported
+```
+
+for SQL-context helpers.
+
+Do not add verbose comments that merely restate code.
+
+---
+
+### Compiler-Warning Audit
+
+Build with the strictest practical warning set supported by the project compiler.
+
+Audit at least:
+
+```text
+implicit narrowing
+signed/unsigned comparison
+unused static functions
+unreachable code
+missing return
+incorrect format specifier
+pointer type mismatch
+shift width
+constant overflow
+uninitialized variable
+```
+
+On MSVC, enable the project’s practical high warning level without introducing unrelated source-tree failures.
+
+On Clang or GCC, use an equivalent strict build where available.
+
+Do not suppress a warning globally to hide a `pblob.c` defect.
+
+Any local suppression must be narrowly scoped and justified.
+
+---
+
+### Undefined-Behavior Audit
+
+Review for:
+
+* signed overflow;
+* oversized shifts;
+* shifting negative values;
+* unaligned access;
+* strict-aliasing violations;
+* out-of-bounds pointer arithmetic;
+* invalid pointer use after result transfer;
+* use-after-free;
+* double-free;
+* narrowing before range validation;
+* implementation-defined signed-byte conversion.
+
+Run UBSan where supported.
+
+Do not assume passing ordinary tests proves absence of undefined behavior.
+
+---
+
+### Address-Safety Audit
+
+Run ASan or an equivalent memory-safety configuration where supported.
+
+Exercise:
+
+* empty values;
+* maximum tested arrays;
+* malformed JSON;
+* malformed internal JSONB test hooks;
+* invalid BLOB lengths;
+* invalid non-finite words;
+* OOM paths where compatible;
+* repeated prepared-statement execution.
+
+No leak, over-read, overwrite, use-after-free, or double-free is acceptable.
+
+---
+
+### Malformed Internal JSONB Tests
+
+Retain test-only malformed-node coverage.
+
+At minimum verify safe failure for:
+
+* offset beyond `nBlob`;
+* truncated root header;
+* truncated child header;
+* payload length crossing root end;
+* zero-length numeric payload;
+* element-count disagreement;
+* malformed decimal numeric payload;
+* malformed JSON5 hexadecimal payload;
+* sign-only payload;
+* reserved or unsupported node type.
+
+These tests must never expose caller JSONB as a supported `pblob_pack()` input.
+
+---
+
+### Regression Matrix
+
+Run representative successful cases for all directions:
+
+```text
+pack int8
+unpack int8
+pack <f2
+unpack <f2
+pack >f2
+unpack >f2
+pack <f4
+unpack <f4
+pack >f4
+unpack >f4
+```
+
+For each format verify:
+
+* empty case;
+* one element;
+* multiple elements;
+* boundary values;
+* cross-endian consistency where applicable;
+* pack/unpack identity;
+* type and format errors;
+* length errors where applicable;
+* limit behavior;
+* prepared-statement reuse.
+
+No supported direction may contain placeholder behavior.
+
+---
+
+### Required Audit Tests
+
+Add or retain explicit tests for:
+
+```text
+NULL precedence
+type-error precedence
+format-error precedence
+JSON-error precedence
+root-type precedence
+element-type precedence
+range precedence
+length-error precedence
+first invalid element index
+empty pack results
+empty unpack results
+JSON subtype
+signed zero
+subnormal preservation
+maximum finite values
+non-finite rejection
+exact packed size
+length-limit enforcement
+OOM cleanup
+prepared-statement recovery
+```
+
+Every defect found during audit must receive a regression test before it is fixed or in the same patch.
+
+---
+
+### Build Verification
+
+Perform all required configurations.
+
+#### Normal Build
+
+Build the normal amalgamation and release targets.
+
+Verify:
+
+* all supported SQL functions work;
+* no placeholder code remains;
+* no test-only interface is present;
+* no new warnings appear;
+* exact smoke vectors pass.
+
+#### Test Build
+
+Build `testfixture` or the project equivalent with:
+
+```text
+SQLITE_TEST
+SQLITE_DEBUG
+FP16_USE_NATIVE_CONVERSION=0
+```
+
+Run:
+
+* all focused `pblob` tests;
+* exhaustive binary16 tests;
+* malformed internal tests;
+* limit tests;
+* OOM tests;
+* prepared-statement tests;
+* all prior-stage tests.
+
+#### Strict-Warning Build
+
+Build with the project’s strict practical warning configuration.
+
+Treat every new `pblob.c` warning as a failure.
+
+#### Sanitizer Build
+
+Run focused tests under:
+
+```text
+ASan
+UBSan
+```
+
+or the closest supported equivalent.
+
+Document unavailable sanitizer configurations rather than claiming they passed.
+
+#### JSON-Disabled Build
+
+Build with:
+
+```text
+SQLITE_OMIT_JSON
+```
+
+Verify:
+
+* build and link succeed;
+* no `pblob` functions are registered;
+* no JSON, FP16, or test-only references remain unresolved;
+* no warnings appear.
+
+---
+
+### Prohibited Work
+
+Do not:
+
+* add new formats;
+* add new production SQL functions;
+* add optional arguments;
+* add format aliases;
+* add headers or metadata to packed BLOBs;
+* add automatic endian detection;
+* accept JSONB input for `pblob_pack()`;
+* return JSONB from `pblob_unpack()`;
+* change the binary16 conversion path;
+* enable native FP16 conversion;
+* add another numeric parser;
+* add another JSON writer;
+* add another FP16 implementation;
+* expose a public C API;
+* add `pblob.h`;
+* modify `json.c`;
+* modify the vendored FP16 implementation;
+* refactor unrelated SQLite code.
+
+Do not proceed to test-suite reorganization or release documentation beyond what is required to complete this audit.
+
+---
+
+### Expected Deliverables
+
+Provide:
+
+1. Updated `pblob.c`.
+2. Updated focused tests covering every audit finding.
+3. Any narrowly scoped test-only helper corrections.
+4. A written audit checklist showing each reviewed area and result.
+5. Exact build commands executed.
+6. Exact test commands executed.
+7. Results for:
+
+   * normal build;
+   * test build;
+   * strict-warning build;
+   * sanitizer build;
+   * JSON-disabled build.
+8. A concise list of modified files.
+9. A concise list of defects found and fixed.
+10. Confirmation that:
+
+    * all supported directions remain functional;
+    * validation order is consistent;
+    * every allocation has a proven cleanup path;
+    * all size conversions are checked;
+    * malformed internal JSONB fails safely;
+    * empty results use the correct storage classes;
+    * JSON subtype is assigned only on successful unpack;
+    * non-finite values are consistently rejected;
+    * signed zero is preserved;
+    * no placeholder or dead implementation code remains;
+    * no public API or header was added.
+
+---
+
+### Acceptance Criteria
+
+Stage 12 is complete only when:
+
+* every public validation path follows the specified precedence;
+* NULL propagation always occurs before other validation;
+* storage-class checks perform no coercion;
+* only the five exact format strings are accepted;
+* JSON parsing and traversal use SQLite internals safely;
+* all traversal arithmetic is bounds-checked;
+* all numeric payload length conversions are checked;
+* every allocation and ownership transfer has a correct cleanup path;
+* packed-size multiplication cannot overflow;
+* current SQLite length limits are enforced;
+* empty pack results are zero-length BLOBs;
+* empty unpack results are JSON-subtyped `[]` TEXT;
+* all `int8`, binary16, and binary32 semantics remain correct;
+* all non-finite values are rejected consistently;
+* signed zero survives all relevant round trips;
+* all finite binary16 and tested binary32 values retain bit identity;
+* every public element error identifies the first zero-based invalid index;
+* OOM tests pass without leaks or stale results;
+* malformed internal JSONB tests fail safely;
+* prepared statements recover correctly after every tested error class;
+* no temporary placeholder or dead code remains;
+* strict-warning build is clean;
+* sanitizer runs report no defects;
+* all prior-stage tests remain passing;
+* normal build succeeds;
+* test build succeeds;
+* JSON-disabled build succeeds;
+* no public C API or header exists.
+
+Stop after satisfying these criteria. Do not proceed to Stage 13.
+
+---
+---
+
+## 📗 
 
