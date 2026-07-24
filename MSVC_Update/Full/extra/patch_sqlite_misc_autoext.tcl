@@ -1,3 +1,5 @@
+#!/usr/bin/tclsh
+#
 #===============================================================================
 # SCRIPT:      patch_sqlite_misc_autoext.tcl
 # PURPOSE:     Automates the inline modification of SQLite loadable extensions 

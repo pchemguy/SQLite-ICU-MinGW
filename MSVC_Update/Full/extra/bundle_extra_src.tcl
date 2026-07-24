@@ -1,3 +1,5 @@
+#!/usr/bin/tclsh
+#
 # bundle_extra_src.tcl -- Expand local C #include directives in place.
 #
 # Every positional argument must be the file name of a .c or .h file located
@@ -17,6 +19,7 @@
 # Usage:
 #   tclsh bundle_extra_src.tcl file.c ?file.h ...?
 #
+# https://chatgpt.com/c/6a62ecf5-5bb8-83eb-ba7a-7ce302cf962c
 
 set help [string trim {
 Usage: tclsh bundle_extra_src.tcl FILE...

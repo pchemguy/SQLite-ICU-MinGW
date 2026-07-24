@@ -47,19 +47,22 @@ if "%~1"=="env" (
     exit /b 0
 )
 
-call :SQLITE_DOWNLOAD   || exit /b %ERRORLEVEL%
-call :SQLITE_EXTRACT    || exit /b %ERRORLEVEL%
-call :ZLIB_DOWNLOAD     || exit /b %ERRORLEVEL%
-call :ZLIB_EXTRACT      || exit /b %ERRORLEVEL%
-call :ZLIB_BUILD        || exit /b %ERRORLEVEL%
-call :ICU_DOWNLOAD      || exit /b %ERRORLEVEL%
-call :ICU_EXTRACT       || exit /b %ERRORLEVEL%
-call :ICU_BUILD         || exit /b %ERRORLEVEL%
-call :SQLITE_BUILD_INIT || exit /b %ERRORLEVEL%
-call :PATCH_NORMALIZE_C || exit /b %ERRORLEVEL%
-call :PATCH_EXTRA_SRC   || exit /b %ERRORLEVEL%
-call :BUNDLE_EXTRA_SRC  || exit /b %ERRORLEVEL%
-call :SQLITE_BUILD      || exit /b %ERRORLEVEL%
+call :SQLITE_DOWNLOAD     || exit /b %ERRORLEVEL%
+call :SQLITE_EXTRACT      || exit /b %ERRORLEVEL%
+call :ZLIB_DOWNLOAD       || exit /b %ERRORLEVEL%
+call :ZLIB_EXTRACT        || exit /b %ERRORLEVEL%
+call :ZLIB_BUILD          || exit /b %ERRORLEVEL%
+call :ICU_DOWNLOAD        || exit /b %ERRORLEVEL%
+call :ICU_EXTRACT         || exit /b %ERRORLEVEL%
+call :ICU_BUILD           || exit /b %ERRORLEVEL%
+call :FP16_DOWNLOAD       || exit /b %ERRORLEVEL%
+call :FP16_EXTRACT        || exit /b %ERRORLEVEL%
+call :SQLITE_BUILD_INIT   || exit /b %ERRORLEVEL%
+call :COPY_EXTRAS_TO_TSRC || exit /b %ERRORLEVEL%
+call :PATCH_NORMALIZE_C   || exit /b %ERRORLEVEL%
+call :PATCH_EXTRA_SRC     || exit /b %ERRORLEVEL%
+call :BUNDLE_EXTRA_SRC    || exit /b %ERRORLEVEL%
+call :SQLITE_BUILD        || exit /b %ERRORLEVEL%
 call :COLLECT_BINARIES
 
 EndLocal
@@ -454,6 +457,51 @@ exit /b %ERROR_STATUS%
 
 
 :: ============================================================================
+:FP16_DOWNLOAD
+
+set "DISTRO=fp16_master.zip"
+set "URL=https://github.com/Maratyszcza/FP16/archive/refs/heads/master.zip"
+
+if not exist "%BASEDIR%\%DISTRO%" (
+    echo ===== Downloading FP16 =====
+    curl.exe -fL --retry 3 --output "%BASEDIR%\%DISTRO%" %URL%
+    set "ERROR_STATUS=!ERRORLEVEL!"
+    if "!ERROR_STATUS!"=="0" (
+        echo ----- Downloaded FP16 -----
+    ) else (
+        echo Error downloading FP16.
+        echo Errod code: !ERROR_STATUS!
+    )
+) else (echo ===== Using previously downloaded FP16 =====)
+
+echo:
+exit /b %ERROR_STATUS%
+
+
+:: ============================================================================
+:FP16_EXTRACT
+
+set "DISTROFILE=fp16_master.zip"
+set "SRCDIR=%DISTRODIR%\compat\FP16-master"
+
+if not exist "%SRCDIR%" (
+    echo ===== Extracting FP16 =====
+    cd /d "%DISTRODIR%\compat"
+    "%TAR%" -xf "%BASEDIR%\%DISTROFILE%"
+    set "ERROR_STATUS=!ERRORLEVEL!"
+    if "!ERROR_STATUS!"=="0" (
+        echo ----- Extracted FP16 -----
+    ) else (
+        echo Error extracting FP16.
+        echo Errod code: !ERROR_STATUS!
+    )
+) else (echo ===== Using previously extracted FP16 =====)
+
+echo:
+exit /b %ERROR_STATUS%
+
+
+:: ============================================================================
 :SQLITE_BUILD_INIT
 
 set "ERROR_STATUS=0"
@@ -492,10 +540,26 @@ exit /b %ERRORLEVEL%
 
 
 :: ============================================================================
+:COPY_EXTRAS_TO_TSRC
+
+echo ========== Copy EXTRAS ===========
+
+cd /d "%BUILDDIR%\tsrc"
+
+set EXTRAS=^
+    "%DISTRODIR%\compat\FP16-master\include\*"
+
+tclsh "%BASEDIR%\extra\copy_here.tcl" %EXTRAS%
+
+echo:
+exit /b %ERRORLEVEL%
+
+
+:: ============================================================================
 :PATCH_NORMALIZE_C
 
 set "FILENAME=%BUILDDIR%\tsrc\normalize.c"
-echo ========== Patching "%FILENAME%" ===========
+echo ========== Patch "%FILENAME%" ===========
 
 tclsh "%BASEDIR%\extra\replace.tcl" "%FILENAME%" ^
     "int main" "int sqlite3_normalize_main"      ^
@@ -520,6 +584,7 @@ exit /b %ERRORLEVEL%
 :PATCH_EXTRA_SRC
 
 cd /d "%BUILDDIR%\tsrc"
+echo ========== Patch EXTRA_SRC ===========
 
 set EXTRA_SRC=^
     "compress.c"  ^
@@ -547,6 +612,7 @@ exit /b %ERRORLEVEL%
 :BUNDLE_EXTRA_SRC
 
 cd /d "%BUILDDIR%\tsrc"
+echo ========== Bundle EXTRA_SRC ===========
 
 set EXTRA_SRC=^
     "compress.c"  ^
