@@ -561,16 +561,16 @@ exit /b %ERRORLEVEL%
 set "FILENAME=%BUILDDIR%\tsrc\normalize.c"
 echo ========== Patch "%FILENAME%" ===========
 
-tclsh "%BASEDIR%\extra\replace.tcl" "%FILENAME%" ^
-    "int main" "int sqlite3_normalize_main"      ^
-    "aiClass" "aiClassN"                         ^
-    "sqlite3UpperToLower" "sqlite3UpperToLowerN" ^
-    "sqlite3CtypeMap" "sqlite3CtypeMapN"         ^
-    "sqlite3GetToken" "sqlite3GetTokenN"         ^
-    "IdChar(" "IdCharN("                         ^
-    "sqlite3I" "sqlite3IN"                       ^
-    "sqlite3T" "sqlite3TN"                       ^
-    "TK_" "TKN_"                                 ^
+tclsh "%BASEDIR%\extra\replace.tcl" "%FILENAME%"  ^
+    "int main" "int sqlite3_normalize_main"       ^
+    "aiClass" "ai_ClassN"                         ^
+    "sqlite3UpperToLower" "sqlite3_UpperToLowerN" ^
+    "sqlite3CtypeMap" "sqlite3_CtypeMapN"         ^
+    "sqlite3GetToken" "sqlite3_GetTokenN"         ^
+    "IdChar(" "Id_CharN("                         ^
+    "sqlite3I" "sqlite3_IN"                       ^
+    "sqlite3T" "sqlite3_TN"                       ^
+    "TK_" "TKN_"                                  ^
     "CC_" "CCN_"
 
 tclsh "%BASEDIR%\extra\replace.tcl" "%FILENAME%" ^
