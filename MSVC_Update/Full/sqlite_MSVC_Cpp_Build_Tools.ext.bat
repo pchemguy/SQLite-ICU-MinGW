@@ -58,11 +58,13 @@ call :ICU_BUILD         || exit /b %ERRORLEVEL%
 call :SQLITE_BUILD_INIT || exit /b %ERRORLEVEL%
 call :PATCH_NORMALIZE_C || exit /b %ERRORLEVEL%
 call :PATCH_EXTRA_SRC   || exit /b %ERRORLEVEL%
+call :BUNDLE_EXTRA_SRC  || exit /b %ERRORLEVEL%
 call :SQLITE_BUILD      || exit /b %ERRORLEVEL%
 call :COLLECT_BINARIES
 
 EndLocal
 
+echo:
 exit /b 0
 :: ================================= END MAIN =================================
 
@@ -78,6 +80,7 @@ set "ICUINCDIR=%ICUDIR%\include"
 set "ICULIBDIR=%ICUDIR%\lib%ARCH%"
 set "ICUBINDIR=%ICUDIR%\bin%ARCH%"
 
+echo:
 exit /b 0
 
 
@@ -87,6 +90,7 @@ exit /b 0
 if not defined USE_ZLIB (set "USE_ZLIB=1")
 if not defined USE_SQLAR (set "USE_SQLAR=1")
 
+echo:
 exit /b 0
 
 
@@ -117,6 +121,7 @@ if exist "%TCL_HOME%\bin\tclsh.exe" (
     set "ERROR_STATUS=1"
 )
 
+echo:
 exit /b %ERROR_STATUS%
 
 
@@ -169,6 +174,7 @@ if "%SQLITE_EXTRA%"=="1" (
         -DSQLITE_ENABLE_UUID     
 )
 
+echo:
 exit /b 0
 
 
@@ -237,6 +243,7 @@ if "%ERROR_STATUS%"=="0" (
     echo ----- Environment is NOT OK -----
 )
 
+echo:
 exit /b %ERROR_STATUS%
 
 
@@ -258,6 +265,7 @@ if not exist "%BASEDIR%\%DISTRO%" (
     )
 ) else (echo ===== Using previously downloaded SQLite =====)
 
+echo:
 exit /b %ERROR_STATUS%
 
 
@@ -278,6 +286,7 @@ if not exist "%DISTRODIR%\Makefile.msc" (
     )
 ) else (echo ===== Using previously extracted SQLite =====)
 
+echo:
 exit /b %ERROR_STATUS%
 
 
@@ -299,6 +308,7 @@ if not exist "%BASEDIR%\%DISTRO%" (
     )
 ) else (echo ===== Using previously downloaded ZLIB =====)
 
+echo:
 exit /b %ERROR_STATUS%
 
 
@@ -324,6 +334,7 @@ if not exist "%ZLIBDIR%\win32\Makefile.msc" (
     )
 ) else (echo ===== Using previously extracted ZLIB =====)
 
+echo:
 exit /b %ERROR_STATUS%
 
 
@@ -343,6 +354,7 @@ if not exist "%ZLIBDIR%\zlib1.dll" (
     )
 ) else (echo ===== Using previously built ZLIB =====)
 
+echo:
 exit /b %ERROR_STATUS%
 
 
@@ -390,6 +402,7 @@ if not exist "%BASEDIR%\%DISTRO%" (
     )
 ) else (echo ===== Using previously downloaded ICU =====)
 
+echo:
 exit /b %ERROR_STATUS%
 
 
@@ -412,6 +425,7 @@ if not exist "%ICUDIR%\source\allinone\allinone.sln" (
     )
 ) else (echo ===== Using previously extracted ICU =====)
 
+echo:
 exit /b %ERROR_STATUS%
 
 
@@ -435,6 +449,7 @@ if not exist "%ICUBINDIR%\icuinfo.exe" (
     )
 ) else (echo ===== Using previously built ICU =====)
 
+echo:
 exit /b %ERROR_STATUS%
 
 
@@ -472,12 +487,12 @@ set SRC12=^
 
 nmake /nologo "SRC12=%SRC12%" "TOP=%DISTRODIR%" /f "%DISTRODIR%\Makefile.msc" .target_source
 
+echo:
 exit /b %ERRORLEVEL%
 
 
 :: ============================================================================
 :PATCH_NORMALIZE_C
-:: Patch normalize.c
 
 set "FILENAME=%BUILDDIR%\tsrc\normalize.c"
 echo ========== Patching "%FILENAME%" ===========
@@ -495,18 +510,18 @@ tclsh "%BASEDIR%\extra\replace.tcl" "%FILENAME%" ^
     "CC_" "CCN_"
 
 tclsh "%BASEDIR%\extra\replace.tcl" "%FILENAME%" ^
-    "__GCCN__" "__GCC__"                         
+    "__GCCN__" "__GCC__"
 
+echo:
 exit /b %ERRORLEVEL%
 
 
 :: ============================================================================
 :PATCH_EXTRA_SRC
-:: Patch misc extensions as AutoExtensions
 
 cd /d "%BUILDDIR%\tsrc"
 
-set TARGETS=^
+set EXTRA_SRC=^
     "compress.c"  ^
     "csv.c"       ^
     "decimal.c"   ^
@@ -522,15 +537,41 @@ set TARGETS=^
     "uint.c"      ^
     "uuid.c"
 
-tclsh "%BASEDIR%\extra\patch_sqlite_misc_autoext.tcl" %TARGETS%
+tclsh "%BASEDIR%\extra\patch_sqlite_misc_autoext.tcl" %EXTRA_SRC%
 
+echo:
+exit /b %ERRORLEVEL%
+
+
+:: ============================================================================
+:BUNDLE_EXTRA_SRC
+
+cd /d "%BUILDDIR%\tsrc"
+
+set EXTRA_SRC=^
+    "compress.c"  ^
+    "csv.c"       ^
+    "decimal.c"   ^
+    "fuzzer.c"    ^
+    "noop.c"      ^
+    "prefixes.c"  ^
+    "regexp.c"    ^
+    "rot13.c"     ^
+    "series.c"    ^
+    "sha1.c"      ^
+    "shathree.c"  ^
+    "sqlar.c"     ^
+    "uint.c"      ^
+    "uuid.c"
+
+tclsh "%BASEDIR%\extra\bundle_extra_src.tcl" %EXTRA_SRC%
+
+echo:
 exit /b %ERRORLEVEL%
 
 
 :: ============================================================================
 :SQLITE_BUILD
-
-:: Make SQLite
 
 cd /d "%BUILDDIR%"
 
@@ -554,11 +595,13 @@ set EXTRA_SRC=^
 
 nmake /nologo "EXTRA_SRC=%EXTRA_SRC%" "TOP=%DISTRODIR%" /f "%DISTRODIR%\Makefile.msc" %*
 
+echo:
 exit /b %ERRORLEVEL%
 
 
 :: ============================================================================
 :COLLECT_BINARIES
+
 echo ========== Collecting binaries ===========
 set BINDIR=%~dp0bin
 if not exist "%BINDIR%" mkdir "%BINDIR%"
@@ -570,4 +613,5 @@ if "%USE_ICU%"=="1" (copy /Y "%ICUBINDIR%\icu*.dll" "%BINDIR%")
 if "%USE_ZLIB%"=="1" (copy /Y "%ZLIBDIR%\zlib1.dll"  "%BINDIR%")
 echo ---------- Copied  binaries -----------
 
+echo:
 exit /b 0
