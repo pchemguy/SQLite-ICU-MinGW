@@ -189,11 +189,18 @@
 ::     RBU=1
 ::     API_ARMOR=1
 ::     SYMBOLS=0
-::     NO_TCL=1
+::     NO_TCL=0
 ::     WITHOUT_JIMSH=1
 ::
 ::   NO_TCL disables the SQLite Tcl extension as a final build product. Tcl is
-::   nevertheless still required as a build-time tool.
+::   nevertheless still required as a build-time tool. Use NO_TCL=0 for test builds.
+::
+:: EXTRAS SEPARATION
+::   It is essential to separate activation of standard ext/misc extensions, many
+::   of which are included in test builds, and any third-party extensions. Standard
+::   ext/misc extensions should not be activated via the current extras pipeline
+::   as the same extensions are separately included in test components, resulting
+::   in fatal build errors. Third-party integrated extensions should not be affected.
 ::
 :: EMBEDDED EXT/MISC MODULES
 ::   When SQLITE_EXTRA is nonzero, :EXTRA_SRC_PREPARE prepares selected
@@ -294,6 +301,13 @@
 ::   individual move and copy commands are conditional on their source files
 ::   being present.
 ::
+:: TESTING BUILDS
+::   - Current Makefile.msc linker options apparently are not set correctly
+::     for test builds with ICU. Use USE_ICU=0 for test builds.
+::
+::   - Current extras pipeline (standard ext/misc extensions) is not compatible
+::     with test builds. Use SQLITE_EXTRA=0 for test builds.
+::
 :: OPERATIONAL NOTES
 ::   - Run the script from MSVC CMD shell, not by invoking it through a
 ::     noninitialized ordinary command prompt.
@@ -354,8 +368,11 @@ if not defined USE_SQLAR    (set "USE_SQLAR=1")
 if not defined SQLITE_EXTRA (set "SQLITE_EXTRA=1")
 if not exist "%THIRDDIR%" (cmd /c mkdir "%THIRDDIR%" || exit /b !ERRORLEVEL!)
 
-(
+if not "%USE_ICU%"=="0" (
     call :ICU_OPTIONS       || exit /b !ERRORLEVEL!
+) 1>>"%STDOUTLOG%" 2>>"%STDERRLOG%"
+
+(
     call :TCL_OPTIONS       || exit /b !ERRORLEVEL!
     call :BUILD_OPTIONS     || exit /b !ERRORLEVEL!
 ) 1>>"%STDOUTLOG%" 2>>"%STDERRLOG%"
@@ -464,7 +481,7 @@ set "SESSION=1"
 set "RBU=1"
 set "API_ARMOR=1"
 set "SYMBOLS=0"
-set "NO_TCL=1"
+rem set "NO_TCL=1"
 set "WITHOUT_JIMSH=1"
 set "EXTRA_SRC="
 
