@@ -50,11 +50,7 @@ if not exist "%THIRDDIR%" (cmd /c mkdir "%THIRDDIR%" || exit /b !ERRORLEVEL!)
     call :BUILD_OPTIONS || exit /b !ERRORLEVEL!
 ) 1>>"%STDOUTLOG%" 2>>"%STDERRLOG%"
 
-if "%~1"=="env" (
-    nmake "TOP=%DISTRODIR%" /f "%DISTRODIR%\Makefile.msc" env
-    exit /b 0
-)
-
+call :MAKE_DEBUG %*     || exit /b !ERRORLEVEL!
 call :SQLITE_DOWNLOAD   || exit /b !ERRORLEVEL!
 call :SQLITE_EXTRACT    || exit /b !ERRORLEVEL!
 call :ZLIB_DOWNLOAD     || exit /b !ERRORLEVEL!
@@ -109,10 +105,21 @@ exit /b 0
 :: ============================================================================
 :TCL_OPTIONS
 
-where tclsh 1>nul 2>nul && echo TCL found. && exit /b 0
+set "TCLBIN="
+for /f "usebackq delims=" %%P in (`where tclsh.exe 2^>nul`) do (
+    set "TCLBIN=%%~P"
+)
+if exist "%TCLBIN%" (
+    set "TCL_HOME=%TCLBIN:\bin\tclsh.exe=%"
+    echo Using TCL on Path.
+    goto :TCL_FOUND
+) else (set "TCLBIN=")
+if exist "%TCL_HOME%\bin\tclsh.exe" (
+    echo Using TCL on Path.
+    goto :TCL_FOUND
+)
 
-echo TCL not on Path. Trying TCL_HOME "%TCL_HOME%" and conventional locations.
-if not exist "%TCL_HOME%\bin\tclsh.exe" if exist "%ProgramFiles%\TCL\bin\tclsh.exe" (
+if exist "%ProgramFiles%\TCL\bin\tclsh.exe" (
     set "TCL_HOME=%ProgramFiles%\TCL"
 ) else if exist "C:\dev\TCL\bin\tclsh.exe" (
     set "TCL_HOME=C:\dev\TCL"
@@ -122,19 +129,25 @@ if not exist "%TCL_HOME%\bin\tclsh.exe" if exist "%ProgramFiles%\TCL\bin\tclsh.e
     set "TCL_HOME=H:\dev\TCL"
 )
 
-echo TCL_HOME: "%TCL_HOME%"
-
-if exist "%TCL_HOME%\bin\tclsh.exe" (
-    set "Path=%TCL_HOME%\bin;%Path%"
-    echo TCL found.
-    set "ERROR_STATUS=0"
-) else (
+if not exist "%TCL_HOME%\bin\tclsh.exe" (
     echo TCL not found.
     set "ERROR_STATUS=1"
+    exit /b !ERROR_STATUS!
 )
 
+:TCL_FOUND
+echo TCL found. TCL_HOME: "%TCL_HOME%"
+if not defined TCLBIN (
+    set "Path=%TCL_HOME%\bin;%Path%"
+    echo Added TCL to PATH.
+)
+set "TCLSH_CMD=%TCL_HOME%\bin\tclsh.exe"
+echo TCLSH_CMD = __%TCLSH_CMD%__
+echo puts "TCL version: [info patchlevel]" | "%TCLSH_CMD%"
+set "TCLSH_CMD="%TCLSH_CMD%""
+
 echo:
-exit /b %ERROR_STATUS%
+exit /b 0
 
 
 :: ============================================================================
@@ -145,6 +158,7 @@ set "RBU=1"
 set "API_ARMOR=1"
 set "SYMBOLS=0"
 set "NO_TCL=1"
+set "WITHOUT_JIMSH=1"
 set "EXTRA_SRC="
 
 set OPT_XTRA=%OPT_XTRA% ^
@@ -166,6 +180,23 @@ set OPT_XTRA=%OPT_XTRA% ^
     -DSQLITE_SOUNDEX
 
 if not exist "%BUILDDIR%" (mkdir "%BUILDDIR%" || exit /b !ERRORLEVEL!)
+
+echo:
+exit /b 0
+
+
+:: ============================================================================
+:MAKE_DEBUG
+
+set "TARGET="
+if "%~1"=="env"      (set "TARGET=%~1")
+if "%~1"=="tcl-test" (set "TARGET=%~1")
+if "%~1"=="tcl-env"  (set "TARGET=%~1")
+
+if defined TARGET (
+    nmake "TOP=%DISTRODIR%" /f "%DISTRODIR%\Makefile.msc" %TARGET%
+    exit /b 1
+)
 
 echo:
 exit /b 0
