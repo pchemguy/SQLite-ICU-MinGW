@@ -288,17 +288,53 @@ Files are replaced atomically and are only rewritten when the generated content 
 
 For the modules I currently integrate, the preparation process is conceptually:
 
-1. Copy the selected `ext/misc` sources and their local dependencies into the build source directory.
-2. Run `patch_sqlite_misc_autoext.tcl` on the selected extension entry-point sources.
-3. Add the generated `misc_ext_init.c` to the set of extra amalgamation sources.
-4. Run `bundle_extra_src.tcl` on sources that still contain local dependencies.
-5. Invoke the normal SQLite build with the relevant `EXTRA_SRC`, `SQLITE_ENABLE_*`, and `SQLITE_EXTRA_AUTOEXT` definitions.
+1. Run `patch_sqlite_misc_autoext.tcl` on the selected extension sources in `ext/misc`.
+2. Run `bundle_extra_src.tcl` on sources to inline local dependencies.
+3. Add patched extensions and the generated `misc_ext_init.c` to the set of extra amalgamation sources.
+4. Invoke the normal SQLite build with the relevant `EXTRA_SRC`, `SQLITE_ENABLE_*`, and `SQLITE_EXTRA_AUTOEXT` definitions.
 
 The exact MSVC command-line setup and the ordering of these stages in my build pipeline are described below.
 
-## Build invocation
+## Example MSVC build pipeline
 
-[Build-pipeline details to be added.]
+The accompanying `build_sqlite_msvc.bat` script demonstrates the complete integration in a Windows/MSVC build.
+
+At a high level, the script:
+
+1. Locates the required MSVC and Tcl tooling.
+2. Downloads and extracts the SQLite source tree and optional ZLIB and ICU dependencies.
+3. Builds ZLIB and ICU when enabled.
+4. Selects the `ext/misc` modules to embed and defines their corresponding `SQLITE_ENABLE_*` macros.
+5. Runs `patch_sqlite_misc_autoext.tcl` to adapt the selected modules and generate `misc_ext_init.c`.
+6. Runs `bundle_extra_src.tcl` to inline their local source dependencies.
+7. Passes the prepared modules and dispatcher to `Makefile.msc` through `EXTRA_SRC`.
+8. Defines:
+
+```text
+SQLITE_EXTRA_AUTOEXT=sqlite3ExtraAutoExtInit
+```
+
+9. Builds SQLite from a separate build directory and collects `sqlite3.exe`, `sqlite3.dll`, `sqlite3.def`, and the required runtime DLLs into `bin`.
+
+The relevant part of the build configuration is conceptually equivalent to:
+
+```bat
+set OPT_XTRA=%OPT_XTRA% ^
+    -DSQLITE_EXTRA_AUTOEXT=sqlite3ExtraAutoExtInit ^
+    -DSQLITE_ENABLE_CSV ^
+    -DSQLITE_ENABLE_DECIMAL ^
+    -DSQLITE_ENABLE_REGEXP ^
+    -DSQLITE_ENABLE_SERIES
+
+tclsh patch_sqlite_misc_autoext.tcl %MISC_EXT%
+tclsh bundle_extra_src.tcl %MISC_EXT%
+
+nmake /f Makefile.msc ^
+    "TOP=%DISTRODIR%" ^
+    "EXTRA_SRC=%EXTRA_SRC%"
+```
+
+The full script also enables several ordinary SQLite compile-time options and supports optional ICU collation, ZLIB, SQLAR, session, RBU, and API-armor builds. Those parts are independent of the auto-extension mechanism and are included primarily to make the example a usable end-to-end build pipeline.
 
 ## Scripts
 
