@@ -161,12 +161,6 @@
 ::
 ::     Default: 1
 ::
-::   USE_SQLAR
-::     Enables SQLite's SQL archive integration where supported by
-::     Makefile.msc.
-::
-::     Default: 1
-::
 ::   SQLITE_EXTRA
 ::     Controls preparation and inclusion of the selected ext/misc modules.
 ::
@@ -355,6 +349,7 @@ set "DISTRODIR=%BASEDIR%\sqlite"
 set "SQLITE_MAKEFILE=%DISTRODIR%\Makefile.msc"
 set "TOP=%DISTRODIR%"
 set "BUILDDIR=%BASEDIR%\build"
+set "TSRC=%BUILDDIR%\tsrc"
 set "THIRDDIR=%DISTRODIR%\compat"
 set "STDOUTLOG=%BASEDIR%\stdout.log"
 set "STDERRLOG=%BASEDIR%\stderr.log"
@@ -364,7 +359,6 @@ del "%STDERRLOG%" 2>nul
 set "OPT_XTRA="
 if not defined USE_ICU      (set "USE_ICU=1")
 if not defined USE_ZLIB     (set "USE_ZLIB=1")
-if not defined USE_SQLAR    (set "USE_SQLAR=1")
 if not defined SQLITE_EXTRA (set "SQLITE_EXTRA=1")
 if not exist "%THIRDDIR%" (cmd /c mkdir "%THIRDDIR%" || exit /b !ERRORLEVEL!)
 
@@ -392,6 +386,7 @@ if not "%USE_ICU%"=="0" (
     call :ICU_EXTRACT       || exit /b !ERRORLEVEL!
     call :ICU_BUILD         || exit /b !ERRORLEVEL!
 )
+call :SQLITE_BUILD_INIT     || exit /b !ERRORLEVEL!
 call :FP16_DOWNLOAD         || exit /b !ERRORLEVEL!
 call :FP16_EXTRACT          || exit /b !ERRORLEVEL!
 if not "%SQLITE_EXTRA%"=="0" (
@@ -504,6 +499,7 @@ set OPT_XTRA=%OPT_XTRA% ^
     -DSQLITE_SOUNDEX
 
 if not exist "%BUILDDIR%" (mkdir "%BUILDDIR%" || exit /b !ERRORLEVEL!)
+if not exist "%TSRC%"     (mkdir "%TSRC%"     || exit /b !ERRORLEVEL!)
 
 echo:
 exit /b 0
@@ -847,8 +843,7 @@ echo:
 
 echo ========== Copy FP16 ===========
 
-if not exist "%BUILDDIR%\tsrc" (cmd /c mkdir "%BUILDDIR%\tsrc")
-cd /d "%BUILDDIR%\tsrc"
+cd /d "%TSRC%"
 
 tclsh "%BASEDIR%\extra\copy_here.tcl" "%THIRDDIR%\FP16-master\include\*"
 set "ERROR_STATUS=%ERRORLEVEL%"
@@ -895,6 +890,11 @@ set MISC_EXT=^
     "uint.c"      ^
     "uuid.c"
 
+echo ========== Copy MISC_EXT ===========
+tclsh "%DISTRODIR%\tool\cp.tcl" %MISC_EXT% "%TSRC%" || exit /b !ERRORLEVEL!
+
+cd /d "%TSRC%"
+
 echo ========== Patch MISC_EXT ===========
 tclsh "%BASEDIR%\extra\patch_sqlite_misc_autoext.tcl" %MISC_EXT% || exit /b !ERRORLEVEL!
 
@@ -906,21 +906,32 @@ tclsh "%BASEDIR%\extra\bundle_extra_src.tcl" %MISC_EXT% || exit /b !ERRORLEVEL!
 echo ========== Set EXTRA_SRC for extended SQLite build ===========
 
 set EXTRA_SRC=%EXTRA_SRC% ^
-    ""%DISTRODIR%\ext\misc\compress.c""      ^
-    ""%DISTRODIR%\ext\misc\csv.c""           ^
-    ""%DISTRODIR%\ext\misc\decimal.c""       ^
-    ""%DISTRODIR%\ext\misc\fuzzer.c""        ^
-    ""%DISTRODIR%\ext\misc\noop.c""          ^
-    ""%DISTRODIR%\ext\misc\prefixes.c""      ^
-    ""%DISTRODIR%\ext\misc\regexp.c""        ^
-    ""%DISTRODIR%\ext\misc\rot13.c""         ^
-    ""%DISTRODIR%\ext\misc\series.c""        ^
-    ""%DISTRODIR%\ext\misc\sha1.c""          ^
-    ""%DISTRODIR%\ext\misc\shathree.c""      ^
-    ""%DISTRODIR%\ext\misc\sqlar.c""         ^
-    ""%DISTRODIR%\ext\misc\uint.c""          ^
-    ""%DISTRODIR%\ext\misc\uuid.c""          ^
-    ""%DISTRODIR%\ext\misc\misc_ext_init.c""
+    ""%TSRC%\compress.c""      ^
+    ""%TSRC%\csv.c""           ^
+    ""%TSRC%\decimal.c""       ^
+    ""%TSRC%\fuzzer.c""        ^
+    ""%TSRC%\noop.c""          ^
+    ""%TSRC%\prefixes.c""      ^
+    ""%TSRC%\regexp.c""        ^
+    ""%TSRC%\rot13.c""         ^
+    ""%TSRC%\series.c""        ^
+    ""%TSRC%\sha1.c""          ^
+    ""%TSRC%\shathree.c""      ^
+    ""%TSRC%\sqlar.c""         ^
+    ""%TSRC%\uint.c""          ^
+    ""%TSRC%\uuid.c""          ^
+    ""%TSRC%\misc_ext_init.c""
+
+echo:
+exit /b %ERRORLEVEL%
+
+
+:: ============================================================================
+:SQLITE_BUILD_INIT
+
+cd /d "%BUILDDIR%" || exit /b !ERRORLEVEL!
+
+nmake /nologo "TOP=%DISTRODIR%" /f "%DISTRODIR%\Makefile.msc" .target_source
 
 echo:
 exit /b %ERRORLEVEL%
