@@ -1,13 +1,324 @@
 @echo off
-:: ============================================================================
-:: Builds SQLite using Microsoft Visual C++ Build Tools (MSVC toolset).
-:: MSVC toolset can be installed via a
-::   - dedicated installer:
-::       https://go.microsoft.com/fwlink/?LinkId=691126
-::   - Visual Studio installer (including CE):
-::       https://visualstudio.microsoft.com/downloads
-:: TCL must also be available, as it is required by the building workflow.
-:: ===========================================================================
+:: =============================================================================
+:: SCRIPT
+::   build_sqlite_msvc.bat
+::
+:: PURPOSE
+::   Downloads, prepares, builds, and packages a customized SQLite distribution
+::   on Windows using the Microsoft Visual C++ toolchain and SQLite's
+::   Makefile.msc build system.
+::
+::   The build may include:
+::
+::     - the SQLite command-line shell;
+::     - sqlite3.dll and its module-definition file;
+::     - ZLIB support;
+::     - ICU collation support;
+::     - selected SQLite ext/misc modules compiled directly into the SQLite
+::       library and registered as automatic extensions;
+::     - additional compile-time SQLite features configured through OPT_XTRA.
+::
+::   Build artifacts and required runtime DLLs are collected into a dedicated
+::   bin directory after a successful build.
+::
+:: REQUIREMENTS
+::   Run this script from a Microsoft Visual C++ developer command prompt whose
+::   architecture matches the desired output architecture.
+::
+::   Required tools:
+::
+::     cl.exe
+::       Microsoft C/C++ compiler.
+::
+::     nmake.exe
+::       Microsoft Program Maintenance Utility used by Makefile.msc.
+::
+::     msbuild.exe
+::       Required when ICU is enabled.
+::
+::     tclsh.exe
+::       Required by SQLite's source-generation workflow and by the custom Tcl
+::       scripts that prepare the embedded ext/misc modules.
+::
+::     curl.exe
+::       Used to download SQLite, ZLIB, ICU release metadata, and ICU sources.
+::
+::     tar.exe
+::       The Windows system tar implementation is used to extract archives.
+::
+::   Microsoft Visual C++ Build Tools may be installed using either:
+::
+::     - the standalone Build Tools installer:
+::         https://go.microsoft.com/fwlink/?LinkId=691126
+::
+::     - the Visual Studio installer, including Visual Studio Community:
+::         https://visualstudio.microsoft.com/downloads
+::
+::   Tcl must either:
+::
+::     - be available through PATH;
+::     - be identified by TCL_HOME; or
+::     - be installed in one of the fallback locations recognized by
+::       :TCL_OPTIONS.
+::
+:: INVOCATION
+::   From an initialized MSVC developer command prompt:
+::
+::     build_sqlite_msvc.cmd [NMAKE_TARGET_OR_OPTION ...]
+::
+::   Arguments not handled as special diagnostic targets are forwarded to the
+::   final SQLite nmake invocation.
+::
+::   Examples:
+::
+::     build_sqlite_msvc.bat
+::
+::       Performs the default configured SQLite build.
+::
+::     build_sqlite_msvc.cmd clean
+::
+::       Passes "clean" to the final Makefile.msc invocation.
+::
+::     build_sqlite_msvc.cmd sqlite3.dll
+::
+::       Requests the named Makefile.msc target.
+::
+:: SPECIAL DIAGNOSTIC TARGETS
+::   The following first arguments are executed immediately against SQLite's
+::   Makefile.msc and then terminate the script without running the download,
+::   dependency-build, packaging, or normal SQLite-build stages:
+::
+::     env
+::     tcl-env
+::
+:: DIRECTORY LAYOUT
+::   All paths are derived from the directory containing this script.
+::
+::     <script directory>\
+::       build_sqlite_msvc.bat
+::       extra\
+::         patch_sqlite_misc_autoext.tcl
+::         bundle_extra_src.tcl
+::
+::       sqlite.zip
+::       zlib.tar.gz
+::       icu4c-X-sources.zip
+::       icu_release_meta.json
+::
+::       sqlite\
+::         Makefile.msc
+::         compat\
+::           zlib\
+::           icu\
+::         ext\
+::           misc\
+::
+::       build\
+::         Intermediate SQLite build products.
+::
+::       bin\
+::         Final executables, libraries, definition files, and dependency DLLs.
+::
+:: DOWNLOAD SOURCES
+::   SQLite:
+::
+::     https://sqlite.org/src/zip/sqlite.zip
+::
+::   The URL currently refers to a source-tree snapshot rather than a
+::   version-numbered release archive. Once downloaded, sqlite.zip is reused
+::   until it is manually deleted.
+::
+::   ZLIB:
+::
+::     https://zlib.net/current/zlib.tar.gz
+::
+::   ICU:
+::
+::     The script queries the latest ICU GitHub release metadata:
+::
+::       https://api.github.com/repos/unicode-org/icu/releases/latest
+::
+::     It extracts the ICU4C source ZIP URL from that metadata and stores the
+::     downloaded archive under the stable local name:
+::
+::       icu4c-X-sources.zip
+::
+:: BUILD CONFIGURATION
+::   Configuration is controlled primarily through environment variables set
+::   near the beginning of :MAIN and in the option subroutines.
+::
+::   USE_ICU
+::     Enables ICU download, extraction, compilation, SQLite ICU integration,
+::     and collection of ICU runtime DLLs.
+::
+::     Default: 1
+::
+::     Set to 0 before the ICU stages are evaluated to omit ICU.
+::
+::   USE_ZLIB
+::     Enables SQLite Makefile.msc ZLIB integration and collection of
+::     zlib1.dll.
+::
+::     Default: 1
+::
+::   USE_SQLAR
+::     Enables SQLite's SQL archive integration where supported by
+::     Makefile.msc.
+::
+::     Default: 1
+::
+::   SQLITE_EXTRA
+::     Controls preparation and inclusion of the selected ext/misc modules.
+::
+::     Default: 1
+::
+::     Set to 0 to skip :EXTRA_SRC_PREPARE.
+::
+::   OPT_XTRA
+::     Accumulates preprocessor definitions passed through SQLite's
+::     Makefile.msc build.
+::
+::   EXTRA_SRC
+::     Contains additional C translation units to be included in SQLite's
+::     source-generation and compilation workflow.
+::
+:: SQLITE BUILD OPTIONS
+::   The script enables the following SQLite Makefile.msc options:
+::
+::     SESSION=1
+::     RBU=1
+::     API_ARMOR=1
+::     SYMBOLS=0
+::     NO_TCL=1
+::     WITHOUT_JIMSH=1
+::
+::   NO_TCL disables the SQLite Tcl extension as a final build product. Tcl is
+::   nevertheless still required as a build-time tool.
+::
+:: EMBEDDED EXT/MISC MODULES
+::   When SQLITE_EXTRA is nonzero, :EXTRA_SRC_PREPARE prepares selected
+::   SQLite ext/misc modules for static inclusion. The preparation process has
+::   two stages:
+::
+::     1. patch_sqlite_misc_autoext.tcl
+::
+::        Adapts the selected loadable-extension sources for compilation inside
+::        SQLite and generates the aggregate automatic-extension initializer.
+::
+::     2. bundle_extra_src.tcl
+::
+::        Expands local source dependencies so the prepared modules can
+::        participate in SQLite's generated-source and amalgamation workflow.
+::
+::   The generated aggregate initializer is selected with:
+::
+::     SQLITE_EXTRA_AUTOEXT=sqlite3ExtraAutoExtInit
+::
+::   The corresponding module feature definitions are also appended to OPT_XTRA.
+::
+::   The prepared source files and misc_ext_init.c are supplied through
+::   EXTRA_SRC to the final nmake invocation.
+::
+:: BUILD STAGES
+::   The normal workflow performs the following stages in order:
+::
+::     1. Initialize ICU, Tcl, ZLIB, and SQLite build options.
+::     2. Recognize and execute an optional diagnostic Makefile.msc target.
+::     3. Download sqlite.zip when it is not already present.
+::     4. Extract SQLite when sqlite\Makefile.msc is not already present.
+::     5. Download and extract ZLIB when required files are absent.
+::     6. Build zlib1.dll through SQLite's Makefile.msc ZLIB target.
+::     7. When ICU is enabled:
+::          - obtain current ICU release metadata;
+::          - locate the ICU4C source archive;
+::          - download and extract ICU;
+::          - build ICU using its allinone Visual Studio solution.
+::     8. When SQLITE_EXTRA is enabled:
+::          - patch the selected ext/misc modules;
+::          - bundle their local includes;
+::          - construct EXTRA_SRC.
+::     9. Run SQLite's Makefile.msc from the separate build directory.
+::    10. Move primary SQLite artifacts and copy dependency DLLs into bin.
+::
+:: ARCHITECTURE
+::   ICU output directories are selected from VSCMD_ARG_TGT_ARCH.
+::     VSCMD_ARG_TGT_ARCH=x64
+::       ICU libraries and binaries are expected in lib64 and bin64.
+::     Any other value
+::       ICU libraries and binaries are expected in lib and bin.
+::
+::   The script therefore must be launched from the correct x86 or x64 MSVC
+::   developer environment before building.
+::
+:: INCREMENTAL AND REUSE BEHAVIOR
+::   The workflow reuses existing downloads, extracted source trees, and built
+::   dependencies when their expected marker files are present.
+::
+::   Important marker files include:
+::
+::     sqlite\Makefile.msc
+::     sqlite\compat\zlib\win32\Makefile.msc
+::     sqlite\compat\zlib\zlib1.dll
+::     sqlite\compat\icu\source\allinone\allinone.sln
+::     <ICU binary directory>\icuinfo.exe
+::
+::   To force a fresh operation, remove the corresponding archive, extracted
+::   directory, build output, or marker file before rerunning the script.
+::
+::   The custom ext/misc preparation scripts are expected to be safe for the
+::   source state in which this build invokes them. Reusing an already modified
+::   SQLite source tree depends on those scripts preserving their documented
+::   idempotency guarantees.
+::
+:: OUTPUT
+::   The final bin directory may contain:
+::
+::     sqlite3.dll
+::     sqlite3.exe
+::     sqlite3.def
+::     zlib1.dll
+::     ICU runtime DLLs matching icu*.dll
+::
+::   Existing files in bin are deleted before newly built artifacts are collected.
+::
+:: ERROR HANDLING
+::   Each major stage returns its command status through ERRORLEVEL.
+::
+::   The main routine stops at the first failing stage and exits with that
+::   nonzero status. Successful completion returns exit code 0.
+::
+::   Commands executed inside parenthesized blocks use delayed expansion where
+::   required so the current ERRORLEVEL is propagated correctly.
+::
+::   :COLLECT_BINARIES is intentionally invoked without a fatal error check;
+::   individual move and copy commands are conditional on their source files
+::   being present.
+::
+:: OPERATIONAL NOTES
+::   - Run the script from MSVC CMD shell, not by invoking it through a
+::     noninitialized ordinary command prompt.
+::
+::   - The script changes its working directory during several stages. Paths
+::     used by the workflow are therefore constructed as absolute paths rooted
+::     at the script directory.
+::
+::   - Downloaded archives are deliberately cached. Delete them manually when
+::     a newer upstream source archive is required.
+::
+::   - The SQLite URL used here tracks the upstream source tree. For a strictly
+::     reproducible build, replace it with a version-pinned archive and retain
+::     that archive with the build inputs.
+::
+::   - The ICU release lookup depends on the current GitHub release metadata
+::     format and on the expected ICU4C source-archive naming convention.
+::
+::   - ICU is built in Release configuration with UWP projects skipped.
+::
+::   - sqlite3.exe and sqlite3.dll are built from the same configured SQLite
+::     source tree, but the exact Makefile.msc targets produced depend on the
+::     arguments forwarded to nmake.
+::
+:: =============================================================================
 
 :: ============================= BEGIN DISPATCHER =============================
 call :MAIN %*
