@@ -336,11 +336,15 @@ Note: missing `sqlite3_checker.exe` target in `$(TESTPROGS)`
 
 - smoketest (PREREQ: `$(TESTPROGS)`, should be `testfixture.exe`)
 
+- coretestprogs
 - testfixture.exe
 - sqlite3_analyzer.exe
 - sqldiff.exe
 - dbhash.exe
 - sqltclsh.exe
-
-- coretestprogs
 - testfixture.exe sqlite3_analyzer.exe sqldiff.exe dbhash.exe sqltclsh.exe
+
+- devtest
+- tcltest
+- releasetest
+- fuzztest
