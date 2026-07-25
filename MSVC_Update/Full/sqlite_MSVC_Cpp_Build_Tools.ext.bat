@@ -348,16 +348,15 @@ del "%STDOUTLOG%" 2>nul
 del "%STDERRLOG%" 2>nul
 
 set "OPT_XTRA="
-set "USE_ICU=1"
-if not defined USE_ICU (set "USE_ICU=1")
-set "SQLITE_EXTRA=1"
-if not defined SQLITE_EXTRA (set "SQLITE_EXTRA=0")
+if not defined USE_ICU      (set "USE_ICU=1")
+if not defined USE_ZLIB     (set "USE_ZLIB=1")
+if not defined USE_SQLAR    (set "USE_SQLAR=1")
+if not defined SQLITE_EXTRA (set "SQLITE_EXTRA=1")
 if not exist "%THIRDDIR%" (cmd /c mkdir "%THIRDDIR%" || exit /b !ERRORLEVEL!)
 
 (
     call :ICU_OPTIONS       || exit /b !ERRORLEVEL!
     call :TCL_OPTIONS       || exit /b !ERRORLEVEL!
-    call :ZLIB_OPTIONS      || exit /b !ERRORLEVEL!
     call :BUILD_OPTIONS     || exit /b !ERRORLEVEL!
 ) 1>>"%STDOUTLOG%" 2>>"%STDERRLOG%"
 
@@ -366,9 +365,11 @@ call :CHECK_PREREQUISITES   || exit /b !ERRORLEVEL!
 call :MAKE_DEBUG %*         || exit /b !ERRORLEVEL!
 call :SQLITE_DOWNLOAD       || exit /b !ERRORLEVEL!
 call :SQLITE_EXTRACT        || exit /b !ERRORLEVEL!
-call :ZLIB_DOWNLOAD         || exit /b !ERRORLEVEL!
-call :ZLIB_EXTRACT          || exit /b !ERRORLEVEL!
-call :ZLIB_BUILD            || exit /b !ERRORLEVEL!
+if not "%USE_ZLIB%"=="0" (
+    call :ZLIB_DOWNLOAD     || exit /b !ERRORLEVEL!
+    call :ZLIB_EXTRACT      || exit /b !ERRORLEVEL!
+    call :ZLIB_BUILD        || exit /b !ERRORLEVEL!
+)
 if not "%USE_ICU%"=="0" (
     call :ICU_DOWNLOAD      || exit /b !ERRORLEVEL!
     call :ICU_EXTRACT       || exit /b !ERRORLEVEL!
@@ -400,16 +401,6 @@ set "ICUBINDIR=%ICUDIR%\bin%ARCH%"
 
 set OPT_XTRA=%OPT_XTRA% ^
     -DSQLITE_ENABLE_ICU_COLLATIONS
-
-echo:
-exit /b 0
-
-
-:: ============================================================================
-:ZLIB_OPTIONS
-
-if not defined USE_ZLIB (set "USE_ZLIB=1")
-if not defined USE_SQLAR (set "USE_SQLAR=1")
 
 echo:
 exit /b 0
