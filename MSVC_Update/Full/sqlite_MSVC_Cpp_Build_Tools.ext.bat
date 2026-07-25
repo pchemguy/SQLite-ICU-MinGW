@@ -355,29 +355,31 @@ if not defined SQLITE_EXTRA (set "SQLITE_EXTRA=0")
 if not exist "%THIRDDIR%" (cmd /c mkdir "%THIRDDIR%" || exit /b !ERRORLEVEL!)
 
 (
-    call :ICU_OPTIONS   || exit /b !ERRORLEVEL!
-    call :TCL_OPTIONS   || exit /b !ERRORLEVEL!
-    call :ZLIB_OPTIONS  || exit /b !ERRORLEVEL!
-    call :BUILD_OPTIONS || exit /b !ERRORLEVEL!
+    call :ICU_OPTIONS       || exit /b !ERRORLEVEL!
+    call :TCL_OPTIONS       || exit /b !ERRORLEVEL!
+    call :ZLIB_OPTIONS      || exit /b !ERRORLEVEL!
+    call :BUILD_OPTIONS     || exit /b !ERRORLEVEL!
 ) 1>>"%STDOUTLOG%" 2>>"%STDERRLOG%"
 
-call :MAKE_DEBUG %*     || exit /b !ERRORLEVEL!
-call :SQLITE_DOWNLOAD   || exit /b !ERRORLEVEL!
-call :SQLITE_EXTRACT    || exit /b !ERRORLEVEL!
-call :ZLIB_DOWNLOAD     || exit /b !ERRORLEVEL!
-call :ZLIB_EXTRACT      || exit /b !ERRORLEVEL!
-call :ZLIB_BUILD        || exit /b !ERRORLEVEL!
+call :CHECK_PREREQUISITES   || exit /b !ERRORLEVEL!
+
+call :MAKE_DEBUG %*         || exit /b !ERRORLEVEL!
+call :SQLITE_DOWNLOAD       || exit /b !ERRORLEVEL!
+call :SQLITE_EXTRACT        || exit /b !ERRORLEVEL!
+call :ZLIB_DOWNLOAD         || exit /b !ERRORLEVEL!
+call :ZLIB_EXTRACT          || exit /b !ERRORLEVEL!
+call :ZLIB_BUILD            || exit /b !ERRORLEVEL!
 if not "%USE_ICU%"=="0" (
     call :ICU_DOWNLOAD      || exit /b !ERRORLEVEL!
     call :ICU_EXTRACT       || exit /b !ERRORLEVEL!
     call :ICU_BUILD         || exit /b !ERRORLEVEL!
 )
-call :FP16_DOWNLOAD     || exit /b !ERRORLEVEL!
-call :FP16_EXTRACT      || exit /b !ERRORLEVEL!
+call :FP16_DOWNLOAD         || exit /b !ERRORLEVEL!
+call :FP16_EXTRACT          || exit /b !ERRORLEVEL!
 if not "%SQLITE_EXTRA%"=="0" (
     call :EXTRA_SRC_PREPARE || exit /b !ERRORLEVEL!
 )
-call :SQLITE_BUILD      || exit /b !ERRORLEVEL!
+call :SQLITE_BUILD          || exit /b !ERRORLEVEL!
 call :COLLECT_BINARIES
 
 EndLocal
