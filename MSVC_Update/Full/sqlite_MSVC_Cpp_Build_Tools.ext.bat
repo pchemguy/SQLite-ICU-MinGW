@@ -423,7 +423,9 @@ if exist "%TCL_HOME%\bin\tclsh.exe" (
     goto :TCL_FOUND
 )
 
-if exist "%ProgramFiles%\TCL\bin\tclsh.exe" (
+if exist "%systemDrive%\dev\TCL\bin\tclsh.exe" (
+    set "TCL_HOME=%systemDrive%\dev\TCL"
+) else if exist "%ProgramFiles%\TCL\bin\tclsh.exe" (
     set "TCL_HOME=%ProgramFiles%\TCL"
 ) else if exist "C:\dev\TCL\bin\tclsh.exe" (
     set "TCL_HOME=C:\dev\TCL"
@@ -449,6 +451,7 @@ set "TCLSH_CMD=%TCL_HOME%\bin\tclsh.exe"
 echo TCLSH_CMD = __%TCLSH_CMD%__
 echo puts "TCL version: [info patchlevel]" | "%TCLSH_CMD%"
 set "TCLSH_CMD="%TCLSH_CMD%""
+set "TCLDIR=%TCL_HOME%"
 
 echo:
 exit /b 0
