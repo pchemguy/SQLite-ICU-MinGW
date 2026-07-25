@@ -327,3 +327,20 @@ The key point is that **the test build is not merely `sqlite3.exe`**. The primar
 [1]: https://sqlite.org/src/doc/trunk/doc/compile-for-windows.md "SQLite: Notes On Compiling SQLite On Windows 11"
 [2]: https://sqlite.org/src/doc/trunk/README.md "SQLite: Documentation"
 
+---
+---
+
+## 📗 SQLite Testing Makefile.msc Targets
+
+Note: missing `sqlite3_checker.exe` target in `$(TESTPROGS)`
+
+- smoketest (PREREQ: `$(TESTPROGS)`, should be `testfixture.exe`)
+
+- testfixture.exe
+- sqlite3_analyzer.exe
+- sqldiff.exe
+- dbhash.exe
+- sqltclsh.exe
+
+- coretestprogs
+- testfixture.exe sqlite3_analyzer.exe sqldiff.exe dbhash.exe sqltclsh.exe
