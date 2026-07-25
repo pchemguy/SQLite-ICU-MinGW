@@ -380,7 +380,7 @@ call :FP16_EXTRACT          || exit /b !ERRORLEVEL!
 if not "%SQLITE_EXTRA%"=="0" (
     call :EXTRA_SRC_PREPARE || exit /b !ERRORLEVEL!
 )
-call :SQLITE_BUILD          || exit /b !ERRORLEVEL!
+call :SQLITE_BUILD %*       || exit /b !ERRORLEVEL!
 call :COLLECT_BINARIES
 
 EndLocal
