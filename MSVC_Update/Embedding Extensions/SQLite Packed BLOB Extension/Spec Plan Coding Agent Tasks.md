@@ -3,7 +3,7 @@ url: https://chatgpt.com/c/6a61e127-7f24-83eb-9bcf-31c5a900a6a4
 project: SQLite Extension
 ---
 
-# Coding-Agent Tasks
+# Coding Agent Tasks
 
 ## 📗  Stage 1: `pblob.c` Skeleton and Build Integration
 
@@ -430,10 +430,9 @@ Provide:
 3. Any minimal auto-extension-dispatcher change required for a no-op initializer.
 4. The exact build commands executed.
 5. The result of:
-
-   * normal build;
-   * test build;
-   * JSON-disabled build.
+    * normal build;
+    * test build;
+    * JSON-disabled build.
 6. A concise list of modified files.
 7. Confirmation that no SQL functions are registered yet.
 8. Confirmation that no `pblob.h` or public C API was added.
@@ -878,18 +877,16 @@ Provide:
 4. Exact build commands executed.
 5. Exact test commands executed.
 6. Results for:
-
-   * normal build;
-   * test build;
-   * JSON-disabled build.
+    * normal build;
+    * test build;
+    * JSON-disabled build.
 7. A concise list of modified files.
 8. Confirmation that:
-
-   * both SQL functions are registered;
-   * both have arity 2;
-   * both currently return only “not implemented” errors;
-   * no argument validation or conversion logic was added;
-   * no public header or public C API was added.
+    * both SQL functions are registered;
+    * both have arity 2;
+    * both currently return only “not implemented” errors;
+    * no argument validation or conversion logic was added;
+    * no public header or public C API was added.
 
 ---
 
@@ -1708,21 +1705,19 @@ Provide:
 3. Exact build commands executed.
 4. Exact test commands executed.
 5. Results for:
-
-   * normal build;
-   * test build;
-   * JSON-disabled build.
+    * normal build;
+    * test build;
+    * JSON-disabled build.
 6. A concise list of modified files.
 7. Confirmation that:
-
-   * NULL propagation is implemented;
-   * storage-class validation is implemented;
-   * exact format parsing is implemented;
-   * embedded-NUL formats are rejected;
-   * validation order matches this specification;
-   * valid calls still end in placeholder errors;
-   * no JSON parsing or conversion logic was added;
-   * no public header or C API was added.
+    * NULL propagation is implemented;
+    * storage-class validation is implemented;
+    * exact format parsing is implemented;
+    * embedded-NUL formats are rejected;
+    * validation order matches this specification;
+    * valid calls still end in placeholder errors;
+    * no JSON parsing or conversion logic was added;
+    * no public header or C API was added.
 
 ---
 
@@ -2499,23 +2494,21 @@ Provide:
 4. Exact build commands executed.
 5. Exact test commands executed.
 6. Results for:
-
-   * normal build;
-   * test build;
-   * JSON-disabled build.
+    * normal build;
+    * test build;
+    * JSON-disabled build.
 7. A concise list of modified files.
 8. Confirmation that:
-
-   * endian helpers use only explicit byte operations;
-   * unaligned addresses are tested;
-   * binary16 classification is implemented;
-   * binary32 classification is implemented;
-   * full-domain signed-byte decoding is tested;
-   * checked-size multiplication is implemented and tested;
-   * all helpers remain private;
-   * public SQL behavior remains unchanged;
-   * no JSON or conversion workflow was added;
-   * no public header or C API was added.
+    * endian helpers use only explicit byte operations;
+    * unaligned addresses are tested;
+    * binary16 classification is implemented;
+    * binary32 classification is implemented;
+    * full-domain signed-byte decoding is tested;
+    * checked-size multiplication is implemented and tested;
+    * all helpers remain private;
+    * public SQL behavior remains unchanged;
+    * no JSON or conversion workflow was added;
+    * no public header or C API was added.
 
 ---
 
@@ -2802,9 +2795,8 @@ Required logical algorithm:
 2. Detect an optional leading `'-'`.
 3. Reject a sign-only payload.
 4. If negative:
-
-   * exclude the leading sign from the string passed to `sqlite3DecOrHexToI64()`;
-   * remember the negative sign separately.
+    * exclude the leading sign from the string passed to `sqlite3DecOrHexToI64()`;
+    * remember the negative sign separately.
 5. Duplicate the unsigned payload using:
 
    ```c
@@ -2979,10 +2971,9 @@ Required behavior:
 4. Handle ordinary signed-range values.
 5. Handle exact negative `SMALLEST_INT64`.
 6. Handle a positive 16-digit hexadecimal value whose high bit is set:
-
-   * reinterpret the returned 64-bit bit pattern as `sqlite3_uint64`;
-   * convert that unsigned value to `double`;
-   * do not treat it as negative.
+    * reinterpret the returned 64-bit bit pattern as `sqlite3_uint64`;
+    * convert that unsigned value to `double`;
+    * do not treat it as negative.
 7. Apply a leading negative sign where valid.
 8. Reject malformed hexadecimal syntax.
 9. Reject hexadecimal values too large for the supported SQLite path.
@@ -3460,23 +3451,21 @@ Provide:
 4. Exact build commands executed.
 5. Exact test commands executed.
 6. Results for:
-
-   * normal build;
-   * test build;
-   * JSON-disabled build.
+    * normal build;
+    * test build;
+    * JSON-disabled build.
 7. A concise list of modified files.
 8. Confirmation that:
-
-   * integer extraction uses `sqlite3DecOrHexToI64()`;
-   * general numeric extraction uses `sqlite3AtoF()` and adapted JSON5 integer handling;
-   * temporary payloads use SQLite database allocators;
-   * signed 64-bit boundaries are handled;
-   * positive high-bit hexadecimal JSON integers are handled correctly for `double`;
-   * malformed nodes and OOM are handled;
-   * helpers remain private;
-   * public SQL behavior remains unchanged;
-   * no packing or unpacking workflow was added;
-   * no public header or API was added.
+    * integer extraction uses `sqlite3DecOrHexToI64()`;
+    * general numeric extraction uses `sqlite3AtoF()` and adapted JSON5 integer handling;
+    * temporary payloads use SQLite database allocators;
+    * signed 64-bit boundaries are handled;
+    * positive high-bit hexadecimal JSON integers are handled correctly for `double`;
+    * malformed nodes and OOM are handled;
+    * helpers remain private;
+    * public SQL behavior remains unchanged;
+    * no packing or unpacking workflow was added;
+    * no public header or API was added.
 
 ---
 
@@ -4722,24 +4711,22 @@ Provide:
 4. Exact build commands executed.
 5. Exact test commands executed.
 6. Results for:
-
-   * normal build;
-   * test build;
-   * JSON-disabled build.
+    * normal build;
+    * test build;
+    * JSON-disabled build.
 7. A concise list of modified files.
 8. Confirmation that:
-
-   * only `pblob_pack(..., 'int8')` became functional;
-   * JSON parsing uses `jsonParseFuncArg()`;
-   * root arrays are required;
-   * array traversal uses `jsonbPayloadSize()`;
-   * element counting uses `jsonbArrayCount()`;
-   * integer extraction uses `pblobJsonbInteger()`;
-   * output allocation is exact and single-shot;
-   * out-of-range values are rejected;
-   * the empty array returns a zero-length BLOB;
-   * other formats and all unpacking remain placeholders;
-   * no public API or header was added.
+    * only `pblob_pack(..., 'int8')` became functional;
+    * JSON parsing uses `jsonParseFuncArg()`;
+    * root arrays are required;
+    * array traversal uses `jsonbPayloadSize()`;
+    * element counting uses `jsonbArrayCount()`;
+    * integer extraction uses `pblobJsonbInteger()`;
+    * output allocation is exact and single-shot;
+    * out-of-range values are rejected;
+    * the empty array returns a zero-length BLOB;
+    * other formats and all unpacking remain placeholders;
+    * no public API or header was added.
 
 ---
 
@@ -5783,23 +5770,21 @@ Provide:
 4. Exact build commands executed.
 5. Exact test commands executed.
 6. Results for:
-
-   * normal build;
-   * test build;
-   * JSON-disabled build.
+    * normal build;
+    * test build;
+    * JSON-disabled build.
 7. A concise list of modified files.
 8. Confirmation that:
-
-   * only `pblob_unpack(..., 'int8')` became newly functional;
-   * BLOB bytes are decoded with `pblobDecodeInt8()`;
-   * output uses `JsonString`;
-   * output is compact JSON TEXT;
-   * output receives `JSON_SUBTYPE`;
-   * zero-length BLOB returns `[]`;
-   * every BLOB length is valid for `int8`;
-   * pack/unpack byte round trips succeed;
-   * floating formats remain placeholders;
-   * no public API or header was added.
+    * only `pblob_unpack(..., 'int8')` became newly functional;
+    * BLOB bytes are decoded with `pblobDecodeInt8()`;
+    * output uses `JsonString`;
+    * output is compact JSON TEXT;
+    * output receives `JSON_SUBTYPE`;
+    * zero-length BLOB returns `[]`;
+    * every BLOB length is valid for `int8`;
+    * pack/unpack byte round trips succeed;
+    * floating formats remain placeholders;
+    * no public API or header was added.
 
 ---
 
@@ -7039,24 +7024,22 @@ Provide:
 5. Exact build commands executed.
 6. Exact test commands executed.
 7. Results for:
-
-   * normal build;
-   * test build;
-   * JSON-disabled build.
+    * normal build;
+    * test build;
+    * JSON-disabled build.
 8. A concise list of modified files.
 9. Confirmation that:
-
-   * only `<f4` and `>f4` packing became newly functional;
-   * JSON numeric extraction uses `pblobJsonbNumber()`;
-   * conversion follows `double -> float -> bits`;
-   * `fp32_to_bits()` is used;
-   * non-finite source and target values are rejected;
-   * underflow is accepted;
-   * signed zero is preserved;
-   * endian output uses explicit byte helpers;
-   * allocation is exact and single-shot;
-   * binary32 unpacking and all binary16 paths remain placeholders;
-   * no public API or header was added.
+    * only `<f4` and `>f4` packing became newly functional;
+    * JSON numeric extraction uses `pblobJsonbNumber()`;
+    * conversion follows `double -> float -> bits`;
+    * `fp32_to_bits()` is used;
+    * non-finite source and target values are rejected;
+    * underflow is accepted;
+    * signed zero is preserved;
+    * endian output uses explicit byte helpers;
+    * allocation is exact and single-shot;
+    * binary32 unpacking and all binary16 paths remain placeholders;
+    * no public API or header was added.
 
 ---
 
@@ -9721,26 +9704,24 @@ Provide:
 5. Exact build commands executed.
 6. Exact test commands executed.
 7. Results for:
-
-   * normal build;
-   * test build;
-   * JSON-disabled build.
+    * normal build;
+    * test build;
+    * JSON-disabled build.
 8. A concise list of modified files.
 9. Confirmation that:
-
-   * only `<f2` and `>f2` packing became newly functional;
-   * conversion follows `double -> float -> binary16`;
-   * `fp16_ieee_from_fp32_value()` is used;
-   * portable FP16 mode is forced;
-   * non-finite source values are rejected;
-   * non-finite binary32 intermediates are rejected;
-   * non-finite binary16 results are rejected;
-   * underflow is accepted;
-   * signed zero is preserved;
-   * endian output uses explicit byte helpers;
-   * output allocation is exact and single-shot;
-   * binary16 unpacking remains a placeholder;
-   * no public API or header was added.
+    * only `<f2` and `>f2` packing became newly functional;
+    * conversion follows `double -> float -> binary16`;
+    * `fp16_ieee_from_fp32_value()` is used;
+    * portable FP16 mode is forced;
+    * non-finite source values are rejected;
+    * non-finite binary32 intermediates are rejected;
+    * non-finite binary16 results are rejected;
+    * underflow is accepted;
+    * signed zero is preserved;
+    * endian output uses explicit byte helpers;
+    * output allocation is exact and single-shot;
+    * binary16 unpacking remains a placeholder;
+    * no public API or header was added.
 
 ---
 
@@ -11225,13 +11206,11 @@ Provide:
 6. Exact build commands executed.
 7. Exact test commands executed.
 8. Results for:
-
-   * normal build;
-   * test build;
-   * JSON-disabled build.
+    * normal build;
+    * test build;
+    * JSON-disabled build.
 9. A concise list of modified files.
 10. Confirmation that:
-
     * `<f2` and `>f2` unpacking became functional;
     * odd BLOB lengths are rejected;
     * endian reads use `pblobGetU16Le()` and `pblobGetU16Be()`;
@@ -12601,16 +12580,14 @@ Provide:
 5. Exact build commands executed.
 6. Exact test commands executed.
 7. Results for:
-
-   * normal build;
-   * test build;
-   * strict-warning build;
-   * sanitizer build;
-   * JSON-disabled build.
+    * normal build;
+    * test build;
+    * strict-warning build;
+    * sanitizer build;
+    * JSON-disabled build.
 8. A concise list of modified files.
 9. A concise list of defects found and fixed.
 10. Confirmation that:
-
     * all supported directions remain functional;
     * validation order is consistent;
     * every allocation has a proven cleanup path;
@@ -15267,7 +15244,6 @@ Provide:
 12. A concise list of modified and added files.
 13. A concise list of defects found by the expanded suite.
 14. Confirmation that:
-
     * normal tests do not require Python;
     * all vector data is independent of `pblob.c`;
     * all test-only C code remains in `pblob.c`;
@@ -16511,7 +16487,6 @@ Provide:
 18. A concise list of defects found and fixed.
 19. The final integration report.
 20. Confirmation that:
-
     * amalgamation source ordering is correct;
     * release shell and DLL builds succeed;
     * functions auto-register on new connections;
@@ -17716,7 +17691,6 @@ Provide:
 18. Final modified-file list.
 19. Final clean-tree status classification.
 20. Confirmation that:
-
     * no unsupported feature was added;
     * no placeholder or obsolete code remains;
     * all generated files are current;
