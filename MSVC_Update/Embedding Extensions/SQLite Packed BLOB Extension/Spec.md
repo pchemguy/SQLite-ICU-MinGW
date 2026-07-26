@@ -2,7 +2,7 @@
 url: https://chatgpt.com/c/6a61e127-7f24-83eb-9bcf-31c5a900a6a4
 ---
 
-## 📗 SQLite Packed Numeric BLOB Extension Specification - Part 1: Design and Conversion Workflows
+## 📗 SQLite Packed BLOB Extension Specification - Part 1: Design and Conversion Workflows
 
 > [!NOTE] Prompt
 > 
@@ -2142,7 +2142,7 @@ The auto-extension dispatcher may reference the initializer through a forward de
 ---
 
 
-## 📗 SQLite Packed Numeric BLOB Extension Specification - Part 2: Testing Strategy and Implementation
+## 📗 SQLite Packed BLOB Extension Specification - Part 2: Testing Strategy and Implementation
 
 > [!NOTE] Prompt
 > 
