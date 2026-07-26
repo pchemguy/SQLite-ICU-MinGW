@@ -2142,7 +2142,6 @@ The auto-extension dispatcher may reference the initializer through a forward de
 ---
 ---
 
-
 ## 📗 SQLite Packed BLOB Extension Specification - Part 2: Testing Strategy and Implementation
 
 > [!NOTE] Prompt
