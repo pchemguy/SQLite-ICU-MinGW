@@ -1,6 +1,7 @@
 ---
 url: https://github.com/timlrx/sqlite-extension-template/blob/main/README.md
 ---
+
 # SQLite Extension Template
 
 This repository contains a template for building custom [SQLite] extensions in C / C++. It supports the following targets:

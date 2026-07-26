@@ -5,6 +5,7 @@ author:
   - "[[Simon Willison]]"
 created: 2024-03-23
 ---
+
 # Building and testing C extensions for SQLite with ChatGPT Code Interpreter
 
 I wrote yesterday about how I used [Claude and ChatGPT Code Interpreter for simple ad-hoc side quests](https://simonwillison.net/2024/Mar/22/claude-and-chatgpt-case-study/) —in that case, for converting a shapefile to GeoJSON and merging it into a single polygon.
