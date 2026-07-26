@@ -1,5 +1,6 @@
 ---
 url: https://chatgpt.com/c/6a61e127-7f24-83eb-9bcf-31c5a900a6a4
+project: SQLite Extension
 ---
 
 ## 📗 SQLite Packed Numeric BLOB Extension Implementation Plan

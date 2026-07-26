@@ -1,5 +1,6 @@
 ---
 url: https://chatgpt.com/c/6a643d87-ce3c-83eb-891c-9e217ab8bd60
+project: SQLite Extension
 ---
 
 ## 📗 SQLite Testing - Building and Running
