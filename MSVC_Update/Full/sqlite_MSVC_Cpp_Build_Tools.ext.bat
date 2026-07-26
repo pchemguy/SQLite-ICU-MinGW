@@ -365,31 +365,32 @@ if not exist "%TSRC%"     (mkdir "%TSRC%"     || exit /b !ERRORLEVEL!)
 if not exist "%THIRDDIR%" (mkdir "%THIRDDIR%" || exit /b !ERRORLEVEL!)
 
 if not "%USE_ICU%"=="0" (
-    call :ICU_OPTIONS       || exit /b !ERRORLEVEL!
-)
-call :TCL_OPTIONS           || exit /b !ERRORLEVEL!
-call :BUILD_OPTIONS         || exit /b !ERRORLEVEL!
-call :CHECK_PREREQUISITES   || exit /b !ERRORLEVEL!
-call :MAKE_DEBUG %*         || exit /b !ERRORLEVEL!
-call :SQLITE_DOWNLOAD       || exit /b !ERRORLEVEL!
-call :SQLITE_EXTRACT        || exit /b !ERRORLEVEL!
-if not "%USE_ZLIB%"=="0" (
-    call :ZLIB_DOWNLOAD     || exit /b !ERRORLEVEL!
-    call :ZLIB_EXTRACT      || exit /b !ERRORLEVEL!
-    call :ZLIB_BUILD        || exit /b !ERRORLEVEL!
-)
-if not "%USE_ICU%"=="0" (
-    call :ICU_DOWNLOAD      || exit /b !ERRORLEVEL!
-    call :ICU_EXTRACT       || exit /b !ERRORLEVEL!
-    call :ICU_BUILD         || exit /b !ERRORLEVEL!
-)
-call :SQLITE_BUILD_INIT     || exit /b !ERRORLEVEL!
-call :FP16_DOWNLOAD         || exit /b !ERRORLEVEL!
-call :FP16_EXTRACT          || exit /b !ERRORLEVEL!
+    call :ICU_OPTIONS             || exit /b !ERRORLEVEL!
+)                                
+call :TCL_OPTIONS                 || exit /b !ERRORLEVEL!
+call :BUILD_OPTIONS               || exit /b !ERRORLEVEL!
+call :CHECK_PREREQUISITES         || exit /b !ERRORLEVEL!
+call :MAKE_DEBUG %*               || exit /b !ERRORLEVEL!
+call :SQLITE_DOWNLOAD             || exit /b !ERRORLEVEL!
+call :SQLITE_EXTRACT              || exit /b !ERRORLEVEL!
+if not "%USE_ZLIB%"=="0" (       
+    call :ZLIB_DOWNLOAD           || exit /b !ERRORLEVEL!
+    call :ZLIB_EXTRACT            || exit /b !ERRORLEVEL!
+    call :ZLIB_BUILD              || exit /b !ERRORLEVEL!
+)                                
+if not "%USE_ICU%"=="0" (        
+    call :ICU_DOWNLOAD            || exit /b !ERRORLEVEL!
+    call :ICU_EXTRACT             || exit /b !ERRORLEVEL!
+    call :ICU_BUILD               || exit /b !ERRORLEVEL!
+)                                
+call :SQLITE_BUILD_INIT           || exit /b !ERRORLEVEL!
+call :FP16_DOWNLOAD               || exit /b !ERRORLEVEL!
+call :FP16_EXTRACT                || exit /b !ERRORLEVEL!
 if not "%SQLITE_EXTRA%"=="0" (
-    call :EXTRA_SRC_PREPARE || exit /b !ERRORLEVEL!
+    call :EXTRA_SRC_PREPARE_STOCK || exit /b !ERRORLEVEL!
 )
-call :SQLITE_BUILD %*       || exit /b !ERRORLEVEL!
+call :EXTRA_SRC_PREPARE_THIRD     || exit /b !ERRORLEVEL!
+call :SQLITE_BUILD %*             || exit /b !ERRORLEVEL!
 call :COLLECT_BINARIES
 
 EndLocal
@@ -920,7 +921,7 @@ exit /b %ERROR_STATUS%
 
 
 :: ============================================================================
-:EXTRA_SRC_PREPARE
+:EXTRA_SRC_PREPARE_STOCK
 
 set "SECTION=EXTRA_SRC_PREPARE"
 
@@ -993,6 +994,42 @@ set EXTRA_SRC=%EXTRA_SRC% ^
     ""%TSRC%\uint.c""          ^
     ""%TSRC%\uuid.c""          ^
     ""%TSRC%\misc_ext_init.c""
+
+echo ~~~~~ %SECTION% ~~~~~
+echo:
+exit /b %ERRORLEVEL%
+
+
+:: ============================================================================
+:EXTRA_SRC_PREPARE_THIRD
+
+set "SECTION=EXTRA_SRC_PREPARE_THIRD"
+
+set OPT_XTRA=%OPT_XTRA%^
+    -DSQLITE_ENABLE_ALPHABET
+
+cd /d "%DISTRODIR%\ext\misc"
+
+set MISC_EXT=^
+    "alphabet.c" 
+
+echo ========== Copy MISC_EXT ===========
+tclsh "%DISTRODIR%\tool\cp.tcl" %MISC_EXT% "%TSRC%" || exit /b !ERRORLEVEL!
+
+cd /d "%TSRC%"
+
+echo ========== Patch MISC_EXT ===========
+tclsh "%BASEDIR%\extra\patch_sqlite_misc_autoext.tcl" %MISC_EXT% || exit /b !ERRORLEVEL!
+
+echo:
+
+echo ========== Bundle MISC_EXT ===========
+tclsh "%BASEDIR%\extra\bundle_extra_src.tcl" %MISC_EXT% || exit /b !ERRORLEVEL!
+
+echo ========== Set EXTRA_SRC for extended SQLite build ===========
+
+set EXTRA_SRC=%EXTRA_SRC% ^
+    ""%TSRC%\alphabet.c""
 
 echo ~~~~~ %SECTION% ~~~~~
 echo:
