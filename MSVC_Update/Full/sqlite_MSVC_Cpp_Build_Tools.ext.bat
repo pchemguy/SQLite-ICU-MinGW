@@ -360,19 +360,16 @@ set "OPT_XTRA="
 if not defined USE_ICU      (set "USE_ICU=1")
 if not defined USE_ZLIB     (set "USE_ZLIB=1")
 if not defined SQLITE_EXTRA (set "SQLITE_EXTRA=1")
-if not exist "%THIRDDIR%" (cmd /c mkdir "%THIRDDIR%" || exit /b !ERRORLEVEL!)
+if not exist "%BUILDDIR%" (mkdir "%BUILDDIR%" || exit /b !ERRORLEVEL!)
+if not exist "%TSRC%"     (mkdir "%TSRC%"     || exit /b !ERRORLEVEL!)
+if not exist "%THIRDDIR%" (mkdir "%THIRDDIR%" || exit /b !ERRORLEVEL!)
 
 if not "%USE_ICU%"=="0" (
     call :ICU_OPTIONS       || exit /b !ERRORLEVEL!
-) 1>>"%STDOUTLOG%" 2>>"%STDERRLOG%"
-
-(
-    call :TCL_OPTIONS       || exit /b !ERRORLEVEL!
-    call :BUILD_OPTIONS     || exit /b !ERRORLEVEL!
-) 1>>"%STDOUTLOG%" 2>>"%STDERRLOG%"
-
+)
+call :TCL_OPTIONS           || exit /b !ERRORLEVEL!
+call :BUILD_OPTIONS         || exit /b !ERRORLEVEL!
 call :CHECK_PREREQUISITES   || exit /b !ERRORLEVEL!
-
 call :MAKE_DEBUG %*         || exit /b !ERRORLEVEL!
 call :SQLITE_DOWNLOAD       || exit /b !ERRORLEVEL!
 call :SQLITE_EXTRACT        || exit /b !ERRORLEVEL!
@@ -405,6 +402,8 @@ exit /b 0
 :: ============================================================================
 :ICU_OPTIONS
 
+set "SECTION=ICU_OPTIONS"
+
 if "/%VSCMD_ARG_TGT_ARCH%/" == "/x64/" (set "ARCH=64") else (set "ARCH=")
 set "ICUDIR=%THIRDDIR%\icu"
 set "ICUINCDIR=%ICUDIR%\include"
@@ -414,12 +413,15 @@ set "ICUBINDIR=%ICUDIR%\bin%ARCH%"
 set OPT_XTRA=%OPT_XTRA% ^
     -DSQLITE_ENABLE_ICU_COLLATIONS
 
+echo ~~~~~ %SECTION% ~~~~~
 echo:
 exit /b 0
 
 
 :: ============================================================================
 :TCL_OPTIONS
+
+set "SECTION=TCL_OPTIONS"
 
 set "TCLBIN="
 for /f "usebackq delims=" %%P in (`where tclsh.exe 2^>nul`) do (
@@ -465,12 +467,15 @@ echo puts "TCL version: [info patchlevel]" | "%TCLSH_CMD%"
 set "TCLSH_CMD="%TCLSH_CMD%""
 set "TCLDIR=%TCL_HOME%"
 
+echo ~~~~~ %SECTION% ~~~~~
 echo:
 exit /b 0
 
 
 :: ============================================================================
 :BUILD_OPTIONS
+
+set "SECTION=BUILD_OPTIONS"
 
 set "SESSION=1"
 set "RBU=1"
@@ -498,15 +503,43 @@ set OPT_XTRA=%OPT_XTRA% ^
     -DSQLITE_USE_URI=1 ^
     -DSQLITE_SOUNDEX
 
-if not exist "%BUILDDIR%" (mkdir "%BUILDDIR%" || exit /b !ERRORLEVEL!)
-if not exist "%TSRC%"     (mkdir "%TSRC%"     || exit /b !ERRORLEVEL!)
+echo:
+echo ===== Optional Build Configuration =====
+set "MSG=USE_ICU:      %USE_ICU% - ICU is"
+if "%USE_ICU%"=="0" (
+    set "MSG=%MSG% OFF."
+) else (
+    set "MSG=%MSG% ON."
+)
+echo %MSG%
 
+set "MSG=USE_ZLIB:     %USE_ZLIB% - ZLIB is"
+if "%USE_ZLIB%"=="0" (
+    set "MSG=%MSG% OFF."
+) else (
+    set "MSG=%MSG% ON."
+)
+echo %MSG%
+
+set "MSG=SQLITE_EXTRA: %SQLITE_EXTRA% - Misc SQLite Extensions Extra is"
+if "%SQLITE_EXTRA%"=="0" (
+    set "MSG=%MSG% OFF."
+) else (
+    set "MSG=%MSG% ON."
+)
+echo %MSG%
+echo ----- Optional Build Configuration -----
+echo:
+
+echo ~~~~~ %SECTION% ~~~~~
 echo:
 exit /b 0
 
 
 :: ============================================================================
 :MAKE_DEBUG
+
+set "SECTION=MAKE_DEBUG"
 
 set "TARGET="
 if "%~1"=="env"      (set "TARGET=%~1")
@@ -518,12 +551,15 @@ if defined TARGET (
     exit /b 1
 )
 
+echo ~~~~~ %SECTION% ~~~~~
 echo:
 exit /b 0
 
 
 :: ============================================================================
 :CHECK_PREREQUISITES
+
+set "SECTION=CHECK_PREREQUISITES"
 
 echo ===== Verifying environment =====
 
@@ -587,12 +623,15 @@ if "%ERROR_STATUS%"=="0" (
     echo ----- Environment is NOT OK -----
 )
 
+echo ~~~~~ %SECTION% ~~~~~
 echo:
 exit /b %ERROR_STATUS%
 
 
 :: ============================================================================
 :SQLITE_DOWNLOAD
+
+set "SECTION=SQLITE_DOWNLOAD"
 
 set "DISTRO=sqlite.zip"
 set "URL=https://sqlite.org/src/zip/sqlite.zip"
@@ -609,12 +648,15 @@ if not exist "%BASEDIR%\%DISTRO%" (
     )
 ) else (echo ===== Using previously downloaded SQLite =====)
 
+echo ~~~~~ %SECTION% ~~~~~
 echo:
 exit /b %ERROR_STATUS%
 
 
 :: ============================================================================
 :SQLITE_EXTRACT
+
+set "SECTION=SQLITE_EXTRACT"
 
 set "DISTROFILE=sqlite.zip"
 
@@ -630,12 +672,15 @@ if not exist "%DISTRODIR%\Makefile.msc" (
     )
 ) else (echo ===== Using previously extracted SQLite =====)
 
+echo ~~~~~ %SECTION% ~~~~~
 echo:
 exit /b %ERROR_STATUS%
 
 
 :: ============================================================================
 :ZLIB_DOWNLOAD
+
+set "SECTION=ZLIB_DOWNLOAD"
 
 set "DISTRO=zlib.tar.gz"
 set "URL=https://zlib.net/current/zlib.tar.gz"
@@ -652,12 +697,15 @@ if not exist "%BASEDIR%\%DISTRO%" (
     )
 ) else (echo ===== Using previously downloaded ZLIB =====)
 
+echo ~~~~~ %SECTION% ~~~~~
 echo:
 exit /b %ERROR_STATUS%
 
 
 :: ============================================================================
 :ZLIB_EXTRACT
+
+set "SECTION=ZLIB_EXTRACT"
 
 set "DISTROFILE=zlib.tar.gz"
 set "ZLIBDIR=%THIRDDIR%\zlib"
@@ -678,12 +726,15 @@ if not exist "%ZLIBDIR%\win32\Makefile.msc" (
     )
 ) else (echo ===== Using previously extracted ZLIB =====)
 
+echo ~~~~~ %SECTION% ~~~~~
 echo:
 exit /b %ERROR_STATUS%
 
 
 :: ============================================================================
 :ZLIB_BUILD
+
+set "SECTION=ZLIB_BUILD"
 
 if not exist "%ZLIBDIR%\zlib1.dll" (
     echo ===== Building ZLIB =====
@@ -698,12 +749,15 @@ if not exist "%ZLIBDIR%\zlib1.dll" (
     )
 ) else (echo ===== Using previously built ZLIB =====)
 
+echo ~~~~~ %SECTION% ~~~~~
 echo:
 exit /b %ERROR_STATUS%
 
 
 :: ============================================================================
 :ICU_DOWNLOAD
+
+set "SECTION=ICU_DOWNLOAD"
 
 set "DISTRO=icu4c-X-sources.zip"
 set "URL="
@@ -746,12 +800,15 @@ if not exist "%BASEDIR%\%DISTRO%" (
     )
 ) else (echo ===== Using previously downloaded ICU =====)
 
+echo ~~~~~ %SECTION% ~~~~~
 echo:
 exit /b %ERROR_STATUS%
 
 
 :: ============================================================================
 :ICU_EXTRACT
+
+set "SECTION=ICU_EXTRACT"
 
 set "DISTROFILE=icu4c-X-sources.zip"
 set "ICUDIR=%THIRDDIR%\icu"
@@ -769,12 +826,15 @@ if not exist "%ICUDIR%\source\allinone\allinone.sln" (
     )
 ) else (echo ===== Using previously extracted ICU =====)
 
+echo ~~~~~ %SECTION% ~~~~~
 echo:
 exit /b %ERROR_STATUS%
 
 
 :: ============================================================================
 :ICU_BUILD
+
+set "SECTION=ICU_BUILD"
 
 if not exist "%ICUBINDIR%\icuinfo.exe" (
     echo ===== Building ICU =====
@@ -793,12 +853,15 @@ if not exist "%ICUBINDIR%\icuinfo.exe" (
     )
 ) else (echo ===== Using previously built ICU =====)
 
+echo ~~~~~ %SECTION% ~~~~~
 echo:
 exit /b %ERROR_STATUS%
 
 
 :: ============================================================================
 :FP16_DOWNLOAD
+
+set "SECTION=FP16_DOWNLOAD"
 
 set "DISTRO=fp16_master.zip"
 set "URL=https://github.com/Maratyszcza/FP16/archive/refs/heads/master.zip"
@@ -815,12 +878,15 @@ if not exist "%BASEDIR%\%DISTRO%" (
     )
 ) else (echo ===== Using previously downloaded FP16 =====)
 
+echo ~~~~~ %SECTION% ~~~~~
 echo:
 exit /b %ERROR_STATUS%
 
 
 :: ============================================================================
 :FP16_EXTRACT
+
+set "SECTION=FP16_EXTRACT"
 
 set "DISTROFILE=fp16_master.zip"
 set "SRCDIR=%THIRDDIR%\FP16-master"
@@ -848,12 +914,15 @@ cd /d "%TSRC%"
 tclsh "%BASEDIR%\extra\copy_here.tcl" "%THIRDDIR%\FP16-master\include\*"
 set "ERROR_STATUS=%ERRORLEVEL%"
 
+echo ~~~~~ %SECTION% ~~~~~
 echo:
 exit /b %ERROR_STATUS%
 
 
 :: ============================================================================
 :EXTRA_SRC_PREPARE
+
+set "SECTION=EXTRA_SRC_PREPARE"
 
 set OPT_XTRA=%OPT_XTRA%^
     -DSQLITE_EXTRA_AUTOEXT=sqlite3ExtraAutoExtInit ^
@@ -864,6 +933,7 @@ set OPT_XTRA=%OPT_XTRA%^
     -DSQLITE_ENABLE_NOOP     ^
     -DSQLITE_ENABLE_PREFIXES ^
     -DSQLITE_ENABLE_REGEXP   ^
+    -DSQLITE_ENABLE_REMEMBER ^
     -DSQLITE_ENABLE_ROT      ^
     -DSQLITE_ENABLE_SERIES   ^
     -DSQLITE_ENABLE_SHA      ^
@@ -882,6 +952,7 @@ set MISC_EXT=^
     "noop.c"      ^
     "prefixes.c"  ^
     "regexp.c"    ^
+    "remember.c"  ^
     "rot13.c"     ^
     "series.c"    ^
     "sha1.c"      ^
@@ -913,6 +984,7 @@ set EXTRA_SRC=%EXTRA_SRC% ^
     ""%TSRC%\noop.c""          ^
     ""%TSRC%\prefixes.c""      ^
     ""%TSRC%\regexp.c""        ^
+    ""%TSRC%\remember.c""      ^
     ""%TSRC%\rot13.c""         ^
     ""%TSRC%\series.c""        ^
     ""%TSRC%\sha1.c""          ^
@@ -922,6 +994,7 @@ set EXTRA_SRC=%EXTRA_SRC% ^
     ""%TSRC%\uuid.c""          ^
     ""%TSRC%\misc_ext_init.c""
 
+echo ~~~~~ %SECTION% ~~~~~
 echo:
 exit /b %ERRORLEVEL%
 
@@ -929,10 +1002,13 @@ exit /b %ERRORLEVEL%
 :: ============================================================================
 :SQLITE_BUILD_INIT
 
+set "SECTION=SQLITE_BUILD_INIT"
+
 cd /d "%BUILDDIR%" || exit /b !ERRORLEVEL!
 
 nmake /nologo "TOP=%DISTRODIR%" /f "%DISTRODIR%\Makefile.msc" .target_source
 
+echo ~~~~~ %SECTION% ~~~~~
 echo:
 exit /b %ERRORLEVEL%
 
@@ -940,16 +1016,21 @@ exit /b %ERRORLEVEL%
 :: ============================================================================
 :SQLITE_BUILD
 
+set "SECTION=SQLITE_BUILD"
+
 cd /d "%BUILDDIR%" || exit /b !ERRORLEVEL!
 
 nmake /nologo "EXTRA_SRC=%EXTRA_SRC%" "TOP=%DISTRODIR%" /f "%DISTRODIR%\Makefile.msc" %*
 
+echo ~~~~~ %SECTION% ~~~~~
 echo:
 exit /b %ERRORLEVEL%
 
 
 :: ============================================================================
 :COLLECT_BINARIES
+
+set "SECTION=COLLECT_BINARIES"
 
 echo ========== Collecting binaries ===========
 set BINDIR=%~dp0bin
@@ -962,6 +1043,7 @@ if "%USE_ICU%"=="1" (copy /Y "%ICUBINDIR%\icu*.dll" "%BINDIR%")
 if "%USE_ZLIB%"=="1" (copy /Y "%ZLIBDIR%\zlib1.dll"  "%BINDIR%")
 echo ---------- Copied  binaries -----------
 
+echo ~~~~~ %SECTION% ~~~~~
 echo:
 exit /b 0
 
