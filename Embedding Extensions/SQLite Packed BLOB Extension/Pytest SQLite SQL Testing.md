@@ -5647,12 +5647,3 @@ Implementation is complete when:
 13. The SQLite connection is always closed.
 14. The code remains a single maintainable Python module with clearly separated logical layers.
 
----
----
-
-## 📗 Pytest SQLite Testing
-
-> [!NOTE] Prompt
-> 
-> I am changing approach. The first implementation of the testing system will focus solely on testing via SQL. This scope mean that this testing can be fully implemented via pytest. I will directly replace the copy of sqlite3.dll used by Python with the target built copy.
-
