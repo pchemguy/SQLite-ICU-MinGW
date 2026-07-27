@@ -371,6 +371,7 @@ call :SQLITE_BUILD_INIT        || exit /b !ERRORLEVEL!
 
 call :FP16_DOWNLOAD            || exit /b !ERRORLEVEL!
 call :FP16_EXTRACT             || exit /b !ERRORLEVEL!
+
 if not "%SQLITE_EXTRA%"=="0" (
     call :EXTRA_SRC_STOCK      || exit /b !ERRORLEVEL!
 )
@@ -415,8 +416,8 @@ if exist "%TARGETDIR%" (
     goto :MKDIR__DIR_EXIT
 )
 
-mkdir "%TARGETDIR%"        || set "MKDIR_FAILED=1"
-if not exist "%TARGETDIR%" || set "MKDIR_FAILED=1"
+mkdir "%TARGETDIR%" ||      set "MKDIR_FAILED=1"
+if not exist "%TARGETDIR%" (set "MKDIR_FAILED=1")
 
 if defined MKDIR_FAILED (
     set "ERROR_STATUS=1"
@@ -463,6 +464,7 @@ if not exist "%TARGET%" (
     set "ERROR_STATUS=!ERRORLEVEL!"
     if "!ERROR_STATUS!"=="0" (
         echo {INFO} ----- Downloaded %NAME% -----
+        echo {INFO} "%TARGET%"
     ) else (
         echo {ERROR} %NAME% download failed. Error Code: !ERROR_STATUS!.
     )
@@ -594,13 +596,13 @@ if "%SQLITE_EXTRA%"=="0" (
 )
 echo %MSG%
 
-set "OUT=%PROJDIR%\_out"
+set "OUT=%PROJDIR%\out"
 call :MKDIR__DIR "%OUT%" || exit /b !ERRORLEVEL!
 set "STDOUTLOG=%OUT%\stdout.log"
 set "STDERRLOG=%OUT%\stderr.log"
-del /Y "%STDOUTLOG%" 2>nul
-del /Y "%STDERRLOG%" 2>nul
-set "CACHEDIR=OUT%\cache"
+del /Q "%STDOUTLOG%" 2>nul
+del /Q "%STDERRLOG%" 2>nul
+set "CACHEDIR=%OUT%\cache"
 call :MKDIR__DIR "%CACHEDIR%" || exit /b !ERRORLEVEL!
 set "SQLITEDIR=%OUT%\sqlite"
 call :MKDIR__DIR "%SQLITEDIR%" || exit /b !ERRORLEVEL!
@@ -610,6 +612,8 @@ set "BUILDDIR=%OUT%\build"
 call :MKDIR__DIR "%BUILDDIR%" || exit /b !ERRORLEVEL!
 set "TSRC=%BUILDDIR%\tsrc"
 call :MKDIR__DIR "%TSRC%" || exit /b !ERRORLEVEL!
+set "BINDIR=%OUT%\bin"
+call :MKDIR__DIR "%BINDIR%" || exit /b !ERRORLEVEL!
 
 echo ~~~~~ %SECTION% ~~~~~
 echo:
@@ -859,7 +863,7 @@ set "FLAG=%SQLITE_MAKEFILE%"
 set "SRC=%CACHEDIR%\sqlite.zip"
 set "DST=%OUT%"
 
-call :EXTRACT__NAME_FLAG_SRC_DSTL SQLite "%FLAG%" "%SRC%" "%DST%"
+call :EXTRACT__NAME_FLAG_SRC_DST SQLite "%FLAG%" "%SRC%" "%DST%"
 set "ERROR_STATUS=%ERRORLEVEL%"
 
 echo ~~~~~ %SECTION% ~~~~~
@@ -894,8 +898,7 @@ set "FLAG=%ZLIBDIR%\win32\Makefile.msc"
 set "SRC=%CACHEDIR%\zlib.tar.gz"
 set "DST=%THIRDDIR%"
 
-cmd /c rmdir /S /Q "%ZLIBDIR%" 1>>"%STDOUTLOG%" 2>>"%STDERRLOG%"
-call :EXTRACT__NAME_FLAG_SRC_DSTL ZLIB "%FLAG%" "%SRC%" "%DST%"
+call :EXTRACT__NAME_FLAG_SRC_DST ZLIB "%FLAG%" "%SRC%" "%DST%"
 set "ERROR_STATUS=%ERRORLEVEL%"
 if "%ERROR_STATUS%"=="0" (
     move /Y "%THIRDDIR%\zlib-*" "%THIRDDIR%\zlib"
@@ -949,7 +952,7 @@ set "ERROR_STATUS=%ERRORLEVEL%"
 if "!ERROR_STATUS!"=="0" (
     echo ----- Downloaded ICU release meta -----
 ) else (
-    del /Y /Q "%ICU_REPO_META%"
+    del /Q "%ICU_REPO_META%"
     echo {ERROR} Failed to download ICU release meta.
     goto :ICU_DOWNLOAD_EXIT
 )
@@ -988,8 +991,7 @@ set "FLAG=%ICUDIR%\source\allinone\allinone.sln"
 set "SRC=%CACHEDIR%\icu4c-X-sources.zip"
 set "DST=%THIRDDIR%"
 
-cmd /c rmdir /S /Q "%ZLIBDIR%" 1>>"%STDOUTLOG%" 2>>"%STDERRLOG%"
-call :EXTRACT__NAME_FLAG_SRC_DSTL ICU "%FLAG%" "%SRC%" "%DST%"
+call :EXTRACT__NAME_FLAG_SRC_DST ICU "%FLAG%" "%SRC%" "%DST%"
 set "ERROR_STATUS=%ERRORLEVEL%"
 
 echo ~~~~~ %SECTION% ~~~~~
@@ -1007,7 +1009,7 @@ if not exist "%ICUBINDIR%\icuinfo.exe" (
     echo {INFO} ===== Building ICU =====
     cd /d "%ICUDIR%"
     msbuild "%ICUDIR%\source\allinone\allinone.sln" ^
-            /m /p:Configuration=Release /p:SkipUWP=true
+            /m /p:Configuration=Release /p:SkipUWP=true 1>>"%STDOUTLOG%" 2>>"%STDERRLOG%"
     set "ERROR_STATUS=!ERRORLEVEL!"
     if "!ERROR_STATUS!"=="0" (
         echo {INFO} ----- Built ICU -----
@@ -1046,7 +1048,7 @@ exit /b %ERRORLEVEL%
 setlocal
 set "SECTION=FP16_DOWNLOAD"
 
-set "DISTRO=fp16_master.zip"
+set "DISTRO=%CACHEDIR%\fp16_master.zip"
 set "URL=https://github.com/Maratyszcza/FP16/archive/refs/heads/master.zip"
 
 call :DOWNLOAD__NAME_PATH_URL FP16 "%DISTRO%" "%URL%"
@@ -1067,7 +1069,7 @@ set "FLAG=%THIRDDIR%\FP16-master"
 set "SRC=%CACHEDIR%\fp16_master.zip"
 set "DST=%THIRDDIR%"
 
-call :EXTRACT__NAME_FLAG_SRC_DSTL FP16 "%FLAG%" "%SRC%" "%DST%"
+call :EXTRACT__NAME_FLAG_SRC_DST FP16 "%FLAG%" "%SRC%" "%DST%"
 set "ERROR_STATUS=%ERRORLEVEL%"
 if not "%ERROR_STATUS%"=="0" goto :FP16_EXTRACT_EXIT
 
@@ -1132,12 +1134,12 @@ echo:
 
 echo {INFO} ========== Patch MISC_EXT ===========
 cd /d "%TSRC%"
-"%TCLSH_CMD%" "%PROJDIR%\extra\patch_sqlite_misc_autoext.tcl" %MISC_EXT% || exit /b !ERRORLEVEL!
+"%TCLSH_CMD%" "%TOOLDIR%\patch_sqlite_misc_autoext.tcl" %MISC_EXT% || exit /b !ERRORLEVEL!
 
 echo:
 
 echo {INFO} ========== Bundle MISC_EXT ===========
-"%TCLSH_CMD%" "%PROJDIR%\extra\bundle_extra_src.tcl" %MISC_EXT% || exit /b !ERRORLEVEL!
+"%TCLSH_CMD%" "%TOOLDIR%\bundle_extra_src.tcl" %MISC_EXT% || exit /b !ERRORLEVEL!
 
 echo {INFO} ========== Set EXTRA_SRC for extended SQLite build ===========
 
@@ -1185,12 +1187,12 @@ echo:
 
 echo {INFO} ========== Patch MISC_EXT ===========
 cd /d "%TSRC%"
-"%TCLSH_CMD%" "%PROJDIR%\extra\patch_sqlite_misc_autoext.tcl" %MISC_EXT% || exit /b !ERRORLEVEL!
+"%TCLSH_CMD%" "%TOOLDIR%\patch_sqlite_misc_autoext.tcl" %MISC_EXT% || exit /b !ERRORLEVEL!
 
 echo:
 
 echo {INFO} ========== Bundle MISC_EXT ===========
-"%TCLSH_CMD%" "%PROJDIR%\extra\bundle_extra_src.tcl" %MISC_EXT% || exit /b !ERRORLEVEL!
+"%TCLSH_CMD%" "%TOOLDIR%\bundle_extra_src.tcl" %MISC_EXT% || exit /b !ERRORLEVEL!
 
 echo {INFO} ========== Set EXTRA_SRC for extended SQLite build ===========
 
@@ -1222,9 +1224,7 @@ exit /b %ERRORLEVEL%
 set "SECTION=COLLECT_BINARIES"
 
 echo ========== Collecting binaries ===========
-set BINDIR=%~dp0bin
-if not exist "%BINDIR%" mkdir "%BINDIR%"
-del /Q bin\* 2>nul
+del /Q "%BINDIR%\*" 2>nul
 if exist "%BUILDDIR%\sqlite3.dll" copy /Y "%BUILDDIR%\sqlite3.dll" "%BINDIR%"
 if exist "%BUILDDIR%\sqlite3.exe" copy /Y "%BUILDDIR%\sqlite3.exe" "%BINDIR%"
 if exist "%BUILDDIR%\sqlite3.def" copy /Y "%BUILDDIR%\sqlite3.def" "%BINDIR%"
