@@ -91,34 +91,34 @@
 ::     env
 ::     tcl-env
 ::
-:: DIRECTORY LAYOUT
-::   All paths are derived from the directory containing this script.
-::
-::     <script directory>\
-::       build_sqlite_msvc.bat
-::       extra\
-::         patch_sqlite_misc_autoext.tcl
-::         bundle_extra_src.tcl
-::
-::       sqlite.zip
-::       zlib.tar.gz
-::       icu4c-X-sources.zip
-::       icu_release_meta.json
-::
-::       sqlite\
-::         Makefile.msc
-::         compat\
-::           zlib\
-::           icu\
-::         ext\
-::           misc\
-::
-::       build\
-::         Intermediate SQLite build products.
-::
-::       bin\
-::         Final executables, libraries, definition files, and dependency DLLs.
-::
+:: @DIRECTORY LAYOUT
+:: @  All paths are derived from the directory containing this script.
+:: @
+:: @    <script directory>\
+:: @      build_sqlite_msvc.bat
+:: @      extra\
+:: @        patch_sqlite_misc_autoext.tcl
+:: @        bundle_extra_src.tcl
+:: @
+:: @      sqlite.zip
+:: @      zlib.tar.gz
+:: @      icu4c-X-sources.zip
+:: @      icu_repo_meta.json
+:: @
+:: @      sqlite\
+:: @        Makefile.msc
+:: @        compat\
+:: @          zlib\
+:: @          icu\
+:: @        ext\
+:: @          misc\
+:: @
+:: @      build\
+:: @        Intermediate SQLite build products.
+:: @
+:: @      bin\
+:: @        Final executables, libraries, definition files, and dependency DLLs.
+:: 
 :: DOWNLOAD SOURCES
 ::   SQLite:
 ::
@@ -331,7 +331,7 @@
 :: ============================= BEGIN DISPATCHER =============================
 call :MAIN %*
 
-exit /b 0
+exit /b %ERRORLEVEL%
 :: ============================= END   DISPATCHER =============================
 
 
@@ -342,55 +342,41 @@ SetLocal EnableExtensions EnableDelayedExpansion
 
 set "ERROR_STATUS=0"
 
-set "TAR=%windir%\System32\tar.exe"
-set "BASEDIR=%~dp0"
-set "BASEDIR=%BASEDIR:~0,-1%"
-set "DISTRODIR=%BASEDIR%\sqlite"
-set "SQLITE_MAKEFILE=%DISTRODIR%\Makefile.msc"
-set "TOP=%DISTRODIR%"
-set "BUILDDIR=%BASEDIR%\build"
-set "TSRC=%BUILDDIR%\tsrc"
-set "THIRDDIR=%DISTRODIR%\compat"
-set "STDOUTLOG=%BASEDIR%\stdout.log"
-set "STDERRLOG=%BASEDIR%\stderr.log"
-del "%STDOUTLOG%" 2>nul
-del "%STDERRLOG%" 2>nul
-
-set "OPT_XTRA="
-if not defined USE_ICU      (set "USE_ICU=1")
-if not defined USE_ZLIB     (set "USE_ZLIB=1")
-if not defined SQLITE_EXTRA (set "SQLITE_EXTRA=1")
-if not exist "%BUILDDIR%" (mkdir "%BUILDDIR%" || exit /b !ERRORLEVEL!)
-if not exist "%TSRC%"     (mkdir "%TSRC%"     || exit /b !ERRORLEVEL!)
-if not exist "%THIRDDIR%" (mkdir "%THIRDDIR%" || exit /b !ERRORLEVEL!)
+call :CORE_ENV           || exit /b !ERRORLEVEL!
 
 if not "%USE_ICU%"=="0" (
-    call :ICU_OPTIONS             || exit /b !ERRORLEVEL!
-)                                
-call :TCL_OPTIONS                 || exit /b !ERRORLEVEL!
-call :BUILD_OPTIONS               || exit /b !ERRORLEVEL!
-call :CHECK_PREREQUISITES         || exit /b !ERRORLEVEL!
-call :MAKE_DEBUG %*               || exit /b !ERRORLEVEL!
-call :SQLITE_DOWNLOAD             || exit /b !ERRORLEVEL!
-call :SQLITE_EXTRACT              || exit /b !ERRORLEVEL!
-if not "%USE_ZLIB%"=="0" (       
-    call :ZLIB_DOWNLOAD           || exit /b !ERRORLEVEL!
-    call :ZLIB_EXTRACT            || exit /b !ERRORLEVEL!
-    call :ZLIB_BUILD              || exit /b !ERRORLEVEL!
-)                                
-if not "%USE_ICU%"=="0" (        
-    call :ICU_DOWNLOAD            || exit /b !ERRORLEVEL!
-    call :ICU_EXTRACT             || exit /b !ERRORLEVEL!
-    call :ICU_BUILD               || exit /b !ERRORLEVEL!
-)                                
-call :SQLITE_BUILD_INIT           || exit /b !ERRORLEVEL!
-call :FP16_DOWNLOAD               || exit /b !ERRORLEVEL!
-call :FP16_EXTRACT                || exit /b !ERRORLEVEL!
+    call :ICU_OPTIONS          || exit /b !ERRORLEVEL!
+)                              
+call :ZLIB_OPTIONS             || exit /b !ERRORLEVEL!
+call :TCL_OPTIONS              || exit /b !ERRORLEVEL!
+call :BUILD_OPTIONS            || exit /b !ERRORLEVEL!
+
+call :CHECK_PREREQUISITES      || exit /b !ERRORLEVEL!
+
+call :MAKE_DEBUG %*            || exit /b !ERRORLEVEL!
+
+call :SQLITE_DOWNLOAD          || exit /b !ERRORLEVEL!
+call :SQLITE_EXTRACT           || exit /b !ERRORLEVEL!
+if not "%USE_ZLIB%"=="0" (     
+    call :ZLIB_DOWNLOAD        || exit /b !ERRORLEVEL!
+    call :ZLIB_EXTRACT         || exit /b !ERRORLEVEL!
+    call :ZLIB_BUILD           || exit /b !ERRORLEVEL!
+)                              
+if not "%USE_ICU%"=="0" (      
+    call :ICU_DOWNLOAD         || exit /b !ERRORLEVEL!
+    call :ICU_EXTRACT          || exit /b !ERRORLEVEL!
+    call :ICU_BUILD            || exit /b !ERRORLEVEL!
+)                              
+call :SQLITE_BUILD_INIT        || exit /b !ERRORLEVEL!
+
+call :FP16_DOWNLOAD            || exit /b !ERRORLEVEL!
+call :FP16_EXTRACT             || exit /b !ERRORLEVEL!
 if not "%SQLITE_EXTRA%"=="0" (
-    call :EXTRA_SRC_PREPARE_STOCK || exit /b !ERRORLEVEL!
+    call :EXTRA_SRC_STOCK      || exit /b !ERRORLEVEL!
 )
-call :EXTRA_SRC_PREPARE_THIRD     || exit /b !ERRORLEVEL!
-call :SQLITE_BUILD %*             || exit /b !ERRORLEVEL!
+call :EXTRA_SRC_THIRD          || exit /b !ERRORLEVEL!
+
+call :SQLITE_BUILD %*          || exit /b !ERRORLEVEL!
 call :COLLECT_BINARIES
 
 EndLocal
@@ -398,6 +384,248 @@ EndLocal
 echo:
 exit /b 0
 :: ================================= END MAIN =================================
+
+
+:: ============================================================================
+:MKDIR__DIR
+
+:: Creates directory or fails with feedback.
+::
+:: %~1 - Full targer directory path.
+::
+:: Attempts creating targer directory if not exist.
+:: Fails if creation fails or directory does not exist after creation.
+
+setlocal
+set "SECTION=MKDIR__DIR"
+
+if "%~1"=="" (
+    set "ERROR_STATUS=1"
+    echo {ERROR} Missing required target directory.
+    echo {INFO}  USAGE: call :MKDIR__DIR "{FULL TARGET DIRECTORY PATH}"
+    goto :MKDIR__DIR_EXIT
+)
+
+set "TARGETDIR=%~1"
+set "MKDIR_FAILED="
+set "ERROR_STATUS=0"
+
+if exist "%TARGETDIR%" (
+    echo {INFO} "%TARGETDIR%" already exists.
+    goto :MKDIR__DIR_EXIT
+)
+
+mkdir "%TARGETDIR%"        || set "MKDIR_FAILED=1"
+if not exist "%TARGETDIR%" || set "MKDIR_FAILED=1"
+
+if defined MKDIR_FAILED (
+    set "ERROR_STATUS=1"
+    echo {ERROR} Failed to create "%TARGETDIR%"
+    goto :MKDIR__DIR_EXIT
+)
+
+echo {INFO} Created "%TARGETDIR%".
+
+:MKDIR__DIR_EXIT
+
+echo ~~~~~ %SECTION% ~~~~~
+echo:
+endlocal && set "ERROR_STATUS=%ERROR_STATUS%" && exit /b %ERROR_STATUS%
+
+
+:: ============================================================================
+:DOWNLOAD__NAME_PATH_URL
+
+:: Downloads component.
+::
+:: %~1 - Name.
+:: %~2 - Full download path.
+:: %~3 - Download URL.
+
+setlocal
+set "SECTION=DOWNLOAD__NAME_PATH_URL"
+
+if "%~3"=="" (
+    set "ERROR_STATUS=1"
+    echo {ERROR} Missing required parameters.
+    echo {INFO}  USAGE: call :DOWNLOAD__NAME_PATH_URL "%NAME%" "%DISTRO%" "%URL%"
+    goto :DOWNLOAD_EXIT
+)
+
+set "NAME=%~1"
+set "TARGET=%~2"
+set "URL=%~3"
+set "ERROR_STATUS=0"
+
+if not exist "%TARGET%" (
+    echo {INFO} ===== Downloading %NAME% =====
+    curl.exe -fL --retry 3 --output "%TARGET%" %URL%
+    set "ERROR_STATUS=!ERRORLEVEL!"
+    if "!ERROR_STATUS!"=="0" (
+        echo {INFO} ----- Downloaded %NAME% -----
+    ) else (
+        echo {ERROR} %NAME% download failed. Error Code: !ERROR_STATUS!.
+    )
+) else (
+    echo {INFO} ===== Using previously downloaded %NAME% =====
+)
+
+:DOWNLOAD_EXIT
+
+echo ~~~~~ %SECTION% ~~~~~
+echo:
+endlocal && set "ERROR_STATUS=%ERROR_STATUS%" && exit /b %ERROR_STATUS%
+
+
+:: ============================================================================
+:EXTRACT__NAME_FLAG_SRC_DST
+
+:: Extracts archive using Windows Tar.
+::
+:: %~1 - Name.
+:: %~2 - Flag - file or directory. If exists, use previously extracted files.
+:: %~3 - Archive path - MUST exist.
+:: %~4 - Extraction directory path - MUST exist.
+
+setlocal
+set "SECTION=EXTRACT__NAME_FLAG_SRC_DST"
+
+if "%~4"=="" (
+    set "ERROR_STATUS=1"
+    echo {ERROR} Missing required parameters.
+    set "CLI=call :EXTRACT__NAME_FLAG_SRC_DST "%NAME%" "%FLAG%" "%SRC%" "%DST%""
+    echo {INFO}  USAGE: !CLI!
+    goto :EXTRACT_EXIT
+)
+
+set "NAME=%~1"
+set "FLAG=%~2"
+set "SRC=%~3"
+set "DST=%~4"
+set "ERROR_STATUS=0"
+
+if not exist "%SRC%" (
+    set "ERROR_STATUS=1"
+    echo {ERROR} Archive "%SRC%" not found.
+    goto :EXTRACT_EXIT
+)
+
+if not exist "%DST%" (
+    set "ERROR_STATUS=1"
+    echo {ERROR} Directory "%DST%" not found.
+    goto :EXTRACT_EXIT
+)
+
+if not exist "%FLAG%" (
+    echo {INFO} ===== Extracting %NAME% =====
+    cd /d "%DST%"
+    "%TAR%" -xf "%SRC%"
+    set "ERROR_STATUS=!ERRORLEVEL!"
+    if "!ERROR_STATUS!"=="0" (
+        echo {INFO} ----- Extracted %NAME% -----
+    ) else (
+        echo {ERROR} Failed to extract %NAME%. Error Code: !ERROR_STATUS!.
+    )
+) else (
+    echo {INFO} ===== Using previously extracted %NAME% =====
+)
+
+:EXTRACT_EXIT
+
+echo ~~~~~ %SECTION% ~~~~~
+echo:
+endlocal && set "ERROR_STATUS=%ERROR_STATUS%" && exit /b %ERROR_STATUS%
+:: ============================================================================
+
+
+:CORE_ENV
+
+set "SECTION=CORE_ENV"
+
+set "TAR=%windir%\System32\tar.exe"
+
+set "TOOLDIR="
+if exist "%~dp0patch_sqlite_misc_autoext.tcl" (
+    set "TOOLDIR=%~dp0"
+    set "TOOLDIR=%TOOLDIR:~0,-1%"
+) else if exist "%~dp0tool\patch_sqlite_misc_autoext.tcl" (
+    set "TOOLDIR=%~dp0tool"
+) else if exist "%~dp0tools\patch_sqlite_misc_autoext.tcl" (
+    set "TOOLDIR=%~dp0tools"
+) else if exist "%~dp0extra\patch_sqlite_misc_autoext.tcl" (
+    set "TOOLDIR=%~dp0extra"
+)
+if not defined TOOLDIR (
+    echo {ERROR} Failed to locate patch_sqlite_misc_autoext.tcl.
+    exit /b 1
+)
+echo {INFO} TOOLDIR: %TOOLDIR%.
+
+cd /d "%TOOLDIR%\.."
+set "PROJDIR=%CD%"
+echo {INFO} PROJDIR: %PROJDIR%.
+
+set "OPT_XTRA="
+if not defined USE_ICU      (set "USE_ICU=1")
+if not defined USE_ZLIB     (set "USE_ZLIB=1")
+if not defined SQLITE_EXTRA (set "SQLITE_EXTRA=1")
+
+set "MSG=USE_ICU:      %USE_ICU% - ICU is"
+if "%USE_ICU%"=="0" (
+    set "MSG=%MSG% OFF."
+) else (
+    set "MSG=%MSG% ON."
+)
+echo %MSG%
+
+set "MSG=USE_ZLIB:     %USE_ZLIB% - ZLIB is"
+if "%USE_ZLIB%"=="0" (
+    set "MSG=%MSG% OFF."
+) else (
+    set "MSG=%MSG% ON."
+)
+echo %MSG%
+
+set "MSG=SQLITE_EXTRA: %SQLITE_EXTRA% - Misc SQLite Extensions Extra is"
+if "%SQLITE_EXTRA%"=="0" (
+    set "MSG=%MSG% OFF."
+) else (
+    set "MSG=%MSG% ON."
+)
+echo %MSG%
+
+set "OUT=%PROJDIR%\_out"
+call :MKDIR__DIR "%OUT%" || exit /b !ERRORLEVEL!
+set "STDOUTLOG=%OUT%\stdout.log"
+set "STDERRLOG=%OUT%\stderr.log"
+del /Y "%STDOUTLOG%" 2>nul
+del /Y "%STDERRLOG%" 2>nul
+set "CACHEDIR=OUT%\cache"
+call :MKDIR__DIR "%CACHEDIR%" || exit /b !ERRORLEVEL!
+set "SQLITEDIR=%OUT%\sqlite"
+call :MKDIR__DIR "%SQLITEDIR%" || exit /b !ERRORLEVEL!
+set "THIRDDIR=%SQLITEDIR%\compat"
+call :MKDIR__DIR "%THIRDDIR%" || exit /b !ERRORLEVEL!
+set "BUILDDIR=%OUT%\build"
+call :MKDIR__DIR "%BUILDDIR%" || exit /b !ERRORLEVEL!
+set "TSRC=%BUILDDIR%\tsrc"
+call :MKDIR__DIR "%TSRC%" || exit /b !ERRORLEVEL!
+
+echo ~~~~~ %SECTION% ~~~~~
+echo:
+exit /b 0
+
+
+:: ============================================================================
+:ZLIB_OPTIONS
+
+set "SECTION=ZLIB_OPTIONS"
+
+set "ZLIBDIR=%THIRDDIR%\zlib"
+
+echo ~~~~~ %SECTION% ~~~~~
+echo:
+exit /b 0
 
 
 :: ============================================================================
@@ -457,6 +685,7 @@ if not exist "%TCL_HOME%\bin\tclsh.exe" (
 )
 
 :TCL_FOUND
+
 echo TCL found. TCL_HOME: "%TCL_HOME%"
 if not defined TCLBIN (
     set "Path=%TCL_HOME%\bin;%Path%"
@@ -478,11 +707,11 @@ exit /b 0
 
 set "SECTION=BUILD_OPTIONS"
 
+set "SQLITE_MAKEFILE=%SQLITEDIR%\Makefile.msc"
 set "SESSION=1"
 set "RBU=1"
 set "API_ARMOR=1"
 set "SYMBOLS=0"
-rem set "NO_TCL=1"
 set "WITHOUT_JIMSH=1"
 set "EXTRA_SRC="
 
@@ -504,34 +733,6 @@ set OPT_XTRA=%OPT_XTRA% ^
     -DSQLITE_USE_URI=1 ^
     -DSQLITE_SOUNDEX
 
-echo:
-echo ===== Optional Build Configuration =====
-set "MSG=USE_ICU:      %USE_ICU% - ICU is"
-if "%USE_ICU%"=="0" (
-    set "MSG=%MSG% OFF."
-) else (
-    set "MSG=%MSG% ON."
-)
-echo %MSG%
-
-set "MSG=USE_ZLIB:     %USE_ZLIB% - ZLIB is"
-if "%USE_ZLIB%"=="0" (
-    set "MSG=%MSG% OFF."
-) else (
-    set "MSG=%MSG% ON."
-)
-echo %MSG%
-
-set "MSG=SQLITE_EXTRA: %SQLITE_EXTRA% - Misc SQLite Extensions Extra is"
-if "%SQLITE_EXTRA%"=="0" (
-    set "MSG=%MSG% OFF."
-) else (
-    set "MSG=%MSG% ON."
-)
-echo %MSG%
-echo ----- Optional Build Configuration -----
-echo:
-
 echo ~~~~~ %SECTION% ~~~~~
 echo:
 exit /b 0
@@ -540,6 +741,7 @@ exit /b 0
 :: ============================================================================
 :MAKE_DEBUG
 
+setlocal
 set "SECTION=MAKE_DEBUG"
 
 set "TARGET="
@@ -548,18 +750,19 @@ if "%~1"=="tcl-test" (set "TARGET=%~1")
 if "%~1"=="tcl-env"  (set "TARGET=%~1")
 
 if defined TARGET (
-    nmake "TOP=%DISTRODIR%" /f "%DISTRODIR%\Makefile.msc" %TARGET%
-    exit /b 1
+    nmake "TOP=%SQLITEDIR%" /f "%SQLITEDIR%\Makefile.msc" %TARGET%
+    exit /b 100
 )
 
 echo ~~~~~ %SECTION% ~~~~~
 echo:
-exit /b 0
+endlocal && exit /b 0
 
 
 :: ============================================================================
 :CHECK_PREREQUISITES
 
+setlocal
 set "SECTION=CHECK_PREREQUISITES"
 
 echo ===== Verifying environment =====
@@ -626,157 +829,133 @@ if "%ERROR_STATUS%"=="0" (
 
 echo ~~~~~ %SECTION% ~~~~~
 echo:
-exit /b %ERROR_STATUS%
+endlocal && set "ERROR_STATUS=%ERROR_STATUS%" && exit /b %ERROR_STATUS%
 
 
 :: ============================================================================
 :SQLITE_DOWNLOAD
 
+setlocal
 set "SECTION=SQLITE_DOWNLOAD"
 
-set "DISTRO=sqlite.zip"
+set "DISTRO=%CACHEDIR%\sqlite.zip"
 set "URL=https://sqlite.org/src/zip/sqlite.zip"
 
-if not exist "%BASEDIR%\%DISTRO%" (
-    echo ===== Downloading current SQLite release =====
-    curl.exe -fL --retry 3 --output "%BASEDIR%\%DISTRO%" %URL%
-    set "ERROR_STATUS=!ERRORLEVEL!"
-    if "!ERROR_STATUS!"=="0" (
-        echo ----- Downloaded current SQLite release -----
-    ) else (
-        echo Error downloading SQLite.
-        echo Errod code: !ERROR_STATUS!
-    )
-) else (echo ===== Using previously downloaded SQLite =====)
+call :DOWNLOAD__NAME_PATH_URL SQLite "%DISTRO%" "%URL%"
+set "ERROR_STATUS=%ERRORLEVEL%"
 
 echo ~~~~~ %SECTION% ~~~~~
 echo:
-exit /b %ERROR_STATUS%
+endlocal && set "ERROR_STATUS=%ERROR_STATUS%" && exit /b %ERROR_STATUS%
 
 
 :: ============================================================================
 :SQLITE_EXTRACT
 
+setlocal
 set "SECTION=SQLITE_EXTRACT"
 
-set "DISTROFILE=sqlite.zip"
+set "FLAG=%SQLITE_MAKEFILE%"
+set "SRC=%CACHEDIR%\sqlite.zip"
+set "DST=%OUT%"
 
-if not exist "%DISTRODIR%\Makefile.msc" (
-    echo ===== Extracting SQLite =====
-    "%TAR%" -xf "%BASEDIR%\%DISTROFILE%"
-    set "ERROR_STATUS=!ERRORLEVEL!"
-    if "!ERROR_STATUS!"=="0" (
-        echo ----- Extracted SQLite -----
-    ) else (
-        echo Error extracting SQLite.
-        echo Errod code: !ERROR_STATUS!
-    )
-) else (echo ===== Using previously extracted SQLite =====)
+call :EXTRACT__NAME_FLAG_SRC_DSTL SQLite "%FLAG%" "%SRC%" "%DST%"
+set "ERROR_STATUS=%ERRORLEVEL%"
 
 echo ~~~~~ %SECTION% ~~~~~
 echo:
-exit /b %ERROR_STATUS%
+endlocal && set "ERROR_STATUS=%ERROR_STATUS%" && exit /b %ERROR_STATUS%
 
 
 :: ============================================================================
 :ZLIB_DOWNLOAD
 
+setlocal
 set "SECTION=ZLIB_DOWNLOAD"
 
-set "DISTRO=zlib.tar.gz"
+set "DISTRO=%CACHEDIR%\zlib.tar.gz"
 set "URL=https://zlib.net/current/zlib.tar.gz"
 
-if not exist "%BASEDIR%\%DISTRO%" (
-    echo ===== Downloading ZLIB =====
-    curl.exe -fL --retry 3 --output "%BASEDIR%\%DISTRO%" %URL%
-    set "ERROR_STATUS=!ERRORLEVEL!"
-    if "!ERROR_STATUS!"=="0" (
-        echo ----- Downloaded ZLIB -----
-    ) else (
-        echo Error downloading ZLIB.
-        echo Errod code: !ERROR_STATUS!
-    )
-) else (echo ===== Using previously downloaded ZLIB =====)
+call :DOWNLOAD__NAME_PATH_URL ZLIB "%DISTRO%" "%URL%"
+set "ERROR_STATUS=%ERRORLEVEL%"
 
 echo ~~~~~ %SECTION% ~~~~~
 echo:
-exit /b %ERROR_STATUS%
+endlocal && set "ERROR_STATUS=%ERROR_STATUS%" && exit /b %ERROR_STATUS%
 
 
 :: ============================================================================
 :ZLIB_EXTRACT
 
+setlocal
 set "SECTION=ZLIB_EXTRACT"
 
-set "DISTROFILE=zlib.tar.gz"
-set "ZLIBDIR=%THIRDDIR%\zlib"
+set "FLAG=%ZLIBDIR%\win32\Makefile.msc"
+set "SRC=%CACHEDIR%\zlib.tar.gz"
+set "DST=%THIRDDIR%"
 
-if not exist "%ZLIBDIR%\win32\Makefile.msc" (
-    echo ===== Extracting ZLIB =====
-    cmd /c rmdir /S /Q "%ZLIBDIR%" 1>>"%STDOUTLOG%" 2>>"%STDERRLOG%"
-    "%TAR%" -xf "%BASEDIR%\%DISTROFILE%"
-    set "ERROR_STATUS=!ERRORLEVEL!"
-    if "!ERROR_STATUS!"=="0" (
-        echo ----- Extracted ZLIB -----
-        mkdir "%THIRDDIR%" 2>nul
-        move /Y "%BASEDIR%\zlib-*" "%BASEDIR%\zlib" 1>>"%STDOUTLOG%" 2>>"%STDERRLOG%"
-        move /Y "%BASEDIR%\zlib" "%THIRDDIR%" 1>>"%STDOUTLOG%" 2>>"%STDERRLOG%"
-    ) else (
-        echo Error extracting ZLIB.
-        echo Errod code: !ERROR_STATUS!
-    )
-) else (echo ===== Using previously extracted ZLIB =====)
+cmd /c rmdir /S /Q "%ZLIBDIR%" 1>>"%STDOUTLOG%" 2>>"%STDERRLOG%"
+call :EXTRACT__NAME_FLAG_SRC_DSTL ZLIB "%FLAG%" "%SRC%" "%DST%"
+set "ERROR_STATUS=%ERRORLEVEL%"
+if "%ERROR_STATUS%"=="0" (
+    move /Y "%THIRDDIR%\zlib-*" "%THIRDDIR%\zlib"
+)
 
 echo ~~~~~ %SECTION% ~~~~~
 echo:
-exit /b %ERROR_STATUS%
+endlocal && set "ERROR_STATUS=%ERROR_STATUS%" && exit /b %ERROR_STATUS%
 
 
 :: ============================================================================
 :ZLIB_BUILD
 
+setlocal
 set "SECTION=ZLIB_BUILD"
 
 if not exist "%ZLIBDIR%\zlib1.dll" (
-    echo ===== Building ZLIB =====
-    cd /d "%DISTRODIR%"
-    nmake /nologo "TOP=%DISTRODIR%" "ZLIBLIB=all" /f "%SQLITE_MAKEFILE%" zlib
+    echo {INFO} ===== Building ZLIB =====
+    cd /d "%SQLITEDIR%"
+    nmake /nologo "TOP=%SQLITEDIR%" "ZLIBLIB=all" /f "%SQLITE_MAKEFILE%" zlib
     set "ERROR_STATUS=!ERRORLEVEL!"
     if "!ERROR_STATUS!"=="0" (
-        echo ----- Built ZLIB -----
+        echo {INFO} ----- Built ZLIB -----
     ) else (
-        echo Error building ZLIB.
-        echo Errod code: !ERROR_STATUS!
+        echo {ERROR} Failed to build ZLIB. Error Code: !ERROR_STATUS!.
     )
-) else (echo ===== Using previously built ZLIB =====)
+) else (
+    echo {INFO} ===== Using previously built ZLIB =====
+)
 
 echo ~~~~~ %SECTION% ~~~~~
 echo:
-exit /b %ERROR_STATUS%
+endlocal && set "ERROR_STATUS=%ERROR_STATUS%" && exit /b %ERROR_STATUS%
 
 
 :: ============================================================================
 :ICU_DOWNLOAD
 
+setlocal
 set "SECTION=ICU_DOWNLOAD"
 
-set "DISTRO=icu4c-X-sources.zip"
+set "DISTRO=%CACHEDIR%\icu4c-X-sources.zip"
 set "URL="
 
-set "ICU_RELEASE_META=%BASEDIR%\icu_release_meta.json"
+set "ICU_REPO_META=%CACHEDIR%\icu_repo_meta.json"
 if not exist "%ICU_RELEASE_META%" (
-    curl.exe -s https://api.github.com/repos/unicode-org/icu/releases/latest >"%ICU_RELEASE_META%"
+    curl.exe -s --output "%ICU_REPO_META%" ^
+             https://api.github.com/repos/unicode-org/icu/releases/latest
 )
 set "ERROR_STATUS=%ERRORLEVEL%"
 if "!ERROR_STATUS!"=="0" (
     echo ----- Downloaded ICU release meta -----
 ) else (
-    del /Y /Q "%ICU_RELEASE_META%"
-    echo Error downloading ICU release meta.
-    exit /b %ERROR_STATUS%
+    del /Y /Q "%ICU_REPO_META%"
+    echo {ERROR} Failed to download ICU release meta.
+    goto :ICU_DOWNLOAD_EXIT
 )
 
-for /f "usebackq tokens=2" %%I in (`findstr /R /C:"browser_download_url.*icu4c-.*-s.*rc.*\.zip" "%ICU_RELEASE_META%"`) do (
+set "CLI=findstr /R /C:"browser_download_url.*icu4c-.*-s.*rc.*\.zip" "%ICU_REPO_META%""
+for /f "usebackq tokens=2" %%I in (`%CLI%`) do (
     set "BUFFER=%%~I"
     if "!BUFFER:~-3!"=="zip" (set "URL=!BUFFER!")
     set "BUFFER="
@@ -786,144 +965,128 @@ if defined URL (
 ) else (
     set "ERROR_STATUS=1"
     echo {ERROR} Failed to locate ICU release URL.
-    exit /b %ERROR_STATUS%
+    goto :ICU_DOWNLOAD_EXIT
 )
 
-if not exist "%BASEDIR%\%DISTRO%" (
-    echo ===== Downloading ICU =====
-    curl.exe -fL --retry 3 --output "%BASEDIR%\%DISTRO%" %URL%
-    set "ERROR_STATUS=!ERRORLEVEL!"
-    if "!ERROR_STATUS!"=="0" (
-        echo ----- Downloaded ICU -----
-    ) else (
-        echo Error downloading ICU.
-        echo Errod code: !ERROR_STATUS!
-    )
-) else (echo ===== Using previously downloaded ICU =====)
+call :DOWNLOAD__NAME_PATH_URL ICU "%DISTRO%" "%URL%"
+set "ERROR_STATUS=%ERRORLEVEL%"
+
+:ICU_DOWNLOAD_EXIT
 
 echo ~~~~~ %SECTION% ~~~~~
 echo:
-exit /b %ERROR_STATUS%
+endlocal && set "ERROR_STATUS=%ERROR_STATUS%" && exit /b %ERROR_STATUS%
 
 
 :: ============================================================================
 :ICU_EXTRACT
 
+setlocal
 set "SECTION=ICU_EXTRACT"
 
-set "DISTROFILE=icu4c-X-sources.zip"
-set "ICUDIR=%THIRDDIR%\icu"
+set "FLAG=%ICUDIR%\source\allinone\allinone.sln"
+set "SRC=%CACHEDIR%\icu4c-X-sources.zip"
+set "DST=%THIRDDIR%"
 
-if not exist "%ICUDIR%\source\allinone\allinone.sln" (
-    echo ===== Extracting ICU =====
-    cd /d "%THIRDDIR%"
-    "%TAR%" -xf "%BASEDIR%\%DISTROFILE%"
-    set "ERROR_STATUS=!ERRORLEVEL!"
-    if "!ERROR_STATUS!"=="0" (
-        echo ----- Extracted ICU -----
-    ) else (
-        echo Error extracting ICU.
-        echo Errod code: !ERROR_STATUS!
-    )
-) else (echo ===== Using previously extracted ICU =====)
+cmd /c rmdir /S /Q "%ZLIBDIR%" 1>>"%STDOUTLOG%" 2>>"%STDERRLOG%"
+call :EXTRACT__NAME_FLAG_SRC_DSTL ICU "%FLAG%" "%SRC%" "%DST%"
+set "ERROR_STATUS=%ERRORLEVEL%"
 
 echo ~~~~~ %SECTION% ~~~~~
 echo:
-exit /b %ERROR_STATUS%
+endlocal && set "ERROR_STATUS=%ERROR_STATUS%" && exit /b %ERROR_STATUS%
 
 
 :: ============================================================================
 :ICU_BUILD
 
+setlocal
 set "SECTION=ICU_BUILD"
 
 if not exist "%ICUBINDIR%\icuinfo.exe" (
-    echo ===== Building ICU =====
+    echo {INFO} ===== Building ICU =====
     cd /d "%ICUDIR%"
-    msbuild "%ICUDIR%\source\allinone\allinone.sln" /m /p:Configuration=Release /p:SkipUWP=true
+    msbuild "%ICUDIR%\source\allinone\allinone.sln" ^
+            /m /p:Configuration=Release /p:SkipUWP=true
     set "ERROR_STATUS=!ERRORLEVEL!"
     if "!ERROR_STATUS!"=="0" (
-        echo ----- Built ICU -----
+        echo {INFO} ----- Built ICU -----
+    ) else if exist "%ICUBINDIR%\icuinfo.exe" (
+        echo {INFO} ----- Built ICU -----
+        set "ERROR_STATUS=0"
     ) else (
-        echo Error building ICU.
-        echo Errod code: !ERROR_STATUS!
-        if exist "%ICUBINDIR%\icuinfo.exe" (
-           echo ----- Built ICU -----
-           set "ERROR_STATUS=0"
-        )
+        echo {ERROR} Failed to build ICU. Error Code: !ERROR_STATUS!.
     )
-) else (echo ===== Using previously built ICU =====)
+) else (
+    echo {INFO} ===== Using previously built ICU =====
+)
 
 echo ~~~~~ %SECTION% ~~~~~
 echo:
-exit /b %ERROR_STATUS%
+endlocal && set "ERROR_STATUS=%ERROR_STATUS%" && exit /b %ERROR_STATUS%
+
+
+:: ============================================================================
+:SQLITE_BUILD_INIT
+
+set "SECTION=SQLITE_BUILD_INIT"
+
+cd /d "%BUILDDIR%" || exit /b !ERRORLEVEL!
+
+nmake /nologo "TOP=%SQLITEDIR%" /f "%SQLITE_MAKEFILE%" .target_source
+
+echo ~~~~~ %SECTION% ~~~~~
+echo:
+exit /b %ERRORLEVEL%
 
 
 :: ============================================================================
 :FP16_DOWNLOAD
 
+setlocal
 set "SECTION=FP16_DOWNLOAD"
 
 set "DISTRO=fp16_master.zip"
 set "URL=https://github.com/Maratyszcza/FP16/archive/refs/heads/master.zip"
 
-if not exist "%BASEDIR%\%DISTRO%" (
-    echo ===== Downloading FP16 =====
-    curl.exe -fL --retry 3 --output "%BASEDIR%\%DISTRO%" %URL%
-    set "ERROR_STATUS=!ERRORLEVEL!"
-    if "!ERROR_STATUS!"=="0" (
-        echo ----- Downloaded FP16 -----
-    ) else (
-        echo Error downloading FP16.
-        echo Errod code: !ERROR_STATUS!
-    )
-) else (echo ===== Using previously downloaded FP16 =====)
+call :DOWNLOAD__NAME_PATH_URL FP16 "%DISTRO%" "%URL%"
+set "ERROR_STATUS=%ERRORLEVEL%"
 
 echo ~~~~~ %SECTION% ~~~~~
 echo:
-exit /b %ERROR_STATUS%
+endlocal && set "ERROR_STATUS=%ERROR_STATUS%" && exit /b %ERROR_STATUS%
 
 
 :: ============================================================================
 :FP16_EXTRACT
 
+setlocal
 set "SECTION=FP16_EXTRACT"
 
-set "DISTROFILE=fp16_master.zip"
-set "SRCDIR=%THIRDDIR%\FP16-master"
+set "FLAG=%THIRDDIR%\FP16-master"
+set "SRC=%CACHEDIR%\fp16_master.zip"
+set "DST=%THIRDDIR%"
 
-if not exist "%SRCDIR%" (
-    echo ===== Extracting FP16 =====
-    cd /d "%THIRDDIR%"
-    "%TAR%" -xf "%BASEDIR%\%DISTROFILE%"
-    set "ERROR_STATUS=!ERRORLEVEL!"
-    if "!ERROR_STATUS!"=="0" (
-        echo ----- Extracted FP16 -----
-    ) else (
-        echo Error extracting FP16.
-        echo Errod code: !ERROR_STATUS!
-    )
-) else (echo ===== Using previously extracted FP16 =====)
-
-if not "%ERROR_STATUS%"=="0" (exit /b %ERROR_STATUS%)
-echo:
-
-echo ========== Copy FP16 ===========
-
-cd /d "%TSRC%"
-
-tclsh "%BASEDIR%\extra\copy_here.tcl" "%THIRDDIR%\FP16-master\include\*"
+call :EXTRACT__NAME_FLAG_SRC_DSTL FP16 "%FLAG%" "%SRC%" "%DST%"
 set "ERROR_STATUS=%ERRORLEVEL%"
+if not "%ERROR_STATUS%"=="0" goto :FP16_EXTRACT_EXIT
+
+echo {INFO} ========== Copy FP16 ===========
+
+xcopy /H /Y /B /E /Q "%THIRDDIR%\FP16-master\include\*" "%TSRC%"
+set "ERROR_STATUS=%ERRORLEVEL%"
+
+:FP16_EXTRACT_EXIT
 
 echo ~~~~~ %SECTION% ~~~~~
 echo:
-exit /b %ERROR_STATUS%
+endlocal && set "ERROR_STATUS=%ERROR_STATUS%" && exit /b %ERROR_STATUS%
 
 
 :: ============================================================================
-:EXTRA_SRC_PREPARE_STOCK
+:EXTRA_SRC_STOCK
 
-set "SECTION=EXTRA_SRC_PREPARE"
+set "SECTION=EXTRA_SRC_STOCK"
 
 set OPT_XTRA=%OPT_XTRA%^
     -DSQLITE_EXTRA_AUTOEXT=sqlite3ExtraAutoExtInit ^
@@ -943,7 +1106,7 @@ set OPT_XTRA=%OPT_XTRA%^
     -DSQLITE_ENABLE_UINT     ^
     -DSQLITE_ENABLE_UUID     
 
-cd /d "%DISTRODIR%\ext\misc"
+cd /d "%SQLITEDIR%\ext\misc"
 
 set MISC_EXT=^
     "compress.c"  ^
@@ -962,20 +1125,21 @@ set MISC_EXT=^
     "uint.c"      ^
     "uuid.c"
 
-echo ========== Copy MISC_EXT ===========
-tclsh "%DISTRODIR%\tool\cp.tcl" %MISC_EXT% "%TSRC%" || exit /b !ERRORLEVEL!
-
-cd /d "%TSRC%"
-
-echo ========== Patch MISC_EXT ===========
-tclsh "%BASEDIR%\extra\patch_sqlite_misc_autoext.tcl" %MISC_EXT% || exit /b !ERRORLEVEL!
+echo {INFO} ========== Copy MISC_EXT ===========
+"%TCLSH_CMD%" "%SQLITEDIR%\tool\cp.tcl" %MISC_EXT% "%TSRC%" || exit /b !ERRORLEVEL!
 
 echo:
 
-echo ========== Bundle MISC_EXT ===========
-tclsh "%BASEDIR%\extra\bundle_extra_src.tcl" %MISC_EXT% || exit /b !ERRORLEVEL!
+echo {INFO} ========== Patch MISC_EXT ===========
+cd /d "%TSRC%"
+"%TCLSH_CMD%" "%PROJDIR%\extra\patch_sqlite_misc_autoext.tcl" %MISC_EXT% || exit /b !ERRORLEVEL!
 
-echo ========== Set EXTRA_SRC for extended SQLite build ===========
+echo:
+
+echo {INFO} ========== Bundle MISC_EXT ===========
+"%TCLSH_CMD%" "%PROJDIR%\extra\bundle_extra_src.tcl" %MISC_EXT% || exit /b !ERRORLEVEL!
+
+echo {INFO} ========== Set EXTRA_SRC for extended SQLite build ===========
 
 set EXTRA_SRC=%EXTRA_SRC% ^
     ""%TSRC%\compress.c""      ^
@@ -1001,49 +1165,37 @@ exit /b %ERRORLEVEL%
 
 
 :: ============================================================================
-:EXTRA_SRC_PREPARE_THIRD
+:EXTRA_SRC_THIRD
 
-set "SECTION=EXTRA_SRC_PREPARE_THIRD"
+set "SECTION=EXTRA_SRC_THIRD"
 
 set OPT_XTRA=%OPT_XTRA%^
     -DSQLITE_ENABLE_ALPHABET
 
-cd /d "%DISTRODIR%\ext\misc"
+set SOURCES=^
+    "%PROJDIR%\src\alphabet.c"
 
 set MISC_EXT=^
     "alphabet.c" 
 
-echo ========== Copy MISC_EXT ===========
-tclsh "%DISTRODIR%\tool\cp.tcl" %MISC_EXT% "%TSRC%" || exit /b !ERRORLEVEL!
-
-cd /d "%TSRC%"
-
-echo ========== Patch MISC_EXT ===========
-tclsh "%BASEDIR%\extra\patch_sqlite_misc_autoext.tcl" %MISC_EXT% || exit /b !ERRORLEVEL!
+echo {INFO} ========== Copy MISC_EXT ===========
+"%TCLSH_CMD%" "%SQLITEDIR%\tool\cp.tcl" %SOURCES% "%TSRC%" || exit /b !ERRORLEVEL!
 
 echo:
 
-echo ========== Bundle MISC_EXT ===========
-tclsh "%BASEDIR%\extra\bundle_extra_src.tcl" %MISC_EXT% || exit /b !ERRORLEVEL!
+echo {INFO} ========== Patch MISC_EXT ===========
+cd /d "%TSRC%"
+"%TCLSH_CMD%" "%PROJDIR%\extra\patch_sqlite_misc_autoext.tcl" %MISC_EXT% || exit /b !ERRORLEVEL!
 
-echo ========== Set EXTRA_SRC for extended SQLite build ===========
+echo:
+
+echo {INFO} ========== Bundle MISC_EXT ===========
+"%TCLSH_CMD%" "%PROJDIR%\extra\bundle_extra_src.tcl" %MISC_EXT% || exit /b !ERRORLEVEL!
+
+echo {INFO} ========== Set EXTRA_SRC for extended SQLite build ===========
 
 set EXTRA_SRC=%EXTRA_SRC% ^
     ""%TSRC%\alphabet.c""
-
-echo ~~~~~ %SECTION% ~~~~~
-echo:
-exit /b %ERRORLEVEL%
-
-
-:: ============================================================================
-:SQLITE_BUILD_INIT
-
-set "SECTION=SQLITE_BUILD_INIT"
-
-cd /d "%BUILDDIR%" || exit /b !ERRORLEVEL!
-
-nmake /nologo "TOP=%DISTRODIR%" /f "%DISTRODIR%\Makefile.msc" .target_source
 
 echo ~~~~~ %SECTION% ~~~~~
 echo:
@@ -1057,7 +1209,7 @@ set "SECTION=SQLITE_BUILD"
 
 cd /d "%BUILDDIR%" || exit /b !ERRORLEVEL!
 
-nmake /nologo "EXTRA_SRC=%EXTRA_SRC%" "TOP=%DISTRODIR%" /f "%DISTRODIR%\Makefile.msc" %*
+nmake /nologo "EXTRA_SRC=%EXTRA_SRC%" "TOP=%SQLITEDIR%" /f "%SQLITE_MAKEFILE%" %*
 
 echo ~~~~~ %SECTION% ~~~~~
 echo:
@@ -1091,7 +1243,7 @@ rem
 rem set "FILENAME=%BUILDDIR%\tsrc\normalize.c"
 rem echo ========== Patch "%FILENAME%" ===========
 rem 
-rem tclsh "%BASEDIR%\extra\replace.tcl" "%FILENAME%"  ^
+rem tclsh "%PROJDIR%\extra\replace.tcl" "%FILENAME%"  ^
 rem     "int main" "int sqlite3_normalize_main"       ^
 rem     "aiClass" "ai_ClassN"                         ^
 rem     "sqlite3UpperToLower" "sqlite3_UpperToLowerN" ^
@@ -1103,7 +1255,7 @@ rem     "sqlite3T" "sqlite3_TN"                       ^
 rem     "TK_" "TKN_"                                  ^
 rem     "CC_" "CCN_"
 rem 
-rem tclsh "%BASEDIR%\extra\replace.tcl" "%FILENAME%" ^
+rem tclsh "%PROJDIR%\extra\replace.tcl" "%FILENAME%" ^
 rem     "__GCCN__" "__GCC__"
 rem 
 rem echo:
