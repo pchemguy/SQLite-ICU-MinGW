@@ -2194,3 +2194,2020 @@ Between the available tools, **ctypesgen is the simplest first experiment**, whi
 [3]: https://pyclibrary.readthedocs.io/ "Welcome to PyCLibrary’s documentation! — PyCLibrary 0.2.0.dev documentation"
 [4]: https://pyglet.readthedocs.io/en/latest/internal/wraptypes.html "wraptypes — pyglet v2.1.14"
 [5]: https://github.com/pypdfium2-team "pypdfium2-team · GitHub"
+
+---
+---
+
+## 📗 C Header Generation
+
+> [!NOTE] Prompt
+> 
+> Tell me about leading active open tools for generating*.h
+
+Assuming you mean **generating a `.h` header from function definitions in one or more `.c` files**, the field is surprisingly small. There is one clear turnkey leader, followed by compiler-based building blocks that require some scripting.
+
+### 1. `cproto` — the leading dedicated tool
+
+**`cproto` is the most established purpose-built tool for extracting C function prototypes and variable declarations from C source.**
+
+It can:
+
+* scan `.c` files;
+* emit prototypes for function definitions;
+* optionally emit declarations for global variables;
+* process included project files;
+* handle both modern ANSI C definitions and older K&R syntax;
+* write output suitable for incorporation into a header.
+
+It remains actively maintained and packaged in current Debian and BSD distributions. The latest packaging activity in 2026 identifies the current 4.7/4.8 line. ([Debian Manpages][1])
+
+Basic use:
+
+```cmd
+cproto alphabet.c > alphabet_generated.h
+```
+
+Multiple sources:
+
+```cmd
+cproto source1.c source2.c source3.c > internal_test_api.h
+```
+
+It can also emit variables:
+
+```cmd
+cproto -v alphabet.c > alphabet_generated.h
+```
+
+The exact option spelling should be checked against the installed version because `cproto` has a fairly extensive historical option set.
+
+#### What it generates
+
+Given:
+
+```c
+static sqlite3_int64
+utf8_length(const char *z)
+{
+    /* ... */
+}
+
+int
+decode_utf8(
+    const unsigned char *data,
+    size_t size,
+    uint32_t *codepoint
+)
+{
+    /* ... */
+}
+```
+
+the extracted content is approximately:
+
+```c
+static sqlite3_int64 utf8_length(const char *z);
+
+int decode_utf8(
+    const unsigned char *data,
+    size_t size,
+    uint32_t *codepoint
+);
+```
+
+You would normally filter or transform this further because a test header probably should not preserve `static`.
+
+#### Strengths
+
+* Dedicated exactly to this problem.
+* Mature parser rather than regex extraction.
+* Very small operational footprint.
+* Produces plain C declarations.
+* Works naturally in a build script.
+* No Python dependency.
+* Public-domain core licensing.
+* Better suited to ordinary C than heavyweight Clang tooling.
+
+#### Limitations
+
+`cproto` extracts declarations; it does not understand your architectural intent.
+
+It cannot inherently know:
+
+* which functions belong in the test API;
+* which `static` functions should become test exports;
+* which macros should decorate declarations;
+* whether a declaration should use `STAT_TEST_API`;
+* whether a variable should be exposed directly or through accessors;
+* which declarations are implementation details;
+* what header guard to use;
+* which supporting typedefs and includes are required;
+* whether the generated header remains ABI-safe.
+
+It is therefore best used as an **extraction engine**, followed by controlled filtering or post-processing.
+
+#### Assessment
+
+For a small C99 project on Windows where you want a simple generated test header, this is the first tool I would evaluate.
+
+---
+
+### 2. CProtoGen — modern lightweight Python alternative
+
+**CProtoGen** is a newer Python package and CLI specifically for generating C function prototypes from source files. It can create or overwrite a corresponding header and add conventional header scaffolding. ([PyPI][2])
+
+Typical use:
+
+```cmd
+python -m pip install cprotogen
+
+cprotogen src\alphabet.c ^
+  --header tests\native\alphabet_test_api.h ^
+  --overwrite
+```
+
+Programmatic use:
+
+```python
+from cprotogen.generator import generate_prototypes
+
+generate_prototypes(
+    "src/alphabet.c",
+    "tests/native/alphabet_test_api.h",
+    overwrite=True,
+)
+```
+
+#### Strengths
+
+* Native Windows/Python workflow.
+* Easy to integrate into your pytest environment.
+* Can directly create a `.h` file rather than merely writing declarations to stdout.
+* Small and understandable implementation.
+* MIT licensed.
+* Convenient where the entire project already depends on Python.
+
+#### Limitations
+
+It is much younger and less battle-tested than `cproto`.
+
+For serious C parsing, examine how it handles:
+
+* conditional compilation;
+* macros in return types;
+* function-pointer parameters;
+* multiline attributes;
+* MSVC declarations;
+* nested preprocessor branches;
+* comments between declarator components;
+* complex array parameters;
+* typedef-dependent signatures;
+* definitions embedded in SQLite amalgamation-style code.
+
+I would not assume it has compiler-grade parsing without validating it against your actual source.
+
+#### Assessment
+
+Attractive for simple signatures, but `cproto` is the safer established choice.
+
+---
+
+### 3. Clang LibTooling and AST Matchers — strongest foundation for a custom generator
+
+Clang does not ship a standard command called “generate this project’s public header,” but it provides the strongest open infrastructure for building one:
+
+* Clang parser and semantic analysis;
+* LibTooling;
+* AST Matchers;
+* source locations and source ranges;
+* canonical and written types;
+* access to attributes, linkage, storage class, and declarations;
+* compilation database support.
+
+Clang’s LibTooling is explicitly intended for standalone source-analysis and source-transformation tools, while AST Matchers provide structured matching of functions, variables, records, and other declaration nodes. ([Clang][3])
+
+A custom matcher can select only function definitions satisfying your rules:
+
+```cpp
+functionDecl(
+    isDefinition(),
+    isExpansionInMainFile()
+).bind("function")
+```
+
+Your generator can then emit:
+
+```c
+STAT_TEST_API sqlite3_int64
+utf8_length(const char *z);
+```
+
+rather than blindly reproducing:
+
+```c
+static sqlite3_int64
+utf8_length(const char *z);
+```
+
+#### Why this is technically superior
+
+A Clang-based generator can understand:
+
+* actual C grammar;
+* macro-expanded versus written declarations;
+* storage class;
+* external versus internal linkage;
+* calling conventions;
+* compiler attributes;
+* typedef chains;
+* function-pointer parameters;
+* anonymous structures and unions;
+* target-specific type sizes;
+* source-file ownership;
+* conditional compilation under the exact test-build flags.
+
+It can also use the real compiler command:
+
+```text
+cl.exe /DSQLITE_TEST /I... /D...
+```
+
+through a compilation database or explicitly supplied options.
+
+#### Cost
+
+This is not a turnkey low-overhead solution.
+
+You must implement and maintain:
+
+* symbol-selection rules;
+* declaration rendering;
+* macro policy;
+* ordering;
+* dependency discovery for typedefs;
+* includes;
+* header guards;
+* deterministic output;
+* duplicate removal.
+
+LibTooling also normally means writing and building a C++ utility against LLVM/Clang.
+
+#### Assessment
+
+Use this only when automated header generation becomes a real subsystem. It is excessive for extracting ten test functions.
+
+---
+
+### 4. Python with `libclang` bindings
+
+A lighter variant of Clang tooling is a Python script using Clang’s Python bindings.
+
+Conceptually:
+
+```python
+from clang.cindex import CursorKind, Index
+
+index = Index.create()
+translation_unit = index.parse(
+    "src/alphabet.c",
+    args=[
+        "-DSQLITE_TEST",
+        "-Isqlite",
+    ],
+)
+
+for cursor in translation_unit.cursor.walk_preorder():
+    if cursor.kind == CursorKind.FUNCTION_DECL:
+        if cursor.is_definition():
+            print(cursor.spelling)
+```
+
+The script can inspect:
+
+* return types;
+* parameter types;
+* storage class;
+* source location;
+* linkage;
+* annotations or attributes.
+
+#### Strengths
+
+* Compiler-grade parsing.
+* Easier to prototype than a C++ LibTooling utility.
+* Natural fit in a Python-driven test project.
+* Easy to combine with explicit allowlists or source annotations.
+* Output can be deterministic and narrowly tailored.
+
+#### Weaknesses
+
+* Requires Clang and compatible Python bindings.
+* The Python bindings expose less than the full C++ Clang API.
+* Reconstructing declarations exactly can be difficult.
+* MSVC compatibility requires correct target and include settings.
+* You still have to design the header generator.
+
+#### Assessment
+
+This is probably the best foundation if you eventually want a custom robust generator but do not want to implement it in C++.
+
+---
+
+### 5. CastXML — robust AST interchange, not a direct header generator
+
+**CastXML** is an actively maintained Kitware project that uses Clang to produce an XML representation of C-family declarations. Its latest release was in February 2026, and it explicitly supports emulating both GNU and MSVC compiler environments. ([GitHub][4])
+
+Example:
+
+```cmd
+castxml ^
+  --castxml-cc-msvc "cl.exe" ^
+  src\alphabet.c ^
+  -o alphabet.xml
+```
+
+You then write a second-stage generator that reads the XML and emits a header.
+
+#### Strengths
+
+* Clang-grade parsing.
+* Structured, language-neutral output.
+* Explicit MSVC mode.
+* Maintained and cross-platform.
+* Useful if several downstream generators need the same parsed API.
+* Avoids linking your own utility directly against Clang libraries.
+
+#### Weaknesses
+
+* Does not itself emit `.h`.
+* XML is verbose.
+* Requires custom transformation logic.
+* More moving parts than direct AST scripting.
+* Primarily designed around declaration extraction from headers and binding-generation workflows, rather than synthesizing headers from implementation files.
+
+#### Assessment
+
+A good intermediate representation for a substantial binding generator, but unnecessary for a focused pytest test header.
+
+---
+
+### 6. GCC `-aux-info`
+
+GCC has a compiler option called `-aux-info` that writes declaration information gathered while compiling a translation unit. Historically this supported GCC’s `protoize` workflow. GCC documentation describes generating `.X` files containing prototype information with:
+
+```sh
+gcc -Dfoo=bar file1.c -aux-info file1.X
+```
+
+([GCC][5])
+
+Conceptually:
+
+```cmd
+gcc -c src\alphabet.c ^
+  -aux-info build\alphabet.X ^
+  -o build\alphabet.o
+```
+
+The `.X` file contains declarations for functions encountered by the compiler.
+
+#### Strengths
+
+* Uses the real compiler parser.
+* Sees the source under actual preprocessor definitions.
+* No separate parser.
+* Can be incorporated into GCC/MinGW builds.
+
+#### Weaknesses
+
+* GCC-specific.
+* Output is auxiliary compiler data, not a polished header.
+* Not useful for your primary MSVC build unless you additionally parse with GCC.
+* It may encode declarations in a format intended for GCC tooling rather than stable public consumption.
+* Does not solve export macro insertion or API selection.
+
+#### Assessment
+
+Interesting for MinGW pipelines, but not appropriate as the primary solution for your MSVC-oriented test environment.
+
+---
+
+### 7. Doxygen XML — possible but indirect
+
+Doxygen can parse C and emit structured XML describing functions, variables, types, enums, and macros. Its current project remains actively developed, with a 2026 release. ([GitHub][6])
+
+Configuration:
+
+```text
+GENERATE_XML = YES
+EXTRACT_ALL = YES
+INPUT = src
+```
+
+You could transform Doxygen XML into a header.
+
+#### Strengths
+
+* Mature and actively maintained.
+* Already useful for documentation.
+* Handles documented public APIs particularly well.
+* XML output is designed for downstream processing.
+* Can preserve descriptions alongside declarations.
+
+#### Weaknesses
+
+* Documentation parser, not a compiler frontend.
+* Not intended to reproduce ABI declarations exactly.
+* Macro-heavy code can require careful configuration.
+* Requires a custom XML-to-header stage.
+* Inferior to Clang when correctness of complex C declarators matters.
+
+#### Assessment
+
+Reasonable only when Doxygen is already authoritative for API metadata. Do not adopt it solely to generate a test header.
+
+---
+
+### 8. Tools that should not be treated as robust solutions
+
+#### Regex-based IDE extensions
+
+There are editor extensions that claim to generate `.h` files from `.c` or `.cpp` using regex extraction. One current VS Code extension explicitly advertises regex-based handling of functions, classes, structures, enums, typedefs, and macros. ([Visual Studio Marketplace][7])
+
+These can be convenient interactively, but they are unsuitable as a trustworthy build component.
+
+Regex generally breaks on valid constructs such as:
+
+```c
+int
+(*make_callback(
+    int mode
+))(const unsigned char *, size_t);
+```
+
+or:
+
+```c
+STAT_TEST_API
+sqlite3_int64
+utf8_length(
+    const char *z
+)
+{
+    /* ... */
+}
+```
+
+or declarations controlled by nested preprocessing.
+
+#### Ctags
+
+Universal Ctags is excellent for locating symbols but does not preserve enough complete type and declarator information to generate an ABI-correct header reliably.
+
+#### Doxygen alone
+
+Doxygen generates documentation, not source headers. Its XML can feed a custom generator, but it should not be described as a direct `.h` generator.
+
+---
+
+### The key architectural problem
+
+Automatically generating a header from implementation definitions reverses the conventional C dependency direction.
+
+The conventional model is:
+
+```text
+header declaration
+        ↓
+implementation includes header
+        ↓
+compiler verifies definition matches declaration
+```
+
+For example:
+
+```c
+/* alphabet_test_api.h */
+
+STAT_TEST_API sqlite3_int64
+utf8_length(const char *z);
+```
+
+```c
+/* alphabet.c */
+
+#include "alphabet_test_api.h"
+
+STAT_TEST_API sqlite3_int64
+utf8_length(const char *z)
+{
+    /* ... */
+}
+```
+
+This gives compiler-enforced consistency.
+
+The generated-header model is:
+
+```text
+implementation definition
+        ↓
+generator parses implementation
+        ↓
+header is produced
+        ↓
+Python declaration generator consumes header
+```
+
+This avoids duplicate manual declarations, but introduces:
+
+* generator dependency;
+* symbol-selection policy;
+* generated-file lifecycle;
+* risk of stale generated output;
+* potential parser disagreement with MSVC;
+* test ABI accidentally changing whenever an implementation signature changes.
+
+For production APIs, hand-maintained headers are normally preferable. For a **test-only export surface**, generated headers are more defensible because the header is tooling input rather than a stable public API.
+
+### Best design for your specific purpose
+
+Your source definitions could be annotated with a test-export macro:
+
+```c
+STAT_TEST_API sqlite3_int64
+utf8_length(const char *z)
+{
+    /* ... */
+}
+
+STAT_TEST_API int
+utf8_decode_one(
+    const unsigned char *z,
+    size_t n,
+    uint32_t *codepoint,
+    size_t *consumed
+)
+{
+    /* ... */
+}
+```
+
+Production:
+
+```c
+#define STAT_TEST_API static
+```
+
+Test build:
+
+```c
+#define STAT_TEST_API __declspec(dllexport)
+```
+
+A generator should extract **only definitions carrying `STAT_TEST_API`**.
+
+The generated header should contain:
+
+```c
+#ifndef ALPHABET_TEST_API_H
+#define ALPHABET_TEST_API_H
+
+#include <stddef.h>
+#include <stdint.h>
+
+#if defined(_WIN32)
+# define STAT_TEST_DECL __declspec(dllimport)
+#else
+# define STAT_TEST_DECL
+#endif
+
+STAT_TEST_DECL sqlite3_int64
+utf8_length(const char *z);
+
+STAT_TEST_DECL int
+utf8_decode_one(
+    const unsigned char *z,
+    size_t n,
+    uint32_t *codepoint,
+    size_t *consumed
+);
+
+#endif
+```
+
+Note that the consuming header normally needs `dllimport`, not `dllexport`, although neither is needed merely for parsing it into `ctypes` declarations.
+
+### Practical ranking
+
+| Tool              |   Turnkey `.c` → prototypes |            Parser quality |                Windows/MSVC fit |                Customization | Recommendation           |
+| ----------------- | --------------------------: | ------------------------: | ------------------------------: | ---------------------------: | ------------------------ |
+| `cproto`          |                     **Yes** | Good traditional C parser |                        Moderate | Moderate via post-processing | **Best initial tool**    |
+| CProtoGen         |                         Yes |    Suitable for simpler C |                        **Easy** |      Easy Python integration | Worth evaluating         |
+| Python `libclang` |         No, script required |        **Compiler-grade** | Good with correct configuration |                **Excellent** | Best custom route        |
+| Clang LibTooling  | No, implementation required |        **Compiler-grade** |                            Good |                  **Maximum** | For mature tooling       |
+| CastXML           |       Intermediate XML only |            Compiler-grade |       **Explicit MSVC support** |                         High | For larger generators    |
+| GCC `-aux-info`   |              Prototype data |            Compiler-grade |          Poor for MSVC workflow |                          Low | Not recommended here     |
+| Doxygen XML       |            Intermediate XML |       Documentation-grade |                            Good |                         High | Only if already used     |
+| Regex extensions  |                         Yes |                      Weak |                            Easy |                          Low | Not for automated builds |
+
+### Recommendation
+
+For your current project:
+
+1. Try **`cproto`** against the actual module and inspect its handling of `STAT_TEST_API`, multiline signatures, SQLite types, and preprocessor branches.
+2. Put an explicit marker on every test-visible definition.
+3. Filter the extracted output so only marked functions enter the generated header.
+4. Add deterministic header guards and required includes in a small Python or Tcl postprocessor.
+5. Feed that compact generated header into a separate `ctypes` declaration generator—or generate the `ctypes` declarations directly from the same extraction stage.
+
+The more direct long-term design is actually:
+
+```text
+annotated C definitions
+        ↓
+Clang-based generator
+        ├── generated test_api.h
+        └── generated _ctypes.py
+```
+
+Generating both outputs from the same AST avoids an unnecessary intermediate parsing cycle. For a first implementation, though, **`cproto` plus a small deterministic postprocessor is the lowest-overhead credible route**.
+
+[1]: https://manpages.debian.org/trixie/cproto/cproto.1.en.html "cproto(1) — cproto — Debian trixie — Debian Manpages"
+[2]: https://pypi.org/project/cprotogen/ "cprotogen · PyPI"
+[3]: https://clang.llvm.org/docs/LibASTMatchersTutorial.html "Tutorial for building tools using LibTooling and LibASTMatchers — Clang 24.0.0git documentation"
+[4]: https://github.com/CastXML/CastXML "GitHub - CastXML/CastXML: C-family Abstract Syntax Tree XML Output · GitHub"
+[5]: https://gcc.gnu.org/onlinedocs/gcc-3.2.3/gcc/Running-Protoize.html "Using the GNU Compiler Collection (GCC)"
+[6]: https://github.com/doxygen/doxygen "GitHub - doxygen/doxygen: Official doxygen git repository · GitHub"
+[7]: https://marketplace.visualstudio.com/items?itemName=KairavDutta.header-file-generator "Header File Generator - Visual Studio Marketplace"
+
+---
+---
+
+## 📗 Python LibClang
+
+> [!NOTE] Prompt
+> 
+> I have installed
+> `mamba install -c conda-forge clang clangdev libclang clang-tools`
+> and I have active MSVC setup.
+> Is this enough for Python libclang?
+
+**Almost.** You have the Clang compiler, development files, `libclang.dll`, and command-line tools, but the Python bindings are normally supplied by the separate conda-forge package **`python-clang`**. ([Anaconda][1])
+
+Install it in the same environment:
+
+```cmd
+mamba install -c conda-forge python-clang
+```
+
+Your complete installation is therefore:
+
+```cmd
+mamba install -c conda-forge ^
+  clang clangdev libclang clang-tools python-clang
+```
+
+### Verify the installation
+
+Run:
+
+```cmd
+python -c "from clang import cindex; print(cindex.__file__)"
+```
+
+Then test whether the binding can load `libclang.dll` and create an index:
+
+```cmd
+python -c "from clang.cindex import Index; print(Index.create())"
+```
+
+If both commands succeed, the Python binding is operational. Clang’s Python interface is built over libclang, Clang’s relatively stable C API. ([Clang][2])
+
+### Minimal parsing test
+
+Create `test.c`:
+
+```c
+static int add(int a, int b)
+{
+    return a + b;
+}
+```
+
+Then run:
+
+```python
+from clang.cindex import CursorKind, Index
+
+index = Index.create()
+
+translation_unit = index.parse(
+    "test.c",
+    args=["-std=c11"],
+)
+
+for diagnostic in translation_unit.diagnostics:
+    print(diagnostic)
+
+for cursor in translation_unit.cursor.get_children():
+    if cursor.kind == CursorKind.FUNCTION_DECL:
+        print(
+            cursor.spelling,
+            cursor.result_type.spelling,
+            cursor.is_definition(),
+        )
+```
+
+Expected output should include something resembling:
+
+```text
+add int True
+```
+
+### If Python cannot find `libclang.dll`
+
+On a conda-forge Windows environment, it is commonly located under:
+
+```text
+%CONDA_PREFIX%\Library\bin\libclang.dll
+```
+
+Verify:
+
+```cmd
+where libclang.dll
+dir "%CONDA_PREFIX%\Library\bin\libclang.dll"
+```
+
+Then configure it explicitly before creating an `Index`:
+
+```python
+from pathlib import Path
+import os
+
+from clang.cindex import Config, Index
+
+libclang_path = (
+    Path(os.environ["CONDA_PREFIX"])
+    / "Library"
+    / "bin"
+    / "libclang.dll"
+)
+
+Config.set_library_file(str(libclang_path))
+
+index = Index.create()
+```
+
+The configuration must occur before the first operation that loads libclang.
+
+A reusable setup function:
+
+```python
+from __future__ import annotations
+
+import os
+from pathlib import Path
+
+from clang.cindex import Config
+
+
+def configure_libclang() -> Path:
+    conda_prefix = os.environ.get("CONDA_PREFIX")
+    if not conda_prefix:
+        raise RuntimeError("CONDA_PREFIX is not defined")
+
+    library = (
+        Path(conda_prefix)
+        / "Library"
+        / "bin"
+        / "libclang.dll"
+    )
+
+    if not library.is_file():
+        raise FileNotFoundError(f"libclang.dll not found: {library}")
+
+    Config.set_library_file(str(library))
+    return library
+```
+
+### Version compatibility
+
+The Python `clang.cindex` package and `libclang.dll` should come from the **same LLVM/Clang release line**. Installing both from the same conda-forge environment normally gives the solver an opportunity to select compatible builds.
+
+Inspect installed packages:
+
+```cmd
+mamba list | findstr /i "clang llvm"
+```
+
+You should see mutually compatible versions for at least:
+
+```text
+clang
+clangdev
+libclang
+python-clang
+```
+
+A mismatch often produces errors such as:
+
+```text
+undefined symbol
+```
+
+or:
+
+```text
+function ... not found
+```
+
+when `clang.cindex` attempts to bind functions exported by `libclang.dll`.
+
+### MSVC setup and parsing
+
+Having an active MSVC developer environment helps because you have variables such as:
+
+```text
+INCLUDE
+LIB
+PATH
+VCToolsInstallDir
+WindowsSdkDir
+```
+
+However, libclang does not automatically become MSVC merely because `cl.exe` is available. When parsing a translation unit, you still need to provide the relevant compilation arguments.
+
+For ordinary self-contained C:
+
+```python
+translation_unit = index.parse(
+    "src/alphabet.c",
+    args=[
+        "-x",
+        "c",
+        "-std=c11",
+        "-DSQLITE_TEST=1",
+        "-Isrc",
+        "-Ibuild/sqlite",
+    ],
+)
+```
+
+For source using Microsoft extensions:
+
+```python
+translation_unit = index.parse(
+    "src/alphabet.c",
+    args=[
+        "-x",
+        "c",
+        "-std=c11",
+        "-fms-extensions",
+        "-fms-compatibility",
+        "-DSQLITE_TEST=1",
+        "-Isrc",
+        "-Ibuild/sqlite",
+    ],
+)
+```
+
+Clang accepts most `cl.exe` language constructs, but its parser arguments use Clang-style options unless you invoke a driver explicitly in `clang-cl` mode.
+
+### Do you need all four existing packages?
+
+For a Python libclang script:
+
+| Package        |              Needed? | Purpose                                         |
+| -------------- | -------------------: | ----------------------------------------------- |
+| `libclang`     |              **Yes** | `libclang.dll`, the C API loaded by Python      |
+| `python-clang` |              **Yes** | `clang.cindex` Python module                    |
+| `clang`        |               Useful | Compiler driver and associated runtime          |
+| `clangdev`     | Usually not required | Development headers and libraries               |
+| `clang-tools`  |         Not required | `clang-format`, `clang-tidy`, and related tools |
+
+The minimal installation is generally:
+
+```cmd
+mamba install -c conda-forge libclang python-clang
+```
+
+For your intended AST/header-generation work, keeping the complete toolchain is reasonable.
+
+### One-command definitive check
+
+After installing `python-clang`:
+
+```cmd
+python -c "import os; from pathlib import Path; from clang.cindex import Config,Index; p=Path(os.environ['CONDA_PREFIX'])/'Library'/'bin'/'libclang.dll'; Config.set_library_file(str(p)); print('libclang:',p); print('index:',Index.create())"
+```
+
+If that succeeds, your environment is sufficient for developing a Python-based Clang AST extractor.
+
+[1]: https://anaconda.org/conda-forge/libclang/ "libclang - conda-forge | Anaconda.org"
+[2]: https://clang.llvm.org/docs/LibClang.html "Libclang tutorial — Clang 24.0.0git documentation"
+
+---
+---
+
+## 📗 Generating C Headers and `ctypes` Definitions
+
+> [!NOTE] Prompt
+> 
+> Minimal parsing test works. How do I proceed to creating a C header? Now that parser works, can I use results to also create \*.py ctypes definitions module?
+
+Yes. Once `libclang` parsing works, you can generate both:
+
+```text
+annotated C definitions
+        ↓
+libclang AST extractor
+        ↓
+shared intermediate model
+        ├── generated_test_api.h
+        └── generated_ctypes.py
+```
+
+This is preferable to generating a header and then reparsing that header for `ctypes`: both outputs come from the same parsed translation unit and therefore cannot drift independently.
+
+Libclang exposes AST traversal, cursor types, source ranges, linkage, storage classes, argument cursors, type spellings, and source tokenization. However, it is intentionally a relatively small, stable interface rather than complete access to every detail in Clang’s internal C++ AST. ([Clang][1])
+
+### 1. Mark test-exported functions explicitly
+
+Use a marker macro on each function that should enter the generated test API:
+
+```c_
+#ifdef SQLITE_TEST
+# if defined(_WIN32)
+#  define STAT_TEST_API __declspec(dllexport)
+# else
+#  define STAT_TEST_API __attribute__((visibility("default")))
+# endif
+#else
+# define STAT_TEST_API static
+#endif
+```
+
+Definitions:
+
+```c
+STAT_TEST_API sqlite3_int64
+utf8_length(const char *z)
+{
+    /* ... */
+}
+
+STAT_TEST_API int
+utf8_decode_one(
+    const unsigned char *z,
+    size_t n,
+    uint32_t *codepoint,
+    size_t *consumed
+)
+{
+    /* ... */
+}
+```
+
+The generator should select only definitions whose source spelling contains `STAT_TEST_API`.
+
+Do not select every non-`static` function. Explicit annotation prevents accidental growth of the test ABI.
+
+### 2. Parse in production mode, not test-export mode
+
+A useful detail: parse the source with `SQLITE_TEST` **undefined**, so:
+
+```c
+STAT_TEST_API
+```
+
+expands to:
+
+```c
+static
+```
+
+This preserves the source’s normal implementation semantics while the marker remains visible in the unexpanded source text.
+
+For AST extraction, you can identify the function by examining the original source extent or tokens. Libclang source extents identify the source region corresponding to a cursor, and tokenization gives the lexical tokens in that range. ([Clang][1])
+
+Alternatively, define a separate parser-only form:
+
+```cmd
+-DSTAT_TEST_API=__attribute__((annotate("stat_test_api")))
+```
+
+But that only works cleanly when the source lets the command-line definition override the normal macro definition. A dedicated marker macro is usually simpler.
+
+### 3. Build a shared intermediate model
+
+Do not emit text directly while walking cursors. First collect normalized records:
+
+```python
+from dataclasses import dataclass
+
+
+@dataclass(frozen=True)
+class Parameter:
+    name: str
+    c_type: str
+
+
+@dataclass(frozen=True)
+class Function:
+    name: str
+    result_type: str
+    parameters: tuple[Parameter, ...]
+    variadic: bool
+    source_file: str
+    source_line: int
+```
+
+For your examples:
+
+```python
+Function(
+    name="utf8_length",
+    result_type="sqlite3_int64",
+    parameters=(
+        Parameter(name="z", c_type="const char *"),
+    ),
+    variadic=False,
+    source_file="alphabet.c",
+    source_line=123,
+)
+```
+
+Then write two independent emitters:
+
+```python
+emit_header(functions)
+emit_ctypes_module(functions)
+```
+
+### 4. Extracting functions with libclang
+
+A minimal extractor:
+
+```python
+from __future__ import annotations
+
+from dataclasses import dataclass
+from pathlib import Path
+
+from clang.cindex import (
+    Cursor,
+    CursorKind,
+    Index,
+    TranslationUnit,
+)
+
+
+@dataclass(frozen=True)
+class Parameter:
+    name: str
+    c_type: str
+
+
+@dataclass(frozen=True)
+class Function:
+    name: str
+    result_type: str
+    parameters: tuple[Parameter, ...]
+    variadic: bool
+    source_file: Path
+    source_line: int
+
+
+def cursor_source_text(cursor: Cursor) -> str:
+    start = cursor.extent.start
+    end = cursor.extent.end
+
+    if start.file is None or end.file is None:
+        return ""
+
+    if start.file.name != end.file.name:
+        return ""
+
+    path = Path(start.file.name)
+    data = path.read_bytes()
+
+    return data[start.offset : end.offset].decode(
+        "utf-8",
+        errors="replace",
+    )
+
+
+def is_test_api_function(cursor: Cursor) -> bool:
+    if cursor.kind != CursorKind.FUNCTION_DECL:
+        return False
+
+    if not cursor.is_definition():
+        return False
+
+    if cursor.location.file is None:
+        return False
+
+    source = cursor_source_text(cursor)
+    signature = source.split("{", 1)[0]
+
+    return "STAT_TEST_API" in signature
+
+
+def extract_function(cursor: Cursor) -> Function:
+    parameters = tuple(
+        Parameter(
+            name=argument.spelling,
+            c_type=argument.type.spelling,
+        )
+        for argument in cursor.get_arguments()
+    )
+
+    return Function(
+        name=cursor.spelling,
+        result_type=cursor.result_type.spelling,
+        parameters=parameters,
+        variadic=cursor.type.is_function_variadic(),
+        source_file=Path(cursor.location.file.name),
+        source_line=cursor.location.line,
+    )
+
+
+def walk(cursor: Cursor):
+    yield cursor
+
+    for child in cursor.get_children():
+        yield from walk(child)
+
+
+def parse_functions(
+    source: Path,
+    clang_args: list[str],
+) -> list[Function]:
+    index = Index.create()
+
+    translation_unit = index.parse(
+        str(source),
+        args=clang_args,
+        options=(
+            TranslationUnit.PARSE_DETAILED_PROCESSING_RECORD
+        ),
+    )
+
+    errors = [
+        diagnostic
+        for diagnostic in translation_unit.diagnostics
+        if diagnostic.severity >= diagnostic.Error
+    ]
+
+    if errors:
+        rendered = "\n".join(str(item) for item in errors)
+        raise RuntimeError(
+            f"Clang failed to parse {source}:\n{rendered}"
+        )
+
+    source_resolved = source.resolve()
+
+    functions: list[Function] = []
+
+    for cursor in walk(translation_unit.cursor):
+        if not is_test_api_function(cursor):
+            continue
+
+        if Path(cursor.location.file.name).resolve() != source_resolved:
+            continue
+
+        functions.append(extract_function(cursor))
+
+    functions.sort(key=lambda item: (item.source_line, item.name))
+    return functions
+```
+
+The same-file check is important. Otherwise, traversal may collect functions from included headers.
+
+#### One correction to the source-text helper
+
+Reading `extent.start.offset:end.offset` works when the source is ordinary UTF-8-compatible text and Clang’s offsets refer to the same byte stream. Since the offsets are byte offsets, use `read_bytes()` as above, not `read_text()` followed by Python string slicing.
+
+### 5. Generating the C header
+
+A basic header emitter:
+
+```python
+def format_c_parameter(parameter: Parameter) -> str:
+    name = parameter.name or "arg"
+
+    c_type = parameter.c_type.strip()
+
+    if c_type.endswith("*"):
+        return f"{c_type}{name}"
+
+    return f"{c_type} {name}"
+
+
+def format_c_function(function: Function) -> str:
+    if function.parameters:
+        parameters = ",\n".join(
+            f"    {format_c_parameter(parameter)}"
+            for parameter in function.parameters
+        )
+    else:
+        parameters = "    void"
+
+    if function.variadic:
+        if function.parameters:
+            parameters += ",\n    ..."
+        else:
+            parameters = "    ..."
+
+    return (
+        f"STAT_TEST_DECL {function.result_type}\n"
+        f"{function.name}(\n"
+        f"{parameters}\n"
+        f");"
+    )
+
+
+def emit_header(
+    functions: list[Function],
+    output: Path,
+) -> None:
+    declarations = "\n\n".join(
+        format_c_function(function)
+        for function in functions
+    )
+
+    text = f"""\
+#ifndef STAT_TEST_API_GENERATED_H
+#define STAT_TEST_API_GENERATED_H
+
+#include <stddef.h>
+#include <stdint.h>
+
+#if defined(_WIN32)
+# define STAT_TEST_DECL __declspec(dllimport)
+#else
+# define STAT_TEST_DECL
+#endif
+
+#ifdef __cplusplus
+extern "C" {{
+#endif
+
+{declarations}
+
+#ifdef __cplusplus
+}}
+#endif
+
+#endif
+"""
+
+    output.write_text(text, encoding="utf-8", newline="\n")
+```
+
+Generated result:
+
+```c
+#ifndef STAT_TEST_API_GENERATED_H
+#define STAT_TEST_API_GENERATED_H
+
+#include <stddef.h>
+#include <stdint.h>
+
+#if defined(_WIN32)
+# define STAT_TEST_DECL __declspec(dllimport)
+#else
+# define STAT_TEST_DECL
+#endif
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+STAT_TEST_DECL sqlite3_int64
+utf8_length(
+    const char *z
+);
+
+STAT_TEST_DECL int
+utf8_decode_one(
+    const unsigned char *z,
+    size_t n,
+    uint32_t *codepoint,
+    size_t *consumed
+);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif
+```
+
+#### Important limitation
+
+`argument.type.spelling` is adequate for ordinary parameters such as:
+
+```c
+const unsigned char *
+size_t
+uint32_t *
+```
+
+It is not sufficient for every legal C declarator.
+
+For example:
+
+```c
+int (*callback)(const void *, size_t)
+```
+
+cannot be reconstructed correctly by blindly writing:
+
+```text
+<type spelling> <name>
+```
+
+The parameter name belongs inside the function-pointer declarator.
+
+For complex declarators, use one of these strategies:
+
+1. Restrict the test ABI to simple scalar, pointer, array, and named-structure types.
+2. Preserve the original source tokens for the complete function signature.
+3. Implement a recursive C declarator renderer based on `TypeKind`.
+4. Introduce typedefs for callbacks:
+
+```c
+typedef int (*stat_callback)(const void *, size_t);
+
+STAT_TEST_API int
+run_callback(stat_callback callback);
+```
+
+For a test ABI, **named callback typedefs are the best solution**.
+
+### 6. Better header generation: preserve the original signature
+
+For maximum fidelity, extract the original signature text before the opening function body:
+
+```python
+def extract_signature_source(cursor: Cursor) -> str:
+    source = cursor_source_text(cursor)
+
+    brace_index = source.find("{")
+    if brace_index < 0:
+        raise RuntimeError(
+            f"Could not locate body for {cursor.spelling}"
+        )
+
+    signature = source[:brace_index].rstrip()
+
+    signature = signature.replace(
+        "STAT_TEST_API",
+        "STAT_TEST_DECL",
+        1,
+    )
+
+    return signature + ";"
+```
+
+This preserves:
+
+* multiline formatting;
+* function-pointer parameters;
+* array declarators;
+* macro-based types;
+* pointer qualifiers;
+* calling-convention macros.
+
+Then:
+
+```python
+def emit_header_from_source(
+    cursors: list[Cursor],
+    output: Path,
+) -> None:
+    declarations = "\n\n".join(
+        extract_signature_source(cursor)
+        for cursor in cursors
+    )
+
+    # Add header guard and prerequisite includes.
+```
+
+This is usually the strongest approach for generating the `.h`.
+
+Use the AST to:
+
+* decide which functions qualify;
+* validate names and linkage;
+* sort and deduplicate;
+* inspect dependencies.
+
+Use the original source range to:
+
+* reproduce the declaration.
+
+### 7. Generating a `ctypes` module
+
+Yes, the same `Function` records can generate:
+
+```python
+import ctypes
+
+
+def bind(dll: ctypes.CDLL) -> None:
+    dll.utf8_length.argtypes = [
+        ctypes.c_char_p,
+    ]
+    dll.utf8_length.restype = ctypes.c_int64
+
+    dll.utf8_decode_one.argtypes = [
+        ctypes.POINTER(ctypes.c_ubyte),
+        ctypes.c_size_t,
+        ctypes.POINTER(ctypes.c_uint32),
+        ctypes.POINTER(ctypes.c_size_t),
+    ]
+    dll.utf8_decode_one.restype = ctypes.c_int
+```
+
+The main work is a **C type → ctypes expression mapper**.
+
+### 8. Do not map only from `type.spelling`
+
+String mapping is tempting:
+
+```python
+{
+    "int": "ctypes.c_int",
+    "size_t": "ctypes.c_size_t",
+    "sqlite3_int64": "ctypes.c_int64",
+}
+```
+
+It works for a narrow API, but AST type kinds are more robust.
+
+Use:
+
+* `type.kind`;
+* `type.get_canonical()`;
+* `type.get_pointee()`;
+* typedef spelling where semantically useful;
+* declaration cursors for records and enums.
+
+Libclang provides cursor and type inspection, including complete type information, pointee types, and qualifiers; canonical types can be used to strip typedefs when reasoning about the underlying representation. ([Clang][1])
+
+### 9. A practical type mapper
+
+```python
+from clang.cindex import Type, TypeKind
+
+
+DIRECT_CTYPES = {
+    TypeKind.BOOL: "ctypes.c_bool",
+    TypeKind.CHAR_S: "ctypes.c_char",
+    TypeKind.SCHAR: "ctypes.c_int8",
+    TypeKind.UCHAR: "ctypes.c_uint8",
+    TypeKind.SHORT: "ctypes.c_short",
+    TypeKind.USHORT: "ctypes.c_ushort",
+    TypeKind.INT: "ctypes.c_int",
+    TypeKind.UINT: "ctypes.c_uint",
+    TypeKind.LONG: "ctypes.c_long",
+    TypeKind.ULONG: "ctypes.c_ulong",
+    TypeKind.LONGLONG: "ctypes.c_longlong",
+    TypeKind.ULONGLONG: "ctypes.c_ulonglong",
+    TypeKind.FLOAT: "ctypes.c_float",
+    TypeKind.DOUBLE: "ctypes.c_double",
+}
+
+
+NAMED_TYPE_OVERRIDES = {
+    "size_t": "ctypes.c_size_t",
+    "ptrdiff_t": "ctypes.c_ssize_t",
+    "int8_t": "ctypes.c_int8",
+    "uint8_t": "ctypes.c_uint8",
+    "int16_t": "ctypes.c_int16",
+    "uint16_t": "ctypes.c_uint16",
+    "int32_t": "ctypes.c_int32",
+    "uint32_t": "ctypes.c_uint32",
+    "int64_t": "ctypes.c_int64",
+    "uint64_t": "ctypes.c_uint64",
+    "sqlite3_int64": "ctypes.c_int64",
+    "sqlite3_uint64": "ctypes.c_uint64",
+}
+
+
+class UnsupportedCTypeError(RuntimeError):
+    pass
+
+
+def ctypes_expression(
+    c_type: Type,
+    *,
+    for_result: bool = False,
+) -> str:
+    spelling = " ".join(c_type.spelling.split())
+
+    if spelling in NAMED_TYPE_OVERRIDES:
+        return NAMED_TYPE_OVERRIDES[spelling]
+
+    if c_type.kind == TypeKind.VOID:
+        if for_result:
+            return "None"
+
+        raise UnsupportedCTypeError(
+            "void is not a valid argument type"
+        )
+
+    if c_type.kind in DIRECT_CTYPES:
+        return DIRECT_CTYPES[c_type.kind]
+
+    if c_type.kind == TypeKind.TYPEDEF:
+        override = NAMED_TYPE_OVERRIDES.get(spelling)
+        if override is not None:
+            return override
+
+        return ctypes_expression(
+            c_type.get_canonical(),
+            for_result=for_result,
+        )
+
+    if c_type.kind == TypeKind.ENUM:
+        # C enum ABI is normally int for this controlled interface.
+        return "ctypes.c_int"
+
+    if c_type.kind == TypeKind.POINTER:
+        pointee = c_type.get_pointee()
+        pointee_spelling = " ".join(pointee.spelling.split())
+
+        if pointee.kind == TypeKind.VOID:
+            return "ctypes.c_void_p"
+
+        if (
+            pointee.kind == TypeKind.CHAR_S
+            and pointee.is_const_qualified()
+        ):
+            return "ctypes.c_char_p"
+
+        inner = ctypes_expression(pointee)
+        return f"ctypes.POINTER({inner})"
+
+    raise UnsupportedCTypeError(
+        f"Unsupported C type: "
+        f"{c_type.spelling!r} ({c_type.kind})"
+    )
+```
+
+#### Deliberately strict behavior
+
+Do not silently guess unsupported types.
+
+The generator should fail on:
+
+* structures not yet emitted;
+* unions;
+* arrays;
+* callbacks;
+* `long double`;
+* vectors;
+* complex numbers;
+* incomplete types;
+* variadic functions.
+
+A failed generation step is safer than an ABI-incorrect Python module.
+
+### 10. Preserve actual Clang `Type` objects internally
+
+The earlier `Function` model stores only strings. For `ctypes`, keep the original type information:
+
+```python
+@dataclass(frozen=True)
+class ParsedParameter:
+    name: str
+    c_type: object  # clang.cindex.Type
+
+
+@dataclass(frozen=True)
+class ParsedFunction:
+    name: str
+    result_type: object
+    parameters: tuple[ParsedParameter, ...]
+    variadic: bool
+    signature_source: str
+    source_line: int
+```
+
+Or normalize the type into your own language-neutral model:
+
+```python
+@dataclass(frozen=True)
+class CType:
+    kind: str
+    spelling: str
+    const: bool = False
+    pointee: "CType | None" = None
+```
+
+The second design is better for testing the generator itself and avoids retaining libclang objects after the translation unit goes out of scope.
+
+### 11. Emit the binding module
+
+```python
+def emit_ctypes_module(
+    functions,
+    output: Path,
+) -> None:
+    lines = [
+        '"""Generated ctypes declarations. Do not edit."""',
+        "",
+        "from __future__ import annotations",
+        "",
+        "import ctypes",
+        "",
+        "",
+        "def bind(dll: ctypes.CDLL) -> ctypes.CDLL:",
+    ]
+
+    if not functions:
+        lines.append("    return dll")
+    else:
+        for function in functions:
+            if function.variadic:
+                raise RuntimeError(
+                    f"Variadic function is unsupported: "
+                    f"{function.name}"
+                )
+
+            argument_types = [
+                ctypes_expression(parameter.c_type)
+                for parameter in function.parameters
+            ]
+
+            result_type = ctypes_expression(
+                function.result_type,
+                for_result=True,
+            )
+
+            lines.append(
+                f"    dll.{function.name}.argtypes = ["
+            )
+
+            for argument_type in argument_types:
+                lines.append(f"        {argument_type},")
+
+            lines.append("    ]")
+            lines.append(
+                f"    dll.{function.name}.restype = "
+                f"{result_type}"
+            )
+            lines.append("")
+
+        lines.append("    return dll")
+
+    lines.append("")
+
+    output.write_text(
+        "\n".join(lines),
+        encoding="utf-8",
+        newline="\n",
+    )
+```
+
+Generated module:
+
+```python
+"""Generated ctypes declarations. Do not edit."""
+
+from __future__ import annotations
+
+import ctypes
+
+
+def bind(dll: ctypes.CDLL) -> ctypes.CDLL:
+    dll.utf8_length.argtypes = [
+        ctypes.c_char_p,
+    ]
+    dll.utf8_length.restype = ctypes.c_int64
+
+    dll.utf8_decode_one.argtypes = [
+        ctypes.POINTER(ctypes.c_uint8),
+        ctypes.c_size_t,
+        ctypes.POINTER(ctypes.c_uint32),
+        ctypes.POINTER(ctypes.c_size_t),
+    ]
+    dll.utf8_decode_one.restype = ctypes.c_int
+
+    return dll
+```
+
+Usage:
+
+```python
+import ctypes
+from pathlib import Path
+
+from pytestenv._native_generated import bind
+
+
+dll = bind(
+    ctypes.CDLL(
+        str(Path("build") / "sqlite3.dll")
+    )
+)
+```
+
+### 12. `const char *` requires a policy decision
+
+The mapper above emits:
+
+```python
+ctypes.c_char_p
+```
+
+for:
+
+```c
+const char *
+```
+
+That is appropriate for NUL-terminated text.
+
+It is not appropriate when the same type is used for:
+
+* arbitrary binary data;
+* buffers containing embedded NULs;
+* memory that C modifies despite a bad declaration;
+* an output buffer;
+* a pointer paired with an explicit byte length.
+
+For a binary buffer:
+
+```c
+const unsigned char *data,
+size_t size
+```
+
+generate:
+
+```python
+ctypes.POINTER(ctypes.c_uint8)
+```
+
+For text:
+
+```c
+const char *text
+```
+
+generate:
+
+```python
+ctypes.c_char_p
+```
+
+The C type alone does not always encode enough semantic intent. A practical generator therefore needs:
+
+* strict ABI mapping;
+* optionally, small per-symbol overrides.
+
+For example:
+
+```python
+TYPE_OVERRIDES = {
+    ("decode_blob", "data"): (
+        "ctypes.POINTER(ctypes.c_uint8)"
+    ),
+}
+```
+
+### 13. Structures and unions
+
+For:
+
+```c
+typedef struct DecodeResult {
+    uint32_t codepoint;
+    size_t consumed;
+} DecodeResult;
+```
+
+generate:
+
+```python
+class DecodeResult(ctypes.Structure):
+    _fields_ = [
+        ("codepoint", ctypes.c_uint32),
+        ("consumed", ctypes.c_size_t),
+    ]
+```
+
+Then map:
+
+```c
+DecodeResult *
+```
+
+to:
+
+```python
+ctypes.POINTER(DecodeResult)
+```
+
+The required extraction order is:
+
+1. typedefs;
+2. enum constants;
+3. structures and unions;
+4. callback typedefs;
+5. variables;
+6. functions.
+
+You must also topologically order structure declarations when one structure contains another by value.
+
+Pointers can use forward declarations:
+
+```python
+class Node(ctypes.Structure):
+    pass
+
+
+Node._fields_ = [
+    ("next", ctypes.POINTER(Node)),
+]
+```
+
+### 14. Exported variables
+
+Libclang can also collect `CursorKind.VAR_DECL` cursors bearing your marker.
+
+Generated Python helper:
+
+```python
+def bind_variables(dll: ctypes.CDLL):
+    return {
+        "stat_test_counter": ctypes.c_int.in_dll(
+            dll,
+            "stat_test_counter",
+        ),
+    }
+```
+
+But accessor functions remain preferable:
+
+```c
+STAT_TEST_API int
+stat_test_get_counter(void);
+
+STAT_TEST_API void
+stat_test_set_counter(int value);
+```
+
+They produce a more stable and controllable test ABI.
+
+### 15. Recommended first implementation scope
+
+Start with these supported C types:
+
+* `void` return;
+* `char`, signed and unsigned integer types;
+* fixed-width integer typedefs;
+* `size_t`;
+* `float`;
+* `double`;
+* enums as `int`;
+* pointers to supported scalar types;
+* `const char *`;
+* `void *`;
+* named structures;
+* pointers to named structures.
+
+Reject initially:
+
+* variadic functions;
+* arrays as parameters;
+* function pointers;
+* anonymous structures;
+* unions;
+* bit-fields;
+* `_Complex`;
+* compiler vector types;
+* structures returned by value;
+* `long double`;
+* C++ declarations.
+
+That covers nearly every good test-facing C ABI.
+
+### 16. Verify generated declarations against the DLL
+
+Generation from source proves that declarations exist in the source. It does not prove the resulting DLL exported them.
+
+Add a pytest session check:
+
+```python
+def test_all_generated_symbols_are_exported(native_dll):
+    expected = [
+        "utf8_length",
+        "utf8_decode_one",
+    ]
+
+    missing = [
+        name
+        for name in expected
+        if not hasattr(native_dll, name)
+    ]
+
+    assert not missing, (
+        "Missing native test exports: "
+        + ", ".join(missing)
+    )
+```
+
+The generated module can expose:
+
+```python
+EXPORTED_FUNCTIONS = (
+    "utf8_length",
+    "utf8_decode_one",
+)
+```
+
+Then:
+
+```python
+from pytestenv._native_generated import EXPORTED_FUNCTIONS
+```
+
+### 17. Recommended final architecture
+
+```text
+tools/
+    generate_test_api.py
+
+src/
+    alphabet.c
+
+pytestenv/
+    src/
+        pytestenv/
+            _native_generated.py
+            native.py
+    tests/
+        conftest.py
+        test_native_exports.py
+
+build/
+    generated/
+        alphabet_test_api.h
+```
+
+Generator invocation:
+
+```cmd
+python tools\generate_test_api.py ^
+  --source src\alphabet.c ^
+  --header build\generated\alphabet_test_api.h ^
+  --ctypes pytestenv\src\pytestenv\_native_generated.py ^
+  --clang-arg=-std=c11 ^
+  --clang-arg=-Isqlite ^
+  --clang-arg=-Isrc
+```
+
+The generated header is useful for:
+
+* ABI inspection;
+* optional external consumers;
+* documentation;
+* feeding other binding tools;
+* checking declarations with a C compiler.
+
+The generated Python module is what pytest actually needs.
+
+The best implementation is therefore **not**:
+
+```text
+.c → .h → parse .h → ctypes
+```
+
+It is:
+
+```text
+.c → libclang AST
+       ├── faithful .h from source signatures
+       └── ctypes declarations from semantic types
+```
+
+This gives you one parser run, one selection policy, and two deterministic outputs.
+
+[1]: https://clang.llvm.org/docs/LibClang.html "Libclang tutorial — Clang 24.0.0git documentation"
+
+---
+---
+
+## 📗 `ctypes` Definitions Generator Specification
+
+> [!NOTE] Prompt
+> 
+> I am actually less concerned about header generation, which in my mental model was a source for the current objective of `ctypes` definitions generation. So let's create a specification for a single module libclang-based `ctypes` definitions generator. The C header generation task is taken out of current scope. I want, however, include a literal copy of function declaration extracted from the source `.c` as a comment to the associated `ctypes` definition. Integrate all your suggestions into a specification for AI implementation, providing a comprehensive and rigorous definition of robust tool.  
+

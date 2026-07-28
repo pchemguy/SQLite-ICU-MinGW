@@ -342,42 +342,42 @@ SetLocal EnableExtensions EnableDelayedExpansion
 
 set "ERROR_STATUS=0"
 
-call :CORE_ENV           || exit /b !ERRORLEVEL!
+call :CORE_ENV             || exit /b !ERRORLEVEL!
 
-if not "%USE_ICU%"=="0" (
-    call :ICU_OPTIONS          || exit /b !ERRORLEVEL!
-)                              
-call :ZLIB_OPTIONS             || exit /b !ERRORLEVEL!
-call :TCL_OPTIONS              || exit /b !ERRORLEVEL!
-call :BUILD_OPTIONS            || exit /b !ERRORLEVEL!
+if "%USE_ICU%"=="1" (
+    call :ICU_OPTIONS      || exit /b !ERRORLEVEL!
+)                          
+call :ZLIB_OPTIONS         || exit /b !ERRORLEVEL!
+call :TCL_OPTIONS          || exit /b !ERRORLEVEL!
+call :BUILD_OPTIONS        || exit /b !ERRORLEVEL!
 
-call :CHECK_PREREQUISITES      || exit /b !ERRORLEVEL!
+call :CHECK_PREREQUISITES  || exit /b !ERRORLEVEL!
 
-call :MAKE_DEBUG %*            || exit /b !ERRORLEVEL!
+call :MAKE_DEBUG %*        || exit /b !ERRORLEVEL!
 
-call :SQLITE_DOWNLOAD          || exit /b !ERRORLEVEL!
-call :SQLITE_EXTRACT           || exit /b !ERRORLEVEL!
-if not "%USE_ZLIB%"=="0" (     
-    call :ZLIB_DOWNLOAD        || exit /b !ERRORLEVEL!
-    call :ZLIB_EXTRACT         || exit /b !ERRORLEVEL!
-    call :ZLIB_BUILD           || exit /b !ERRORLEVEL!
-)                              
-if not "%USE_ICU%"=="0" (      
-    call :ICU_DOWNLOAD         || exit /b !ERRORLEVEL!
-    call :ICU_EXTRACT          || exit /b !ERRORLEVEL!
-    call :ICU_BUILD            || exit /b !ERRORLEVEL!
-)                              
-call :SQLITE_BUILD_INIT        || exit /b !ERRORLEVEL!
+call :SQLITE_DOWNLOAD      || exit /b !ERRORLEVEL!
+call :SQLITE_EXTRACT       || exit /b !ERRORLEVEL!
+if "%USE_ZLIB%"=="1" (     
+    call :ZLIB_DOWNLOAD    || exit /b !ERRORLEVEL!
+    call :ZLIB_EXTRACT     || exit /b !ERRORLEVEL!
+    call :ZLIB_BUILD       || exit /b !ERRORLEVEL!
+)                          
+if "%USE_ICU%"=="1" (      
+    call :ICU_DOWNLOAD     || exit /b !ERRORLEVEL!
+    call :ICU_EXTRACT      || exit /b !ERRORLEVEL!
+    call :ICU_BUILD        || exit /b !ERRORLEVEL!
+)                          
+call :SQLITE_BUILD_INIT    || exit /b !ERRORLEVEL!
 
-call :FP16_DOWNLOAD            || exit /b !ERRORLEVEL!
-call :FP16_EXTRACT             || exit /b !ERRORLEVEL!
+call :FP16_DOWNLOAD        || exit /b !ERRORLEVEL!
+call :FP16_EXTRACT         || exit /b !ERRORLEVEL!
 
-if not "%SQLITE_EXTRA%"=="0" (
-    call :EXTRA_SRC_STOCK      || exit /b !ERRORLEVEL!
+if "%SQLITE_EXTRA%"=="1" (
+    call :EXTRA_SRC_STOCK  || exit /b !ERRORLEVEL!
 )
-call :EXTRA_SRC_THIRD          || exit /b !ERRORLEVEL!
+call :EXTRA_SRC_THIRD      || exit /b !ERRORLEVEL!
 
-call :SQLITE_BUILD %*          || exit /b !ERRORLEVEL!
+call :SQLITE_BUILD %*      || exit /b !ERRORLEVEL!
 call :COLLECT_BINARIES
 
 EndLocal
@@ -571,6 +571,7 @@ set "OPT_XTRA="
 if not defined USE_ICU      (set "USE_ICU=1")
 if not defined USE_ZLIB     (set "USE_ZLIB=1")
 if not defined SQLITE_EXTRA (set "SQLITE_EXTRA=1")
+if not defined USE_TEST     (set "USE_TEST=0")
 
 set "MSG=USE_ICU:      %USE_ICU% - ICU is"
 if "%USE_ICU%"=="0" (
@@ -590,6 +591,14 @@ echo %MSG%
 
 set "MSG=SQLITE_EXTRA: %SQLITE_EXTRA% - Misc SQLite Extensions Extra is"
 if "%SQLITE_EXTRA%"=="0" (
+    set "MSG=%MSG% OFF."
+) else (
+    set "MSG=%MSG% ON."
+)
+echo %MSG%
+
+set "MSG=USE_TEST:     %USE_TEST% - Test build is"
+if "%USE_TEST%"=="0" (
     set "MSG=%MSG% OFF."
 ) else (
     set "MSG=%MSG% ON."
@@ -736,6 +745,8 @@ set OPT_XTRA=%OPT_XTRA% ^
     -DSQLITE_DEFAULT_SYNCHRONOUS=1 ^
     -DSQLITE_USE_URI=1 ^
     -DSQLITE_SOUNDEX
+
+if "%USE_TEST%"=="1" (set OPT_XTRA=%OPT_XTRA% -DSQLITE_TEST)                          
 
 echo ~~~~~ %SECTION% ~~~~~
 echo:
