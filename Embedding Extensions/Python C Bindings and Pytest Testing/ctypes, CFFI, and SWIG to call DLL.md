@@ -3138,14 +3138,14 @@ Libclang exposes AST traversal, cursor types, source ranges, linkage, storage cl
 Use a marker macro on each function that should enter the generated test API:
 
 ```c_
-#ifdef SQLITE_TEST
+#ifdef PYTEST_STATIC
 # if defined(_WIN32)
-#  define STAT_TEST_API __declspec(dllexport)
+#  define PYTEST_API __declspec(dllexport)
 # else
-#  define STAT_TEST_API __attribute__((visibility("default")))
+#  define PYTEST_API __attribute__((visibility("default")))
 # endif
 #else
-# define STAT_TEST_API static
+# define PYTEST_API static
 #endif
 ```
 
