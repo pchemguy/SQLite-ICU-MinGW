@@ -652,8 +652,7 @@ set "ICUINCDIR=%ICUDIR%\include"
 set "ICULIBDIR=%ICUDIR%\lib%ARCH%"
 set "ICUBINDIR=%ICUDIR%\bin%ARCH%"
 
-set OPT_XTRA=%OPT_XTRA% ^
-    -DSQLITE_ENABLE_ICU_COLLATIONS
+set OPT_XTRA=%OPT_XTRA% -DSQLITE_ENABLE_ICU_COLLATIONS
 
 echo ~~~~~ %SECTION% ~~~~~
 echo:
@@ -746,7 +745,7 @@ set OPT_XTRA=%OPT_XTRA% ^
     -DSQLITE_USE_URI=1 ^
     -DSQLITE_SOUNDEX
 
-if "%USE_TEST%"=="1" (set OPT_XTRA=%OPT_XTRA% -DSQLITE_TEST)                          
+if "%USE_TEST%"=="1" (set OPT_XTRA=%OPT_XTRA% -DPYTEST_STATIC)                          
 
 echo ~~~~~ %SECTION% ~~~~~
 echo:
