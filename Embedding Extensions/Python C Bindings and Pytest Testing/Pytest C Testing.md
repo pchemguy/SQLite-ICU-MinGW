@@ -68,7 +68,7 @@ Python cannot call a file-local `static` function or access a file-local `static
 
 For test-only access, use one macro that changes both linkage and visibility:
 
-```c
+```c_
 #ifndef STAT_TEST_API_H
 #define STAT_TEST_API_H
 
@@ -153,7 +153,7 @@ This is more explicit but usually unnecessary. A single prefix macro is simpler.
 
 If a source is compiled as C++, exported names are normally mangled. Python FFI libraries generally need a stable C symbol name:
 
-```c
+```c_
 #if defined(__cplusplus)
 #  define STAT_EXTERN_C extern "C"
 #else
@@ -216,7 +216,7 @@ static int stat_test_counter = 0;
 
 A macro variant:
 
-```c
+```c_
 #if defined(SQLITE_TEST)
 #  if defined(_WIN32)
 #    define STAT_TEST_DATA __declspec(dllexport)

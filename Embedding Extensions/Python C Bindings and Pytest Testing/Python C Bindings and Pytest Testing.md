@@ -995,7 +995,7 @@ But mechanically, your macro is correct.
 
 ---
 
-```text
+```c_
 #ifdef SQLITE_TEST
 # if defined(_WIN32)
 #  define PYTEST_EXPORT __declspec(dllexport)
