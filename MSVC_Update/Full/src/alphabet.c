@@ -54,7 +54,7 @@
 /*
 ** Return the byte length of the UTF-8 code point beginning at z.
 */
-PYTEST_API int utf8_byte_count(const unsigned char *z){
+PYTEST_API int ab_utf8_byte_count(const unsigned char *z){
   if( z[0] < 0x80 ) return 1;
   if( (z[0] & 0xE0) == 0xC0 ) return 2;
   if( (z[0] & 0xF0) == 0xE0 ) return 3;
@@ -64,12 +64,12 @@ PYTEST_API int utf8_byte_count(const unsigned char *z){
 /*
 ** Return the number of Unicode code points in a valid UTF-8 string.
 */
-PYTEST_API sqlite3_int64 utf8_length(const char *z){
+PYTEST_API sqlite3_int64 ab_utf8_length(const char *z){
   const unsigned char *p = (const unsigned char *)z;
   sqlite3_int64 n = 0;
 
   while( *p!=0 ){
-    p += utf8_byte_count(p);
+    p += ab_utf8_byte_count(p);
     ++n;
   }
   return n;
@@ -77,14 +77,14 @@ PYTEST_API sqlite3_int64 utf8_length(const char *z){
 
 /*
 ** Return the byte offset corresponding to Unicode code-point index i.
-** The caller guarantees 0 <= i <= utf8_length(z).
+** The caller guarantees 0 <= i <= ab_utf8_length(z).
 */
-PYTEST_API int utf8_byte_offset(const char *z, sqlite3_int64 i){
+PYTEST_API int ab_utf8_byte_offset(const char *z, sqlite3_int64 i){
   const unsigned char *p = (const unsigned char *)z;
   const unsigned char *pStart = p;
 
   while( i>0 ){
-    p += utf8_byte_count(p);
+    p += ab_utf8_byte_count(p);
     --i;
   }
   return (int)(p - pStart);
@@ -94,7 +94,7 @@ PYTEST_API int utf8_byte_offset(const char *z, sqlite3_int64 i){
 ** Resolve language to one of the supported alphabet strings.
 ** Return NULL for an unsupported language.
 */
-PYTEST_API const char *alphabet_select(const char *zLanguage){
+PYTEST_API const char *ab_alphabet_select(const char *zLanguage){
   if( sqlite3_stricmp(zLanguage, "en")==0
    || sqlite3_stricmp(zLanguage, "English")==0
   ){
@@ -153,7 +153,7 @@ static void alphabetStringFunc(
     return;
   }
 
-  zAlphabet = alphabet_select(zLanguage);
+  zAlphabet = ab_alphabet_select(zLanguage);
   if( zAlphabet==0 ){
     sqlite3_result_error(
       context,
@@ -163,7 +163,7 @@ static void alphabetStringFunc(
     return;
   }
 
-  nChars = utf8_length(zAlphabet);
+  nChars = ab_utf8_length(zAlphabet);
 
   if( argc>=2 ){
     if( sqlite3_value_type(argv[1])!=SQLITE_INTEGER ){
@@ -219,8 +219,8 @@ static void alphabetStringFunc(
     }
   }
 
-  iByteStart = utf8_byte_offset(zAlphabet, iStart);
-  iByteEnd = utf8_byte_offset(zAlphabet, iStart + nResult);
+  iByteStart = ab_utf8_byte_offset(zAlphabet, iStart);
+  iByteEnd = ab_utf8_byte_offset(zAlphabet, iStart + nResult);
 
   sqlite3_result_text(
     context,
