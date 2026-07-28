@@ -1880,3 +1880,318 @@ Choose CFFI ABI mode only when `ctypes` declarations become sufficiently verbose
 [3]: https://docs.pytest.org/en/stable/how-to/parametrize.html "How to parametrize fixtures and test functions - pytest documentation"
 [4]: https://cffi.readthedocs.io/en/latest/cdef.html "Preparing Wrapper Modules — CFFI 2.2.0.dev0 documentation"
 [5]: https://www.swig.org/Doc4.3/Python.html "SWIG and Python"
+
+---
+---
+
+## 📗 ctypes Autogen
+
+> [!NOTE] Prompt
+> 
+> For ctypes, are there established active open tools automatically generating declarations from C signatures like CFFI?
+
+Yes. The established options are **ctypesgen**, **ctypeslib2/clang2py**, and **PyCLibrary**. They differ significantly in how they parse C and what they generate.
+
+### 1. ctypesgen
+
+**ctypesgen** is the closest match to “take C headers and emit an importable `ctypes` module.”
+
+It parses C headers, runs a C preprocessor, and generates Python containing:
+
+* `ctypes.Structure` and `ctypes.Union` declarations;
+* typedef mappings;
+* function bindings;
+* constants and enums;
+* global-variable bindings;
+* callback types;
+* library-loading code.
+
+A typical invocation is conceptually:
+
+```cmd
+ctypesgen ^
+  --library sqlite3 ^
+  --include "B:\project\src" ^
+  "B:\project\src\stat_test_api.h" ^
+  --output "pytestenv\src\pytestenv\_native_generated.py"
+```
+
+The generated module can then be imported by pytest:
+
+```python
+from pytestenv import _native_generated as native
+
+assert native.utf8_length(b"abc") == 3
+```
+
+The project explicitly describes itself as an automatic generator of `ctypes` wrappers from C headers. It is also used in a current real-world binding-generation pipeline by pypdfium2, although that project uses its own ctypesgen fork for cleaner and more specialized output. ([PyPI][1])
+
+#### Strengths
+
+* Produces ordinary Python source.
+* No compiled Python extension.
+* Supports more than just function prototypes.
+* Can process preprocessor definitions and included headers.
+* Generated output can be inspected, committed, patched, or regenerated.
+* Closest conceptual equivalent to CFFI’s C declarations while retaining `ctypes`.
+
+#### Weaknesses
+
+* Generated modules can be large and noisy.
+* Real-world headers frequently require command-line defines, include paths, exclusions, or manual cleanup.
+* Platform headers can cause enormous dependency expansion.
+* Macros are inherently difficult to translate.
+* Function ownership and higher-level semantics are not inferred.
+* Generated library-loading logic may not match your desired DLL-location policy.
+
+#### Suitability for your project
+
+Potentially good, but probably more machinery than necessary when your test interface consists of perhaps 10–50 deliberately exported functions.
+
+It becomes attractive when you maintain a dedicated, clean header such as:
+
+```c
+#ifndef ALPHABET_TEST_API_H
+#define ALPHABET_TEST_API_H
+
+#include <stddef.h>
+#include <stdint.h>
+
+int64_t utf8_length(const unsigned char *data, size_t size);
+
+int utf8_decode_one(
+    const unsigned char *data,
+    size_t size,
+    uint32_t *codepoint,
+    size_t *consumed
+);
+
+#endif
+```
+
+It is much less attractive if pointed directly at `sqlite3.h`, internal SQLite headers, or the complete amalgamation.
+
+---
+
+### 2. ctypeslib2 and `clang2py`
+
+**ctypeslib2** provides the `clang2py` generator. It uses **Clang’s parser**, rather than primarily relying on a custom C parser.
+
+Its pipeline is approximately:
+
+```text
+C header
+   ↓
+Clang AST
+   ↓
+Python ctypes declarations
+```
+
+A typical command resembles:
+
+```cmd
+clang2py ^
+  -o pytestenv\src\pytestenv\_native_generated.py ^
+  -l B:\project\build\sqlite3.dll ^
+  B:\project\src\alphabet_test_api.h
+```
+
+The project describes `clang2py` as using libclang’s Python bindings to parse declarations and generate `ctypes`-based Python code. ([PyPI][2])
+
+#### Strengths
+
+* Clang understands real C syntax and ABI-sensitive declarations better than lightweight parsers.
+* Better foundation for:
+
+  * anonymous structures and unions;
+  * nested declarations;
+  * attributes;
+  * complex typedef chains;
+  * architecture-specific layouts;
+  * compiler-specific syntax.
+* Can generate structures, unions, enums, typedefs, pointers, functions, and variables.
+* Particularly useful when the test header is not trivially simple.
+
+#### Weaknesses
+
+* Requires a compatible Clang/libclang installation.
+* Windows setup can be more involved than the actual bindings deserve.
+* Correct Clang include paths and target options matter.
+* Generated output may still need filtering or post-processing.
+* Project release history and packaging have historically been less straightforward than mainstream Python packages.
+* Parsing a large header graph can generate far more declarations than required.
+
+#### Suitability for your project
+
+Technically the strongest automatic generator among the traditional `ctypes` tools, especially where C declarations are complex.
+
+For a small SQLite-extension test API, however, libclang may introduce more environmental complexity than manually writing:
+
+```python
+dll.utf8_length.argtypes = [
+    ctypes.POINTER(ctypes.c_ubyte),
+    ctypes.c_size_t,
+]
+dll.utf8_length.restype = ctypes.c_int64
+```
+
+It is most justified when the interface includes numerous structures, unions, callbacks, or platform-dependent layouts.
+
+---
+
+### 3. PyCLibrary
+
+**PyCLibrary** takes a somewhat different approach. It contains:
+
+1. A pure-Python C header parser.
+2. A runtime library layer that uses parsed declarations to automate `ctypes` access.
+
+Instead of necessarily generating a static Python source module, it can parse headers and bind functions through its `CLibrary` abstraction. Its documentation describes it as a C parser plus an automation library using header definitions to simplify C bindings; the currently implemented backend is based on `ctypes`. ([PyCLibrary][3])
+
+Conceptually:
+
+```python
+from pyclibrary import CParser, CLibrary
+
+parser = CParser(["alphabet_test_api.h"])
+parser.process_all()
+
+lib = CLibrary("sqlite3.dll", parser)
+```
+
+#### Strengths
+
+* Can consume relatively raw C headers.
+* Avoids manually duplicating every declaration in Python.
+* Provides a higher-level runtime abstraction over `ctypes`.
+* Supports parser caching.
+* Useful for exploratory or dynamic binding workflows.
+
+#### Weaknesses
+
+* Adds its own runtime API between your tests and `ctypes`.
+* Less explicit than a generated or handwritten binding module.
+* Its custom parser cannot be expected to understand every MSVC or Clang language extension.
+* Debugging a parser mismatch may be harder than debugging three explicit `argtypes` declarations.
+* Less widely used than direct `ctypes`, CFFI, or SWIG.
+
+#### Suitability for your project
+
+Probably not the best fit. Your objective is a predictable pytest harness, not a generic dynamic C-library browser.
+
+For testing, explicit generated Python source is preferable to reparsing headers at test startup.
+
+---
+
+### Other relevant tools
+
+#### pyglet `wraptypes`
+
+pyglet contains an internal header-to-`ctypes` wrapper generator named `wraptypes`. Its documentation calls it a utility for creating `ctypes` wrappers from C header files. ([Pyglet Documentation][4])
+
+It is actively used inside the pyglet ecosystem, but it is primarily an internal project tool rather than the default general-purpose recommendation for an independent test harness.
+
+#### Project-specific generators
+
+Several substantial projects maintain custom or forked generators. pypdfium2, for example, uses a fork of ctypesgen because it requires cleaner output and project-specific behavior. ([GitHub][5])
+
+This illustrates an important reality: automatic generation works well for low-level declarations, but mature projects frequently add:
+
+* symbol allowlists;
+* custom DLL loading;
+* type overrides;
+* post-processing;
+* platform guards;
+* generated-code normalization.
+
+---
+
+### Comparison
+
+| Tool                  | Parsing approach           | Output model                | External compiler/parser | Best use                           |
+| --------------------- | -------------------------- | --------------------------- | ------------------------ | ---------------------------------- |
+| ctypesgen             | Preprocessor plus C parser | Generated Python module     | C preprocessor           | Clean ordinary C headers           |
+| ctypeslib2 / clang2py | Clang AST                  | Generated Python module     | Clang/libclang           | Complex or ABI-sensitive headers   |
+| PyCLibrary            | Pure-Python parser         | Runtime binding abstraction | Normally none            | Dynamic/exploratory header binding |
+| pyglet wraptypes      | Custom parser/generator    | Generated Python module     | Tool-specific            | Mostly pyglet ecosystem            |
+
+### Recommendation for your pytest harness
+
+I would **not initially add a general-purpose declaration generator**.
+
+Your test API should be deliberately small and flat. For example:
+
+```c
+STAT_TEST_API sqlite3_int64
+utf8_length(const unsigned char *data, size_t size);
+
+STAT_TEST_API int
+utf8_decode_one(
+    const unsigned char *data,
+    size_t size,
+    uint32_t *codepoint,
+    size_t *consumed
+);
+```
+
+The corresponding manual declarations require only a few lines:
+
+```python
+dll.utf8_length.argtypes = [
+    ctypes.POINTER(ctypes.c_ubyte),
+    ctypes.c_size_t,
+]
+dll.utf8_length.restype = ctypes.c_int64
+
+dll.utf8_decode_one.argtypes = [
+    ctypes.POINTER(ctypes.c_ubyte),
+    ctypes.c_size_t,
+    ctypes.POINTER(ctypes.c_uint32),
+    ctypes.POINTER(ctypes.c_size_t),
+]
+dll.utf8_decode_one.restype = ctypes.c_int
+```
+
+This manual layer has useful properties:
+
+* exact and reviewable;
+* no Clang dependency;
+* no parser inconsistencies;
+* no generated noise;
+* no accidental exposure of unrelated symbols;
+* trivial to integrate with pytest;
+* easy to wrap with safe Python methods.
+
+### When generation becomes worthwhile
+
+Adopt **ctypesgen** when:
+
+* the test API reaches dozens or hundreds of declarations;
+* declarations change frequently;
+* repetitive manual synchronization becomes a real maintenance burden;
+* structures and callback typedefs dominate the interface.
+
+Adopt **clang2py** when:
+
+* structures are complex;
+* anonymous unions or compiler attributes matter;
+* MSVC layout compatibility must be reproduced;
+* ordinary header parsers fail.
+
+For your present design, a particularly effective compromise is to generate only from a dedicated test API header:
+
+```text
+src/alphabet.c
+tests/native/alphabet_test_api.h
+pytestenv/src/pytestenv/_native_generated.py
+```
+
+Do not generate from `sqlite3.h` or `sqlite3.c`. Restrict the generator to a compact declaration surface containing only the test-exported functions and types.
+
+Between the available tools, **ctypesgen is the simplest first experiment**, while **clang2py is the more technically rigorous parser-based option**. For a small test interface, handwritten `ctypes` declarations remain simpler and more robust than either.
+
+[1]: https://pypi.org/project/ctypesgen/ "ctypesgen · PyPI"
+[2]: https://pypi.org/project/ctypeslib2/2.0/ "ctypeslib2 · PyPI"
+[3]: https://pyclibrary.readthedocs.io/ "Welcome to PyCLibrary’s documentation! — PyCLibrary 0.2.0.dev documentation"
+[4]: https://pyglet.readthedocs.io/en/latest/internal/wraptypes.html "wraptypes — pyglet v2.1.14"
+[5]: https://github.com/pypdfium2-team "pypdfium2-team · GitHub"
