@@ -2002,13 +2002,12 @@ The project describes `clang2py` as using libclang’s Python bindings to parse 
 
 * Clang understands real C syntax and ABI-sensitive declarations better than lightweight parsers.
 * Better foundation for:
-
-  * anonymous structures and unions;
-  * nested declarations;
-  * attributes;
-  * complex typedef chains;
-  * architecture-specific layouts;
-  * compiler-specific syntax.
+    * anonymous structures and unions;
+    * nested declarations;
+    * attributes;
+    * complex typedef chains;
+    * architecture-specific layouts;
+    * compiler-specific syntax.
 * Can generate structures, unions, enums, typedefs, pointers, functions, and variables.
 * Particularly useful when the test header is not trivially simple.
 
