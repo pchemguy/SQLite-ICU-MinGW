@@ -5921,3 +5921,51 @@ The main deliberate constraint is that the first version rejects structures, cal
 [3]: https://clang.llvm.org/doxygen/group__CINDEX__LEX.html "clang: Token extraction and manipulation"
 [4]: https://docs.python.org/3.12/library/ctypes.html "ctypes — A foreign function library for Python — Python 3.12.13 documentation"
 [5]: https://docs.python.org/id/3.11/library/ctypes.html "ctypes --- A foreign function library for Python — Dokumentasi Python 3.11.15"
+
+---
+---
+
+## 📗 Implementation
+
+> [!NOTE] Prompt
+> 
+> Proceed to implementation of the script based on the spec and all amendments  
+
+Implemented the single-module generator:
+
+[Download `generate_ctypes.py`](sandbox:/mnt/data/generate_ctypes.py)
+
+It includes:
+
+* repeated `--source` inputs and `--ctypes` output;
+* optional `--libclang`;
+* arbitrary repeated `--clang-arg`;
+* exact-token `PYTEST_API` marker selection;
+* external-linkage validation;
+* AST-based function-body boundary detection;
+* literal UTF-8 declaration extraction from source bytes;
+* strict scalar, typedef, and recursive-pointer mapping;
+* canonical fallback for user typedefs;
+* rejection of unsupported types, variadic functions, duplicate symbols, and unsupported calling conventions;
+* deterministic source-order generation;
+* `GENERATED_FUNCTIONS`, `__all__`, and `bind()`;
+* Python syntax validation;
+* atomic writes;
+* `--check`, `--verbose`, and documented exit codes.
+
+Example:
+
+```cmd
+python tool\generate_ctypes.py ^
+  --source src\alphabet.c ^
+  --ctypes pytestenv\src\pytestenv\_native_generated.py ^
+  --clang-arg=-x ^
+  --clang-arg=c ^
+  --clang-arg=-std=c11 ^
+  --clang-arg=--target=x86_64-pc-windows-msvc ^
+  --clang-arg=-fms-extensions ^
+  --clang-arg=-fms-compatibility ^
+  --clang-arg=-DPYTEST_C_API
+```
+
+I validated Python syntax and exercised the type-mapping and module-rendering paths with a synthetic smoke test. The execution environment here does not contain Python libclang, so the real translation-unit integration path could not be run locally; your confirmed working libclang environment is suitable for that test.
