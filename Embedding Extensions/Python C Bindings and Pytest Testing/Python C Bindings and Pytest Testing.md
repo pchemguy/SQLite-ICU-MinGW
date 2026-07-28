@@ -998,11 +998,11 @@ But mechanically, your macro is correct.
 ```text
 #ifdef SQLITE_TEST
 # if defined(_WIN32)
-#  define TEST_PRIV_API __declspec(dllexport)
+#  define PYTEST_EXPORT __declspec(dllexport)
 # else
-#  define TEST_PRIV_API __attribute__((visibility("default")))
+#  define PYTEST_EXPORT __attribute__((visibility("default")))
 # endif
 #else
-# define TEST_PRIV_API static
+# define PYTEST_EXPORT static
 #endif
 ```
