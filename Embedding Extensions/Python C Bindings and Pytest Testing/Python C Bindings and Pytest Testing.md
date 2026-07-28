@@ -995,14 +995,14 @@ But mechanically, your macro is correct.
 
 ---
 
-```c
+```text
 #ifdef SQLITE_TEST
 # if defined(_WIN32)
-#  define TEST_ONLY_EXPORT __declspec(dllexport)
+#  define TEST_PRIV_API __declspec(dllexport)
 # else
-#  define TEST_ONLY_EXPORT __attribute__((visibility("default")))
+#  define TEST_PRIV_API __attribute__((visibility("default")))
 # endif
 #else
-# define TEST_ONLY_EXPORT static
+# define TEST_PRIV_API static
 #endif
 ```
