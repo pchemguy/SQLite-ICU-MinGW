@@ -2,7 +2,7 @@
 url: https://chatgpt.com/c/6a683465-21cc-83eb-942f-54fe28dfe936
 ---
 
-## 📗 Using CFFI, SWIG, and ctypes to call DLL
+## 📗 ctypes, CFFI, and SWIG to call DLL
 
 > [!NOTE] Prompt
 > 
