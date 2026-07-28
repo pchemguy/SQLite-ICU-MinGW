@@ -33,7 +33,7 @@
 # include "sqlite3.h"
 #endif
 
-#ifdef PYTEST_STATIC
+#ifdef PYTEST_C_API
 # if defined(_WIN32)
 #  define PYTEST_API __declspec(dllexport)
 # else

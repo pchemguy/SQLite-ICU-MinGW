@@ -3138,7 +3138,7 @@ Libclang exposes AST traversal, cursor types, source ranges, linkage, storage cl
 Use a marker macro on each function that should enter the generated test API:
 
 ```c_
-#ifdef PYTEST_STATIC
+#ifdef PYTEST_C_API
 # if defined(_WIN32)
 #  define PYTEST_API __declspec(dllexport)
 # else
@@ -4205,9 +4205,1719 @@ This gives you one parser run, one selection policy, and two deterministic outpu
 ---
 ---
 
-## 📗 `ctypes` Definitions Generator Specification
+## 📗 Libclang-Based `ctypes` Definitions Generator Specification
 
 > [!NOTE] Prompt
 > 
 > I am actually less concerned about header generation, which in my mental model was a source for the current objective of `ctypes` definitions generation. So let's create a specification for a single module libclang-based `ctypes` definitions generator. The C header generation task is taken out of current scope. I want, however, include a literal copy of function declaration extracted from the source `.c` as a comment to the associated `ctypes` definition. Integrate all your suggestions into a specification for AI implementation, providing a comprehensive and rigorous definition of robust tool.  
 
+### 1. Purpose
+
+Implement a professional-quality, single-module Python command-line program that parses one or more C implementation files using Python libclang and generates a Python module containing `ctypes` declarations for selected C functions.
+
+The generated module shall configure function objects obtained from a loaded DLL by assigning:
+
+```python
+function.argtypes
+function.restype
+```
+
+The primary use case is direct testing of internal C logic through `pytest`.
+
+The generator shall be:
+
+* deterministic;
+* strict;
+* inspectable;
+* suitable for automated builds;
+* independent of handwritten C header files;
+* safe against silently producing ABI-inaccurate declarations;
+* focused on a deliberately constrained C test ABI;
+* usable on Windows with MSVC-built DLLs;
+* based on libclang semantic information rather than regular expressions.
+
+The generator shall also include, immediately above each generated `ctypes` definition, a comment containing a literal copy of the associated C function declaration extracted from the original `.c` source.
+
+C header generation is explicitly outside the scope of this specification.
+
+---
+
+### 2. High-Level Architecture
+
+The program shall implement this pipeline:
+
+```text
+C implementation file
+        │
+        ▼
+libclang translation unit
+        │
+        ▼
+AST traversal and function selection
+        │
+        ├── semantic function/type model
+        │
+        └── literal source declaration
+        │
+        ▼
+validation and C-to-ctypes type mapping
+        │
+        ▼
+deterministic generated Python module
+```
+
+The generated module shall not parse C, invoke Clang, inspect source files, or infer declarations at runtime.
+
+All parsing and validation shall occur during generation.
+
+---
+
+### 3. Scope
+
+#### 3.1 Included
+
+The program shall support:
+
+* parsing C source files;
+* accepting arbitrary Clang parser arguments;
+* selecting explicitly marked function definitions;
+* extracting function names;
+* extracting return types;
+* extracting parameter types;
+* detecting variadic functions;
+* preserving literal C declaration text from source;
+* mapping a defined subset of C types to `ctypes`;
+* generating a standalone Python binding module;
+* generating a binding function that configures a provided `ctypes.CDLL`;
+* listing generated function names;
+* failing when no selected functions are found in any source file;
+* checking generated output for deterministic changes;
+* validating generated Python syntax;
+* reporting precise unsupported-type diagnostics;
+* atomically writing output;
+* optionally checking whether output is already current.
+
+#### 3.2 Excluded
+
+The first implementation shall not generate:
+
+* C headers;
+* Python wrapper methods;
+* Pythonic conversions;
+* memory-management wrappers;
+* exception translation;
+* `errcheck` callbacks;
+* structure declarations;
+* union declarations;
+* callback declarations;
+* exported-variable bindings;
+* constants or enums;
+* DLL-loading policy;
+* DLL search paths;
+* build commands;
+* pytest tests for the C implementation itself;
+* public Python package metadata.
+
+The generator itself shall be testable with pytest, but generated application tests are outside its responsibility.
+
+---
+
+### 4. Implementation Form
+
+The tool shall consist of exactly one Python source module.
+
+Recommended location:
+
+```text
+tool/generate_ctypes.py
+```
+
+The module shall contain:
+
+* command-line parsing;
+* libclang configuration;
+* source parsing;
+* AST traversal;
+* declaration extraction;
+* type normalization;
+* `ctypes` mapping;
+* output rendering;
+* validation;
+* atomic output writing;
+* program entry point.
+
+The module shall be both executable and importable:
+
+```python
+if __name__ == "__main__":
+    raise SystemExit(main())
+```
+
+The implementation may use standard-library modules and Python libclang only.
+
+No template engine, parser generator, ORM, or code-generation framework shall be required.
+
+---
+
+### 5. Required Runtime Environment
+
+The generator shall target:
+
+* Python 3.10 or later;
+* Python package `clang`, exposing `clang.cindex`;
+* a compatible `libclang.dll`;
+* Windows as the primary platform;
+* ordinary CMD-based invocation.
+
+It shall support explicit configuration through a command-line option.
+
+Example:
+
+```cmd
+python tool\generate_ctypes.py ^
+  --source src\alphabet.c ^
+  --ctypes pytestenv\src\pytestenv\_native_generated.py ^
+  --clang-arg=-x ^
+  --clang-arg=c ^
+  --clang-arg=-std=c11 ^
+  --clang-arg=--target=x86_64-pc-windows-msvc ^
+  --clang-arg=-fms-extensions ^
+  --clang-arg=-DPYTEST_C_API
+```
+
+Libclang provides AST traversal, source locations, source ranges, token extraction, and semantic type information suitable for this design. ([Clang][1])
+
+---
+
+### 6. Command-Line Interface
+
+#### 6.1 Required arguments
+
+The program shall require:
+
+```text
+--source FILE
+--ctypes FILE
+```
+
+`--source` may be repeated.
+
+Example:
+
+```cmd
+python tool\generate_ctypes.py ^
+  --source src\alphabet.c ^
+  --source src\unicode.c ^
+  --ctypes pytestenv\src\pytestenv\_native_generated.py
+```
+
+#### 6.2 Supported options
+
+The CLI shall support:
+
+```text
+--source FILE
+--ctypes FILE
+--clang-arg ARG
+--marker NAME
+--check
+--verbose
+--version
+--help
+```
+
+#### 6.3 Option semantics
+
+##### `--source FILE`
+
+Specifies a C implementation file to parse.
+
+The option may occur multiple times.
+
+Each path shall:
+
+* exist;
+* be a regular file;
+* be resolved to an absolute normalized path;
+* be parsed as a separate translation unit.
+
+Duplicate normalized source paths shall be rejected.
+
+##### `--ctypes FILE`
+
+Specifies the generated Python module.
+
+Its parent directory shall already exist unless the specification is later extended with an explicit directory-creation option.
+
+The generator shall not silently create missing parent directory trees.
+
+##### `--clang-arg ARG`
+
+Adds one argument to every translation-unit parse.
+
+The option may occur any number of times.
+
+Example:
+
+```cmd
+--clang-arg=-x
+--clang-arg=c
+--clang-arg=-std=c11
+--clang-arg=-Isrc
+--clang-arg=-Ibuild\sqlite
+--clang-arg=-DPYTEST_C_API
+--clang-arg=-fms-extensions
+```
+
+The exact strings shall be passed to libclang without interpretation, splitting, rewriting, quoting, or normalization.
+
+##### `--marker NAME`
+
+Specifies the source-level marker identifying functions to expose.
+
+Default:
+
+```text
+PYTEST_API
+```
+
+The name shall be validated as a C identifier:
+
+```text
+[A-Za-z_][A-Za-z0-9_]*
+```
+
+##### `--check`
+
+Performs all parsing, validation, and rendering but does not modify the output file.
+
+Exit status shall be:
+
+* `0` when the existing file exactly matches generated output;
+* `1` stale or absent under --check only;
+* `2` for invocation, parsing, generation, or validation errors.
+
+##### `--verbose`
+
+Enables informational diagnostics, including:
+
+* source file being parsed;
+* effective Clang arguments;
+* number of selected functions;
+* generated function names;
+* output status.
+
+Normal successful operation shall otherwise produce no output.
+
+##### `--version`
+
+Prints the generator version and exits successfully.
+
+#### 6.4 Output channels
+
+- ordinary verbose information goes to stdout;
+- warnings and errors go to stderr;
+- `--version` and `--help` go to stdout, subject to argparse conventions.
+
+---
+
+### 7. Source Annotation Contract
+
+Only explicitly marked function definitions shall be generated.
+
+The expected source form is:
+
+```c
+PYTEST_API sqlite3_int64
+utf8_length(const char *z){
+    /* implementation */
+}
+```
+
+or:
+
+```c
+PYTEST_API int
+decode_value(
+    const unsigned char *data,
+    size_t size,
+    int64_t *result
+){
+    /* implementation */
+}
+```
+
+A conventional marker definition is:
+
+```c
+#ifdef PYTEST_C_API
+# if defined(_WIN32)
+#  define PYTEST_API __declspec(dllexport)
+# else
+#  define PYTEST_API __attribute__((visibility("default")))
+# endif
+#else
+# define PYTEST_API static
+#endif
+```
+
+The generator shall identify functions from the marker’s literal presence in the original function declaration, not merely from external linkage or export attributes in the expanded AST.
+
+This prevents accidental exposure of unrelated non-static functions.
+
+---
+
+### 8. Translation-Unit Parsing
+
+#### 8.1 Independent translation units
+
+Each source file shall be parsed independently with:
+
+```python
+Index.create().parse(...)
+```
+
+The implementation shall not combine multiple implementation files into one synthetic source.
+
+#### 8.2 Parser arguments
+
+The generator shall pass all `--clang-arg` values to every translation unit in their original order.
+
+The supplied Clang arguments shall describe the same target architecture, preprocessor environment, ABI, and relevant compilation mode as the DLL build. Generating declarations from a translation unit parsed for a different target is unsupported.
+
+The generator shall not automatically add platform SDK paths, MSVC include directories, macro definitions, or language-standard options.
+
+The caller is responsible for supplying a parser configuration compatible with the source.
+
+#### 8.3 Recommended parse options
+
+The implementation may use:
+
+```python
+TranslationUnit.PARSE_DETAILED_PROCESSING_RECORD
+```
+
+when needed for preprocessing information.
+
+It shall avoid unrelated options that skip function bodies if those options interfere with reliable definition extents or declaration extraction.
+
+#### 8.4 Parse diagnostics
+
+All translation-unit diagnostics shall be examined.
+
+The program shall treat these severities as fatal:
+
+* `Error`;
+* `Fatal`.
+
+Warnings shall not be fatal by default.
+
+Fatal diagnostics shall be printed in deterministic source order and shall include:
+
+* source path;
+* line;
+* column;
+* diagnostic severity;
+* diagnostic text.
+
+Generation shall stop before writing output if any source has fatal diagnostics.
+
+#### 8.5 Main-file restriction
+
+Only function cursors whose physical location belongs to the source file currently being parsed shall be considered.
+
+Functions originating from included headers shall be ignored.
+
+The restriction shall compare normalized absolute paths rather than raw path strings.
+
+Libclang source locations provide file, line, and column information and can distinguish entities originating in the main translation unit. ([Clang][2])
+
+---
+
+### 9. AST Traversal
+
+The program shall recursively traverse the translation-unit cursor hierarchy.
+
+Candidate cursors must satisfy all of the following:
+
+1. `cursor.kind == CursorKind.FUNCTION_DECL`;
+2. `cursor.is_definition()` is true;
+3. `cursor.location.file` is not `None`;
+4. the cursor belongs to the current source file;
+5. the literal declaration contains the configured marker;
+6. the function has a non-empty symbol name.
+
+Nested traversal is required because function definitions may not always appear as direct children of the translation-unit root under every construct.
+
+---
+
+### 10. Marker Detection
+
+#### 10.1 Literal-source requirement
+
+Marker detection shall be based on source text or source tokens from the function declaration extent.
+
+It shall not be based only on:
+
+* expanded storage class;
+* linkage;
+* visibility;
+* `__declspec(dllexport)`;
+* symbol naming conventions;
+* AST attributes.
+
+#### 10.2 Declaration-only search region
+
+The marker must occur in the declaration portion preceding the function body.
+
+A marker appearing only:
+
+* inside the function body;
+* inside a comment in the function body;
+* inside a string literal in the body;
+
+shall not qualify the function.
+
+#### 10.3 Token-aware preference
+
+The preferred implementation shall use libclang tokenization to identify the opening function-body brace and inspect marker tokens preceding it.
+
+A source-string fallback may be used only if tokenization cannot provide the needed boundary.
+
+Token extraction over a cursor source range is available through libclang. ([Clang][3])
+
+#### 10.4 Marker as an identifier token
+
+The marker shall match only a token whose spelling exactly equals the configured marker.
+
+Substring matching is prohibited.
+
+For example, marker `PYTEST_API` shall not match:
+
+```c
+PYTEST_API_INTERNAL
+```
+
+#### 10.5 Multiple marker occurrences
+
+More than one occurrence in the declaration shall be accepted but may produce a warning in verbose mode.
+
+---
+
+### 11. Literal Function Declaration Extraction
+
+#### 11.1 Required output
+
+For every generated function, the generated Python module shall contain a literal copy of the C function declaration immediately before the associated `ctypes` assignments.
+
+Example source:
+
+```c
+PYTEST_API int
+decode_value(
+    const unsigned char *data,
+    size_t size,
+    int64_t *result
+){
+    /* ... */
+}
+```
+
+Required generated form:
+
+```python
+    # C declaration:
+    # PYTEST_API int
+    # decode_value(
+    #     const unsigned char *data,
+    #     size_t size,
+    #     int64_t *result
+    # )
+    
+    dll.decode_value.argtypes = [
+        ctypes.POINTER(ctypes.c_uint8),
+        ctypes.c_size_t,
+        ctypes.POINTER(ctypes.c_int64),
+    ]
+    dll.decode_value.restype = ctypes.c_int
+```
+
+#### 11.2 Meaning of “literal copy”
+
+The declaration text shall preserve the original source text as closely as possible, including:
+
+* line breaks;
+* indentation;
+* spaces;
+* qualifiers;
+* macros;
+* parameter names;
+* pointer placement;
+* calling-convention markers;
+* comments inside the declaration;
+* attributes inside the declaration.
+
+The following transformations are permitted:
+
+1. removal of the function body and its opening brace;
+2. removal of trailing whitespace on each line;
+3. removal of leading and trailing blank lines;
+4. optional normalization of line endings to `\n`;
+5. prefixing each line with Python comment syntax.
+
+No semantic reformatting shall occur.
+
+The generator shall not rebuild the C declaration from `Type.spelling`.
+
+#### 11.3 Declaration boundary
+
+The declaration shall begin at the first byte of the function cursor extent. Comments preceding the function cursor extent are not part of the copied declaration. Comments lexically contained within the declaration extent are preserved.
+
+It shall end immediately before the opening brace belonging to the function definition.
+
+The opening brace shall be identified token-wise, not by a naive search for the first `{`, because braces may appear in:
+
+* attributes;
+* macros;
+* comments;
+* parameter annotations;
+* compound-literal-like macro expansions.
+
+#### 11.4 Source encoding
+
+Source ranges expose byte-oriented source offsets. The generator shall therefore read source files as raw bytes and slice by byte offset before decoding. It shall not slice a decoded Python string using libclang byte offsets. ([Clang][1])
+
+Source decoding shall use UTF-8 by default.
+
+Invalid UTF-8 shall be treated as a generation error unless a future explicit encoding option is added.
+
+Silently replacing invalid bytes is prohibited because the declaration comment is required to be literal.
+
+#### 11.5 Comment safety
+
+Every extracted line shall be emitted as a Python line comment:
+
+```python
+# ...
+```
+
+The declaration shall not be placed inside a Python triple-quoted string because embedded quoting and escape sequences could alter or invalidate generated output.
+
+---
+
+### 12. Internal Data Model
+
+The implementation shall separate AST extraction from code emission.
+
+A recommended normalized model is:
+
+```python
+@dataclass(frozen=True)
+class SourceLocation:
+    file: Path
+    line: int
+    column: int
+
+
+@dataclass(frozen=True)
+class CType:
+    kind: str
+    spelling: str
+    canonical_spelling: str
+    const: bool
+    volatile: bool
+    restrict: bool
+    pointee: CType | None = None
+
+
+@dataclass(frozen=True)
+class Parameter:
+    name: str
+    c_type: CType
+    location: SourceLocation
+
+
+@dataclass(frozen=True)
+class Function:
+    name: str
+    result_type: CType
+    parameters: tuple[Parameter, ...]
+    variadic: bool
+    declaration_text: str
+    location: SourceLocation
+```
+
+The normalized model shall not retain live libclang cursor or type objects after extraction.
+
+This makes:
+
+* generator tests independent of libclang object lifetimes;
+* type mapping independently testable;
+* rendering independently testable;
+* diagnostics deterministic.
+
+---
+
+### 13. Function Validation
+
+Before output generation, each selected function shall be validated.
+
+#### 13.1 Prohibited functions
+
+Generation shall fail for:
+
+* variadic functions;
+* functions without a name;
+* conflicting duplicate function names;
+* C++ overloaded functions;
+* functions whose declaration cannot be extracted;
+* functions containing unsupported return types;
+* functions containing unsupported parameter types;
+* functions using unsupported calling conventions;
+* functions whose AST type is invalid or incomplete.
+
+#### 13.2 Duplicate names
+
+A function name may appear only once across all parsed source files.
+
+Two definitions with the same name shall be a fatal error even when signatures are identical.
+
+The diagnostic shall identify both source locations.
+
+#### 13.3 Parameter names
+
+Unnamed parameters shall be accepted because `ctypes.argtypes` does not require parameter names.
+
+For diagnostics, unnamed parameters shall be identified by zero-based index:
+
+```text
+parameter 2
+```
+
+#### 13.4 Empty parameter lists
+
+A C declaration written as:
+
+```c
+int function();
+```
+
+has historically different semantics from:
+
+```c
+int function(void);
+```
+
+The generator shall use libclang semantic argument information.
+
+For a function definition with no parameters, generated `argtypes` shall be:
+
+```python
+[]
+```
+
+The literal source comment shall preserve whichever syntax appeared in the source.
+
+---
+
+### 14. Supported C ABI
+
+The first implementation shall intentionally support a constrained, robust C ABI.
+
+#### 14.1 Supported scalar types
+
+The generator shall support:
+
+```c
+_Bool
+bool
+char
+signed char
+unsigned char
+short
+unsigned short
+int
+unsigned int
+long
+unsigned long
+long long
+unsigned long long
+float
+double
+```
+
+#### 14.2 Supported standard typedefs
+
+The generator shall support these typedef names directly:
+
+```c
+int8_t
+uint8_t
+int16_t
+uint16_t
+int32_t
+uint32_t
+int64_t
+uint64_t
+intptr_t
+uintptr_t
+ptrdiff_t
+size_t
+```
+
+#### 14.3 Supported SQLite typedefs
+
+The generator shall support:
+
+```c
+sqlite3_int64
+sqlite3_uint64
+```
+
+#### 14.4 Supported pointer forms
+
+The generator shall support:
+
+* pointers to supported scalar types;
+* pointers to supported typedefs;
+* pointers to `void`;
+* multiple pointer levels when each pointee is otherwise supported;
+* qualified pointees;
+* qualified pointer objects.
+
+Examples:
+
+```c
+const char *
+unsigned char *
+const uint32_t *
+void *
+const void *
+int **
+```
+
+#### 14.5 Supported return forms
+
+The generator shall support:
+
+* `void`;
+* supported scalar values;
+* supported typedef values;
+* supported pointer values.
+
+Support for pointer return types is ABI-only. The generated declaration does not imply ownership, validity duration, nullability, deallocation policy, or safe dereferencing.
+
+#### 14.6 Explicitly unsupported forms
+
+The first implementation shall reject:
+
+* structures;
+* unions;
+* array values and multidimensional or variably modified array forms that cannot be reduced unambiguously to a supported function-parameter pointer ABI;
+* function-pointer parameters;
+* function-pointer returns;
+* variadic functions;
+* pointers to unsupported or incomplete record types (shall not be automatically weakened to `ctypes.c_void_p`);
+* `_Complex`;
+* imaginary types;
+* vector types;
+* `long double`;
+* `_Float16`;
+* `__fp16`;
+* `_Float128`;
+* bit-int types;
+* compiler-specific vector extensions;
+* block pointers;
+* member pointers;
+* references;
+* C++ classes;
+* C++ templates;
+* C++ overload sets;
+* opaque record values;
+* enums unless explicitly enabled in a later version;
+* structure returns by value;
+* structure parameters by value;
+* anonymous record types.
+
+Rejecting unsupported types is mandatory. Silent approximation is prohibited.
+
+---
+
+### 15. C-to-`ctypes` Mapping
+
+#### 15.1 Scalar mapping
+
+The generated mappings shall be:
+
+| C type               | Generated `ctypes` expression |
+| -------------------- | ----------------------------- |
+| `_Bool`, `bool`      | `ctypes.c_bool`               |
+| `char`               | `ctypes.c_char`               |
+| `signed char`        | `ctypes.c_int8`               |
+| `unsigned char`      | `ctypes.c_uint8`              |
+| `short`              | `ctypes.c_short`              |
+| `unsigned short`     | `ctypes.c_ushort`             |
+| `int`                | `ctypes.c_int`                |
+| `unsigned int`       | `ctypes.c_uint`               |
+| `long`               | `ctypes.c_long`               |
+| `unsigned long`      | `ctypes.c_ulong`              |
+| `long long`          | `ctypes.c_longlong`           |
+| `unsigned long long` | `ctypes.c_ulonglong`          |
+| `float`              | `ctypes.c_float`              |
+| `double`             | `ctypes.c_double`             |
+| `void` return        | `None`                        |
+
+Notes:
+
+- `_Bool` shall be recognized semantically. Source declarations written using the standard `bool` macro shall be supported when Clang resolves them to `_Bool`.
+- Plain C `char` maps to `ctypes.c_char` regardless of whether the target treats plain `char` as signed or unsigned. Code requiring numeric signedness shall use `signed char`, `unsigned char`, `int8_t`, or `uint8_t`.
+
+#### 15.2 Fixed-width and named typedef mapping
+
+| C typedef        | Generated expression |
+| ---------------- | -------------------- |
+| `int8_t`         | `ctypes.c_int8`      |
+| `uint8_t`        | `ctypes.c_uint8`     |
+| `int16_t`        | `ctypes.c_int16`     |
+| `uint16_t`       | `ctypes.c_uint16`    |
+| `int32_t`        | `ctypes.c_int32`     |
+| `uint32_t`       | `ctypes.c_uint32`    |
+| `int64_t`        | `ctypes.c_int64`     |
+| `uint64_t`       | `ctypes.c_uint64`    |
+| `intptr_t`       | `ctypes.c_ssize_t`   |
+| `uintptr_t`      | `ctypes.c_size_t`    |
+| `ptrdiff_t`      | `ctypes.c_ssize_t`   |
+| `size_t`         | `ctypes.c_size_t`    |
+| `sqlite3_int64`  | `ctypes.c_int64`     |
+| `sqlite3_uint64` | `ctypes.c_uint64`    |
+
+Notes:
+
+- `ctypes.c_ssize_t` and `ctypes.c_size_t` are used as the available signed and unsigned pointer-width ctypes representations for `intptr_t` and `uintptr_t`.
+
+#### 15.3 Typedef precedence
+
+The mapper shall first inspect the source spelling for recognized ABI-significant typedef names.
+
+Only when no explicit mapping exists may it fall back to the canonical type.
+
+This is necessary because canonicalization may erase useful distinctions such as:
+
+```c
+size_t
+```
+
+versus its platform-dependent underlying integer type.
+
+Named typedef recognition shall operate on the unqualified spelling of the current type node. Top-level `const`, `volatile`, and `restrict` qualifiers shall not prevent recognition of an otherwise supported named typedef.
+
+The recursive mapper should follow this order at every level:
+
+1. Determine pointer, array, function, record, or scalar category.
+2. For a non-pointer node, check its unqualified typedef spelling against explicit mappings.
+3. Only then inspect the canonical type.
+
+#### 15.4 Pointer mapping
+
+General pointer mapping shall be recursive:
+
+```c
+T *
+```
+
+becomes:
+
+```python
+ctypes.POINTER(mapped_T)
+```
+
+#### 15.5 `void *`
+
+Both:
+
+```c
+void *
+const void *
+```
+
+shall map to:
+
+```python
+ctypes.c_void_p
+```
+
+Pointee `const` does not alter the binary pointer representation.  
+Further, `void *` is treated as a complete mapping node, which can itself be pointed to.
+
+#### 15.6 `char *` policy
+
+To avoid silently imposing text semantics, the generator shall use this strict default:
+
+```c
+char *
+const char *
+```
+
+map to:
+
+```python
+ctypes.POINTER(ctypes.c_char)
+```
+
+They shall not automatically map to `ctypes.c_char_p`.
+
+This is deliberate because `c_char_p` has conversion and return-value behavior beyond merely representing a pointer. In particular, a `c_char_p` return is converted to Python `bytes`, which can obscure pointer ownership. ([Python documentation][4])
+
+A later version may add explicit semantic overrides.
+
+#### 15.7 Unsigned byte pointers
+
+```c
+unsigned char *
+const unsigned char *
+uint8_t *
+const uint8_t *
+```
+
+shall map to:
+
+```python
+ctypes.POINTER(ctypes.c_uint8)
+```
+
+#### 15.8 Multiple pointer levels
+
+Example:
+
+```c
+int **
+```
+
+shall map to:
+
+```python
+ctypes.POINTER(ctypes.POINTER(ctypes.c_int))
+```
+
+while
+
+```c
+void **
+```
+
+shall map to:
+
+```python
+ctypes.POINTER(ctypes.c_void_p)
+```
+
+#### 15.9 Pointer qualifiers
+
+Qualifiers such as:
+
+```c
+const
+volatile
+restrict
+```
+
+shall be retained in the internal model and declaration comment but shall not change the generated `ctypes` pointer expression.
+
+#### 15.10 `argtypes` and `restype`
+
+Every generated function shall receive both:
+
+```python
+argtypes
+restype
+```
+
+No generated function may rely on ctypes defaults. By default, ctypes function objects otherwise accept broad argument forms and assume an integer result unless configured. ([Python documentation][5])
+
+---
+
+### 16. Calling Convention
+
+#### 16.1 Initial scope
+
+The initial implementation shall support only the ordinary C calling convention expected through:
+
+```python
+ctypes.CDLL
+```
+
+#### 16.2 Rejected conventions
+
+The generator shall reject functions explicitly declared with incompatible or unsupported conventions, including:
+
+```c
+__stdcall
+__fastcall
+__thiscall
+__vectorcall
+```
+
+unless support is explicitly implemented.
+
+Calling-convention validation shall use libclang semantic information where available. Declaration-token checks may supplement but shall not replace semantic validation. If the installed Python libclang API cannot determine the convention reliably, the generator shall reject declarations containing recognized non-default calling-convention tokens and document that macro-hidden conventions require caller discipline.
+
+#### 16.3 C++ linkage
+
+The source language shall be C.
+
+C++ translation units and overloaded functions are outside scope.
+
+The generator may reject files not parsed as C when it can reliably determine language mode.
+
+---
+
+### 17. Generated Module Interface
+
+The generated module’s supported public API shall consist of `GENERATED_FUNCTIONS` and `bind`.
+
+```python
+__all__ = (
+    "GENERATED_FUNCTIONS",
+    "bind",
+)
+```
+
+It may also expose metadata constants beginning with an underscore.
+
+#### 17.1 `GENERATED_FUNCTIONS`
+
+The module shall define:
+
+```python
+GENERATED_FUNCTIONS = (
+    "decode_value",
+    "utf8_length",
+)
+```
+
+Names shall be sorted lexicographically.
+
+The tuple shall be immutable.
+
+#### 17.2 `bind`
+
+The module shall define:
+
+```python
+def bind(dll: ctypes.CDLL) -> ctypes.CDLL:
+    ...
+```
+
+The function shall:
+
+1. accept an already-loaded library object;
+2. configure each generated function;
+3. return the same object.
+
+It shall not:
+
+* load the DLL;
+* locate files;
+* inspect the environment;
+* catch missing-symbol errors;
+* wrap functions;
+* mutate global process search paths.
+
+#### 17.3 Missing symbols
+
+If a generated symbol is absent, normal `ctypes` attribute lookup shall raise an exception during `bind()`.
+
+The generated code shall not suppress or defer this failure.
+
+#### 17.4 Generated module prologue
+
+The module shall begin with:
+
+```python
+"""Generated ctypes declarations.
+
+This file is generated. Do not edit manually.
+"""
+
+from __future__ import annotations
+
+import ctypes
+```
+
+The generator version and source list may appear in comments, but volatile values such as timestamps shall not be emitted.
+
+---
+
+### 18. Generated Function Layout
+
+Each function shall use this form:
+
+```python
+    # C declaration:
+    # PYTEST_API int
+    # decode_value(
+    #     const unsigned char *data,
+    #     size_t size,
+    #     int64_t *result
+    # )
+
+    dll.decode_value.argtypes = [
+        ctypes.POINTER(ctypes.c_uint8),
+        ctypes.c_size_t,
+        ctypes.POINTER(ctypes.c_int64),
+    ]
+    dll.decode_value.restype = ctypes.c_int
+```
+
+Requirements:
+
+* one blank line before each declaration comment;
+* one blank line between the comment and assignments;
+* one argument type per line;
+* trailing commas in multiline lists;
+* `restype` immediately after `argtypes`;
+* no semicolons;
+* no dynamic loops in generated output;
+* no generated helper abstraction hiding individual assignments.
+
+The generated module must remain easy to inspect and diff.
+
+---
+
+### 19. Function Ordering
+
+Two orderings shall be used for different purposes.
+
+#### 19.1 Generated binding order
+
+Functions in `bind()` shall be ordered by:
+
+1. source-file ordinal in CLI order;
+2. source line;
+3. source column;
+4. function name.
+
+This preserves source locality.
+
+#### 19.2 `GENERATED_FUNCTIONS` order
+
+`GENERATED_FUNCTIONS` shall be lexicographically sorted.
+
+This makes symbol-set comparison straightforward.
+
+---
+
+### 20. Determinism
+
+Given identical:
+
+* source bytes;
+* Clang version;
+* parser arguments;
+* marker name;
+* generator version;
+
+the output bytes shall be identical.
+
+The output shall not include:
+
+* timestamps;
+* random identifiers;
+* machine hostnames;
+* absolute source paths;
+* temporary paths;
+* environment dumps;
+* user names;
+* process IDs.
+
+Source paths in generated comments, when included, shall be relative to the current working directory or omitted.
+
+Line endings shall always be:
+
+```text
+LF
+```
+
+Encoding shall always be:
+
+```text
+UTF-8 without BOM
+```
+
+The generated file shall end with exactly one newline.
+
+---
+
+### 21. Output Validation
+
+Before writing, the generator shall validate generated source.
+
+#### 21.1 Python syntax validation
+
+The generated string shall be passed to:
+
+```python
+compile(
+    generated_text,
+    str(output_path),
+    "exec",
+)
+```
+
+Generation shall fail if compilation raises `SyntaxError`.
+
+#### 21.2 Optional formatter prohibition
+
+The generator shall not depend on Black, Ruff, isort, or another formatter.
+
+The emitter itself shall produce stable PEP 8-compatible formatting.
+
+#### 21.3 Self-consistency checks
+
+Before writing, the generator shall verify:
+
+- function names unique in the model;
+- every model entry produces exactly one binding block by construction;
+- `GENERATED_FUNCTIONS` is derived from the same model;
+- mapped ctypes expressions are validated before insertion;
+* every function in `GENERATED_FUNCTIONS` has assignments in `bind`;
+* no unselected function appears;
+* each function has one `argtypes`;
+* each function has one `restype`;
+* all mapped expressions are from the allowed generator vocabulary.
+
+---
+
+### 22. Atomic File Writing
+
+When not using `--check`, the generator shall:
+
+1. render the complete output in memory;
+2. validate it;
+3. compare it byte-for-byte with the existing file, if present;
+4. do nothing when identical;
+5. write to a temporary file in the destination directory;
+6. flush and close the temporary file;
+7. replace the destination atomically with `os.replace()`.
+
+A failed generation shall never truncate or partially overwrite the existing output.
+
+Temporary files shall be removed on failure where practical.
+
+---
+
+### 23. Exit Codes
+
+The program shall use:
+
+| Exit code | Meaning                                                                                       |
+| --------: | --------------------------------------------------------------------------------------------- |
+|       `0` | Success                                                                                       |
+|       `1` | `--check` detected missing or outdated output                                                 |
+|       `2` | Invalid arguments, parse failure, unsupported declaration, generation failure, or I/O failure |
+
+Unexpected exceptions shall be caught at the top-level entry point, rendered as concise fatal diagnostics, and converted to exit code `2`.
+
+A traceback may be emitted only under an explicit development/debug mode if such a mode is later added.
+
+---
+
+### 24. Diagnostics
+
+Fatal diagnostics shall use this form:
+
+```text
+ERROR: <message>
+```
+
+Source-related errors shall use:
+
+```text
+ERROR: path\file.c:123:17: <message>
+```
+
+Examples:
+
+```text
+ERROR: src\alphabet.c:142:1: selected function "decode_value" is variadic
+```
+
+```text
+ERROR: src\alphabet.c:87:29: parameter 2 of "parse_data" uses unsupported type "struct ParseState *"
+```
+
+```text
+ERROR: duplicate selected function "utf8_length":
+  src\alphabet.c:43:1
+  src\unicode.c:118:1
+```
+
+Warnings in verbose mode shall use:
+
+```text
+WARNING: <message>
+```
+
+Errors shall identify:
+
+* function name;
+* parameter index or return position;
+* source spelling;
+* canonical spelling;
+* libclang type kind;
+* source location.
+
+---
+
+### 25. Recommended Internal Functions
+
+The single module should be decomposed into small internal functions approximately as follows:
+
+```python
+parse_args()
+configure_libclang()
+normalize_source_paths()
+parse_translation_unit()
+collect_translation_unit_diagnostics()
+walk_cursors()
+cursor_is_in_source()
+find_selected_functions()
+extract_literal_declaration()
+normalize_clang_type()
+extract_function_model()
+validate_function()
+map_ctypes_type()
+render_declaration_comment()
+render_function_binding()
+render_module()
+validate_generated_module()
+write_output_atomically()
+check_output()
+main()
+```
+
+These functions are recommendations rather than mandatory names, but equivalent decomposition is required.
+
+The implementation shall not place the entire workflow inside `main()`.
+
+---
+
+### 26. Error Model
+
+Define dedicated internal exceptions:
+
+```python
+class GeneratorError(Exception):
+    pass
+
+
+class ParseError(GeneratorError):
+    pass
+
+
+class DeclarationExtractionError(GeneratorError):
+    pass
+
+
+class UnsupportedTypeError(GeneratorError):
+    pass
+
+
+class DuplicateSymbolError(GeneratorError):
+    pass
+```
+
+Expected user-facing failures shall use these exceptions.
+
+Do not use `assert` for input validation or operational error handling.
+
+Assertions may be used only for internal invariants that cannot be triggered by malformed input.
+
+---
+
+### 27. Testing Requirements for the Generator
+
+The implementation shall include a comprehensive pytest suite, although the test suite itself is not part of the single generated module.
+
+#### 27.1 Unit tests
+
+Test:
+
+* C identifier validation;
+* path normalization;
+* scalar mappings;
+* typedef mappings;
+* recursive pointer mappings;
+* `void` result mapping;
+* rejection of `void` parameters;
+* unsupported type diagnostics;
+* declaration-comment rendering;
+* module rendering;
+* deterministic ordering;
+* duplicate detection;
+* Python syntax validation;
+* atomic no-op behavior for unchanged output;
+* `--check` exit behavior.
+
+#### 27.2 Libclang integration tests
+
+Use small temporary C sources to verify:
+
+* marked function selection;
+* unmarked function exclusion;
+* included-header function exclusion;
+* static marked function selection;
+* multiline declarations;
+* comments inside declarations;
+* pointer qualifiers;
+* zero-argument functions;
+* unnamed parameters;
+* duplicate function names across sources;
+* parse errors;
+* unsupported structures;
+* variadic rejection;
+* marker-like substrings not matching;
+* marker text inside a body not matching;
+* literal declaration preservation.
+
+#### 27.3 Generated-module execution tests
+
+Generate a Python module and execute it against a fake DLL-like object whose function attributes accept assignment to:
+
+```python
+argtypes
+restype
+```
+
+Verify:
+
+* all generated names are accessed;
+* exact `ctypes` types are assigned;
+* `bind()` returns the same object;
+* missing symbols fail immediately.
+
+#### 27.4 Native smoke test
+
+At least one optional integration test should:
+
+1. compile a small C DLL;
+2. generate its ctypes module;
+3. load the DLL with `ctypes.CDLL`;
+4. call `bind()`;
+5. invoke functions;
+6. verify correct results.
+
+This test may be skipped when no supported compiler is available.
+
+---
+
+### 28. Example Input
+
+```c
+#include <stddef.h>
+#include <stdint.h>
+
+#ifdef PYTEST_C_API
+# if defined(_WIN32)
+#  define PYTEST_API __declspec(dllexport)
+# else
+#  define PYTEST_API __attribute__((visibility("default")))
+# endif
+#else
+# define PYTEST_API static
+#endif
+
+PYTEST_API int64_t
+sum_i32(
+    const int32_t *values,
+    size_t count
+){
+    int64_t result = 0;
+
+    for (size_t i = 0; i < count; ++i) {
+        result += values[i];
+    }
+
+    return result;
+}
+
+static int
+not_exported(int value){
+    return value;
+}
+
+PYTEST_API void
+reset_state(void){
+}
+```
+
+---
+
+### 29. Example Generated Output
+
+```python
+"""Generated ctypes declarations.
+
+This file is generated. Do not edit manually.
+"""
+
+from __future__ import annotations
+
+import ctypes
+
+
+__all__ = (
+    "GENERATED_FUNCTIONS",
+    "bind",
+)
+
+
+GENERATED_FUNCTIONS = (
+    "reset_state",
+    "sum_i32",
+)
+
+
+def bind(dll: ctypes.CDLL) -> ctypes.CDLL:
+    # C declaration:
+    # PYTEST_API int64_t
+    # sum_i32(
+    #     const int32_t *values,
+    #     size_t count
+    # )
+
+    dll.sum_i32.argtypes = [
+        ctypes.POINTER(ctypes.c_int32),
+        ctypes.c_size_t,
+    ]
+    dll.sum_i32.restype = ctypes.c_int64
+
+    # C declaration:
+    # PYTEST_API void
+    # reset_state(void)
+
+    dll.reset_state.argtypes = []
+    dll.reset_state.restype = None
+
+    return dll
+```
+
+---
+
+### 30. Example pytest Integration
+
+Generated module use:
+
+```python
+from __future__ import annotations
+
+import ctypes
+from pathlib import Path
+
+import pytest
+
+from pytestenv._native_generated import bind
+
+
+@pytest.fixture(scope="session")
+def native_dll() -> ctypes.CDLL:
+    dll_path = Path(__file__).resolve().parents[2] / "build" / "sqlite3.dll"
+
+    if not dll_path.is_file():
+        pytest.fail(f"Test DLL does not exist: {dll_path}")
+
+    try:
+        dll = ctypes.CDLL(str(dll_path))
+    except OSError as exc:
+        pytest.fail(f"Cannot load test DLL {dll_path}: {exc}")
+
+    return bind(dll)
+```
+
+The generated module shall remain limited to declaration configuration. Encoding, buffer allocation, ownership handling, and higher-level adapters belong in manually maintained test-support code.
+
+---
+
+### 31. Design Rationale
+
+#### 31.1 AST selection plus literal source preservation
+
+Libclang semantic information shall determine:
+
+* whether a cursor is a function;
+* whether it is a definition;
+* its name;
+* return type;
+* parameter types;
+* type kinds;
+* variadic status.
+
+Original source bytes shall determine the displayed C declaration.
+
+This avoids reconstructing complex C syntax from incomplete string representations while retaining compiler-derived ABI semantics.
+
+#### 31.2 Strict type subset
+
+The generator is intended for a deliberately designed test ABI, not arbitrary binding generation.
+
+A strict supported subset:
+
+* keeps output reviewable;
+* prevents unsafe guesses;
+* encourages simple test-facing C signatures;
+* provides actionable failure when the interface becomes too complex.
+
+#### 31.3 No automatic `c_char_p`
+
+Automatic `char *` to `c_char_p` conversion is intentionally avoided because pointer ownership and binary/text semantics cannot be inferred reliably from the C type alone.
+
+#### 31.4 No DLL loading
+
+Keeping DLL loading outside generated code allows pytest fixtures to control:
+
+* exact artifact paths;
+* architecture selection;
+* dependency search paths;
+* failure reporting;
+* session lifetime.
+
+#### 31.5 No generated wrappers
+
+The objective is low-overhead native testing. The generated output should configure raw functions, not hide the underlying ABI behind generated Python behavior.
+
+---
+
+### 32. Acceptance Criteria
+
+The implementation is complete when all of the following are true:
+
+1. It is a single importable Python module.
+2. It parses one or more `.c` files through Python libclang.
+3. It accepts arbitrary repeated Clang arguments.
+4. It selects only explicitly marked function definitions.
+5. It ignores functions from included headers.
+6. It extracts literal function declarations from original source bytes.
+7. It emits those declarations as comments immediately above bindings.
+8. It maps every supported C type exactly as specified.
+9. It rejects every unsupported type with a source-located diagnostic.
+10. It rejects variadic functions.
+11. It rejects duplicate function names.
+12. It assigns both `argtypes` and `restype` for every function.
+13. It emits `GENERATED_FUNCTIONS`.
+14. It emits a `bind()` function accepting an existing `ctypes.CDLL`.
+15. Its output is deterministic.
+16. It validates generated Python syntax.
+17. It writes atomically.
+18. It implements `--check`.
+19. It returns documented exit codes.
+20. Its pytest suite covers parsing, selection, mapping, rendering, diagnostics, and generated-module execution.
+
+### Notes
+
+The main deliberate constraint is that the first version rejects structures, callbacks, arrays, enums, and variadic APIs rather than trying to infer unsafe mappings.
+
+[1]: https://clang.llvm.org/docs/LibClang.html "Libclang tutorial — Clang 24.0.0git documentation"
+[2]: https://clang.llvm.org/doxygen/group__CINDEX__CURSOR__SOURCE.html "clang: Mapping between cursors and source code"
+[3]: https://clang.llvm.org/doxygen/group__CINDEX__LEX.html "clang: Token extraction and manipulation"
+[4]: https://docs.python.org/3.12/library/ctypes.html "ctypes — A foreign function library for Python — Python 3.12.13 documentation"
+[5]: https://docs.python.org/id/3.11/library/ctypes.html "ctypes --- A foreign function library for Python — Dokumentasi Python 3.11.15"
