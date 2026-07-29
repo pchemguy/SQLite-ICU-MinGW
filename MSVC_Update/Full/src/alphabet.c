@@ -34,9 +34,9 @@
 PYTEST_API int ab_utf8_byte_count(const char *zText){
   const unsigned char *z = (const unsigned char *)zText;
 
-  if( z[0] < 0x80 ) return 1;
-  if( (z[0] & 0xE0) == 0xC0 ) return 2;
-  if( (z[0] & 0xF0) == 0xE0 ) return 3;
+  if (z[0] < 0x80) return 1;
+  if ((z[0] & 0xE0) == 0xC0 ) return 2;
+  if ((z[0] & 0xF0) == 0xE0 ) return 3;
   return 4;
 }
 
@@ -46,7 +46,7 @@ PYTEST_API int ab_utf8_byte_count(const char *zText){
 PYTEST_API int64_t ab_utf8_length(const char *zText){
   int64_t n = 0;
 
-  while( *zText!=0 ){
+  while (*zText != 0) {
     zText += ab_utf8_byte_count(zText);
     ++n;
   }
@@ -60,7 +60,7 @@ PYTEST_API int64_t ab_utf8_length(const char *zText){
 PYTEST_API int ab_utf8_byte_offset(const char *zText, int64_t i){
   const char *zStart = zText;
 
-  while( i>0 ){
+  while (i > 0) {
     zText += ab_utf8_byte_count(zText);
     --i;
   }
@@ -72,19 +72,19 @@ PYTEST_API int ab_utf8_byte_offset(const char *zText, int64_t i){
 ** Return NULL for an unsupported language.
 */
 PYTEST_API const char *ab_alphabet_select(const char *zLanguage){
-  if( sqlite3_stricmp(zLanguage, "en")==0
-   || sqlite3_stricmp(zLanguage, "English")==0
+  if (sqlite3_stricmp(zLanguage, "en") == 0
+   || sqlite3_stricmp(zLanguage, "English") == 0
   ){
     return LATIN_UTF8;
   }
 
-  if( sqlite3_stricmp(zLanguage, "ru")==0
-   || sqlite3_stricmp(zLanguage, "Russian")==0
+  if (sqlite3_stricmp(zLanguage, "ru") == 0
+   || sqlite3_stricmp(zLanguage, "Russian") == 0
   ){
     return CYRILLIC_UTF8;
   }
 
-  return 0;
+  return "";
 }
 
 /*
@@ -107,7 +107,7 @@ static void alphabetStringFunc(
   ** NULL propagates. This also permits calls such as
   ** alpha_string('en', NULL) to return NULL.
   */
-  if( sqlite3_value_type(argv[0])==SQLITE_NULL
+  if (sqlite3_value_type(argv[0])==SQLITE_NULL
    || (argc>=2 && sqlite3_value_type(argv[1])==SQLITE_NULL)
    || (argc>=3 && sqlite3_value_type(argv[2])==SQLITE_NULL)
   ){
@@ -115,7 +115,7 @@ static void alphabetStringFunc(
     return;
   }
 
-  if( sqlite3_value_type(argv[0])!=SQLITE_TEXT ){
+  if (sqlite3_value_type(argv[0]) != SQLITE_TEXT) {
     sqlite3_result_error(
       context,
       "alpha_string() language must be text",
@@ -125,13 +125,13 @@ static void alphabetStringFunc(
   }
   
   zLanguage = (const char *)sqlite3_value_text(argv[0]);
-  if( zLanguage==0 ){
+  if (zLanguage == 0) {
     sqlite3_result_error_nomem(context);
     return;
   }
 
   zAlphabet = ab_alphabet_select(zLanguage);
-  if( zAlphabet==0 ){
+  if (zAlphabet == 0 || *zAlphabet == 0) {
     sqlite3_result_error(
       context,
       "alpha_string() language must be en, English, ru, or Russian",
@@ -142,8 +142,8 @@ static void alphabetStringFunc(
 
   nChars = ab_utf8_length(zAlphabet);
 
-  if( argc>=2 ){
-    if( sqlite3_value_type(argv[1])!=SQLITE_INTEGER ){
+  if (argc >= 2) {
+    if (sqlite3_value_type(argv[1]) != SQLITE_INTEGER) {
       sqlite3_result_error(
         context,
         "alpha_string() start must be an integer",
@@ -153,7 +153,7 @@ static void alphabetStringFunc(
     }
     iStart = sqlite3_value_int64(argv[1]);
 
-    if( iStart < -nChars || iStart > nChars ){
+    if (iStart < -nChars || iStart > nChars) {
       sqlite3_result_error(
         context,
         "alpha_string() start index is out of range",
@@ -162,17 +162,17 @@ static void alphabetStringFunc(
       return;
     }
     
-    if( iStart<0 ){
+    if (iStart < 0) {
       iStart += nChars;
     }
   }
 
   nResult = nChars - iStart;
 
-  if( argc==3 ){
+  if (argc == 3){
     sqlite3_int64 nRequested;
 
-    if( sqlite3_value_type(argv[2])!=SQLITE_INTEGER ){
+    if (sqlite3_value_type(argv[2]) != SQLITE_INTEGER) {
       sqlite3_result_error(
         context,
         "alpha_string() length must be an integer",
@@ -182,7 +182,7 @@ static void alphabetStringFunc(
     }
 
     nRequested = sqlite3_value_int64(argv[2]);
-    if( nRequested<0 ){
+    if (nRequested < 0) {
       sqlite3_result_error(
         context,
         "alpha_string() length must not be negative",
@@ -191,7 +191,7 @@ static void alphabetStringFunc(
       return;
     }
 
-    if( nRequested<nResult ){
+    if (nRequested < nResult) {
       nResult = nRequested;
     }
   }
@@ -228,13 +228,13 @@ int sqlite3AlphabetInit(sqlite3 *db){
     db, "alpha_string", 1, flags, 0,
     alphabetStringFunc, 0, 0
   );
-  if( rc!=SQLITE_OK ) return rc;
+  if (rc != SQLITE_OK) return rc;
 
   rc = sqlite3_create_function(
     db, "alpha_string", 2, flags, 0,
     alphabetStringFunc, 0, 0
   );
-  if( rc!=SQLITE_OK ) return rc;
+  if (rc != SQLITE_OK) return rc;
 
   return sqlite3_create_function(
     db, "alpha_string", 3, flags, 0,

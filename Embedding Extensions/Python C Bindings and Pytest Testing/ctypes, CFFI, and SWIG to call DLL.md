@@ -10351,3 +10351,256 @@ Therefore:
 Shroud deliberately generates source wrappers and leaves compilation and linkage to the surrounding build system. Its `library` field is used primarily for generated naming, while the generated source includes the configured header; the actual implementation libraries are supplied by your build configuration. ([shroud.readthedocs.io][1])
 
 [1]: https://shroud.readthedocs.io/en/latest/tutorial.html "Tutorial — shroud 0.13.0 documentation"
+
+---
+---
+
+## 📗 Shroud Python API
+
+> [!NOTE] Prompt
+> 
+> And this produces what python API?
+> 
+> ```yaml
+> library: alphabet_test
+> language: c
+> cxx_header: alphabet.h
+> 
+> options:
+>   wrap_python: true
+>   wrap_fortran: false
+>   wrap_c: false
+> 
+> declarations:
+> - decl: int ab_utf8_byte_count(const char *zText)
+> - decl: int64_t ab_utf8_length(const char *zText)
+> - decl: int ab_utf8_byte_offset(const char *zText, int64_t i)
+> - decl: const char *ab_alphabet_select(const char *zLanguage)
+>         +owner(library)
+> ```
+
+It generates a single native Python extension module:
+
+```python
+import alphabet_test
+```
+
+with these four functions:
+
+```python
+alphabet_test.ab_utf8_byte_count(zText: str) -> int
+alphabet_test.ab_utf8_length(zText: str) -> int
+alphabet_test.ab_utf8_byte_offset(zText: str, i: int) -> int
+alphabet_test.ab_alphabet_select(zLanguage: str) -> str
+```
+
+More concretely:
+
+```python
+import alphabet_test
+
+alphabet_test.ab_utf8_byte_count("A")
+# 1
+
+alphabet_test.ab_utf8_byte_count("Б")
+# 2
+
+alphabet_test.ab_utf8_length("AБ✓")
+# 3
+
+alphabet_test.ab_utf8_byte_offset("AБ✓", 2)
+# 3
+
+alphabet_test.ab_alphabet_select("en")
+# "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
+```
+
+### Argument conversion
+
+The generated wrapper uses:
+
+```c
+PyArg_ParseTupleAndKeywords(..., "s", ...)
+```
+
+for each `const char *` parameter.
+
+Therefore the public inputs are Python `str` values encoded by Python to UTF-8 for the duration of the C call:
+
+```python
+alphabet_test.ab_utf8_length("АБВ")
+```
+
+Passing `bytes` is not the intended API and may be rejected depending on the Python version and parser behavior.
+
+The integer argument uses:
+
+```c
+"L"
+```
+
+so:
+
+```python
+alphabet_test.ab_utf8_byte_offset("АБВ", 2)
+```
+
+accepts a Python integer converted to a signed 64-bit C integer.
+
+### Return conversion
+
+#### `ab_utf8_byte_count`
+
+C:
+
+```c
+int
+```
+
+Python:
+
+```python
+int
+```
+
+#### `ab_utf8_length`
+
+C:
+
+```c
+int64_t
+```
+
+Python:
+
+```python
+int
+```
+
+However, the generated code you showed contains:
+
+```c
+SHTPy_rv = PyInt_FromLong(SHCXX_rv);
+```
+
+On Windows, `long` is only 32 bits. That is a Shroud 0.14.0 code-generation defect for `int64_t`: it should use a 64-bit conversion such as:
+
+```c
+PyLong_FromLongLong(SHCXX_rv)
+```
+
+For your fixed alphabet strings this cannot overflow, but it is not a correct general `int64_t` wrapper.
+
+#### `ab_utf8_byte_offset`
+
+C:
+
+```c
+int
+```
+
+Python:
+
+```python
+int
+```
+
+#### `ab_alphabet_select`
+
+C:
+
+```c
+const char *
+```
+
+Python:
+
+```python
+str
+```
+
+Shroud converts the returned NUL-terminated string using:
+
+```c
+PyUnicode_FromString(SHCXX_rv)
+```
+
+The `+owner(library)` annotation means the C pointer is borrowed. Shroud copies the text into a Python string and does not free the C memory.
+
+### Important NULL-return problem
+
+Your C function returns `NULL` for unsupported languages:
+
+```c
+return 0;
+```
+
+But the generated wrapper unconditionally does:
+
+```c
+SHTPy_rv = PyString_FromString(SHCXX_rv);
+```
+
+which becomes:
+
+```c
+PyUnicode_FromString(SHCXX_rv);
+```
+
+It does not test `SHCXX_rv == NULL`.
+
+Therefore this call is not safely mapped to `None`:
+
+```python
+alphabet_test.ab_alphabet_select("German")
+```
+
+The generated API effectively assumes that `ab_alphabet_select()` always returns a non-NULL string.
+
+So the actual generated API is:
+
+```python
+def ab_alphabet_select(zLanguage: str) -> str:
+    ...
+```
+
+not:
+
+```python
+def ab_alphabet_select(zLanguage: str) -> str | None:
+    ...
+```
+
+You must either change the C contract so it never returns `NULL`, configure a nullable-result Shroud annotation or statement if supported, or patch the generated conversion through a Shroud splicer.
+
+### Module contents
+
+It also creates:
+
+```python
+alphabet_test.Error
+```
+
+because the generated initializer adds a module-specific exception type:
+
+```python
+alphabet_test.Error
+```
+
+None of these four wrappers currently raises it, however.
+
+The effective Python surface is therefore:
+
+```python
+alphabet_test.Error
+
+alphabet_test.ab_utf8_byte_count(str) -> int
+alphabet_test.ab_utf8_length(str) -> int
+alphabet_test.ab_utf8_byte_offset(str, int) -> int
+alphabet_test.ab_alphabet_select(str) -> str
+```
+
+with two generated-code concerns:
+
+1. `int64_t` is converted through 32-bit `long` on Windows.
+2. A `NULL` result from `ab_alphabet_select()` is not handled.
