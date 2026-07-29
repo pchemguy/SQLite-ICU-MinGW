@@ -1,5 +1,7 @@
 ---
-url: https://chatgpt.com/c/6a683465-21cc-83eb-942f-54fe28dfe936
+urls:
+ - https://chatgpt.com/c/6a683465-21cc-83eb-942f-54fe28dfe936
+ - https://chatgpt.com/c/6a69ee1e-7120-83eb-80bc-b307bf9e9010
 ---
 
 ## 📗 ctypes, CFFI, and SWIG to call DLL
@@ -6772,3 +6774,572 @@ Nullability:
 ```
 
 That is compact, orthogonal, and broad enough for a serious C testing interface without pretending to model arbitrary C APIs.
+
+---
+---
+
+## 📗 C Test Example
+
+> [!NOTE] Prompt
+> 
+> Given the scope discussed above, I need a C module with small-sized dummy functions with 0-3 args providing comprehensive coverage of all discussed cases.
+
+Created a standalone C fixture covering the full policy surface discussed:
+
+[Download `ctypes_dummy_api.c`](sandbox:/mnt/data/ctypes_dummy_api.c)
+
+It includes small functions with 0–3 parameters covering:
+
+* scalar values with 0, 1, 2, and 3 arguments;
+* scalar pointer `IN`, `OUT`, and `INOUT`;
+* nullable scalar input;
+* input, output, and in/out typed arrays;
+* fixed-size arrays;
+* caller-provided buffers with capacity;
+* produced length via return value;
+* produced length via `OUT` and `INOUT` scalar parameters;
+* callee-allocated arrays returned through typed output pointers;
+* borrowed and owned returned memory;
+* explicit releaser association;
+* NUL-terminated UTF-8 input and output;
+* length-delimited UTF-8 input;
+* raw byte arrays containing embedded zero bytes;
+* borrowed and owned returned byte arrays;
+* mutable UTF-8 buffers;
+* NUL-terminated byte strings;
+* return roles `VALUE`, `STATUS`, `LENGTH`, and `VOID`;
+* wrapper-internal functions through `expose=NO`.
+
+Each function has structured `PYTEST-WRAPPER` metadata, for example:
+
+```c_
+/*
+** PYTEST-WRAPPER:
+**   return: STATUS success=0
+**   param buffer: OUT BUFFER representation=BYTES capacity=PARAM(capacity)
+**                 length=OUT(written) nullable=NO
+**   param capacity: IN SCALAR representation=NATIVE
+**   param written: OUT SCALAR representation=NATIVE nullable=NO
+*/
+```
+
+The module is standalone, depends only on the C standard library, and passed:
+
+```cmd
+gcc -std=c11 -Wall -Wextra -Werror -DPYTEST_C_API -fsyntax-only ctypes_dummy_api.c
+```
+
+The current generator basis remains the uploaded libclang generator. 
+
+```c
+/*
+** ctypes_dummy_api.c
+**
+** Standalone C fixture for developing and testing generated Python ctypes
+** wrappers. The functions are intentionally small and limited to zero,
+** one, two, or three parameters. Together they cover the compact wrapper
+** policy discussed for:
+**
+**   - ordinary scalar parameters and return values;
+**   - pointer direction: IN, OUT, and INOUT;
+**   - pointer shape: SCALAR, ARRAY, BUFFER, and STRING;
+**   - array lengths obtained from an input parameter, an output parameter,
+**     an input/output parameter, a fixed value, or the C return value;
+**   - caller-provided buffers with capacity and produced-length metadata;
+**   - borrowed and owned callee-memory results;
+**   - nullable pointers;
+**   - NUL-terminated and length-delimited strings;
+**   - UTF-8 text versus uninterpreted bytes; and
+**   - C return roles: VALUE, STATUS, LENGTH, and VOID.
+**
+** Annotation grammar used by this fixture:
+**
+**   PYTEST-WRAPPER:
+**     return: <ROLE> [other attributes]
+**     param <name>: <DIRECTION> <SHAPE> [other attributes]
+**
+** Roles:
+**   VALUE | STATUS | LENGTH(<parameter>) | VOID
+**
+** Directions:
+**   IN | OUT | INOUT
+**
+** Shapes:
+**   SCALAR | ARRAY | BUFFER | STRING
+**
+** Extent attributes:
+**   length=PARAM(<name>)
+**   length=OUT(<name>)
+**   length=INOUT(<name>)
+**   length=RETURN
+**   length=FIXED(<count>)
+**   termination=NUL
+**
+** Buffer attribute:
+**   capacity=PARAM(<name>)
+**
+** Representation:
+**   representation=NATIVE | BYTES | UTF8
+**
+** Storage:
+**   storage=BORROWED | OWNED(<releaser>)
+**
+** Nullability:
+**   nullable=NO | YES
+**
+** Wrapper visibility:
+**   expose=YES | NO
+**
+** The comments are descriptive metadata for a future wrapper generator.  They
+** compile to nothing and do not affect the native ABI.
+*/
+
+#include <stddef.h>
+#include <stdint.h>
+#include <stdlib.h>
+#include <string.h>
+
+#ifndef PYTEST_API
+# ifdef PYTEST_C_API
+#  ifdef _WIN32
+#   define PYTEST_API __declspec(dllexport)
+#  elif defined(__GNUC__) || defined(__clang__)
+#   define PYTEST_API __attribute__((visibility("default")))
+#  else
+#   define PYTEST_API
+#  endif
+# else
+#  define PYTEST_API static
+# endif
+#endif
+
+/*
+** PYTEST-WRAPPER:
+**   return: VALUE
+*/
+PYTEST_API int32_t ctd_scalar_zero(void){
+    return INT32_C(7);
+}
+
+/*
+** PYTEST-WRAPPER:
+**   return: VALUE
+**   param value: IN SCALAR representation=NATIVE
+*/
+PYTEST_API int32_t ctd_scalar_negate(int32_t value){
+    return -value;
+}
+
+/*
+** PYTEST-WRAPPER:
+**   return: VALUE
+**   param left: IN SCALAR representation=NATIVE
+**   param right: IN SCALAR representation=NATIVE
+*/
+PYTEST_API double ctd_scalar_add(double left, double right){
+    return left + right;
+}
+
+/*
+** PYTEST-WRAPPER:
+**   return: VALUE
+**   param value: IN SCALAR representation=NATIVE
+**   param scale: IN SCALAR representation=NATIVE
+**   param offset: IN SCALAR representation=NATIVE
+*/
+PYTEST_API int64_t ctd_scalar_affine(int32_t value, int32_t scale, int32_t offset){
+    return (int64_t)value * scale + offset;
+}
+
+/*
+** PYTEST-WRAPPER:
+**   return: VALUE
+**   param value: IN SCALAR representation=NATIVE nullable=NO
+*/
+PYTEST_API int32_t ctd_scalar_ref_in(const int32_t *value){
+    return *value + 1;
+}
+
+/*
+** PYTEST-WRAPPER:
+**   return: VOID
+**   param result: OUT SCALAR representation=NATIVE nullable=NO
+*/
+PYTEST_API void ctd_scalar_ref_out(int32_t *result){
+    *result = INT32_C(41);
+}
+
+/*
+** PYTEST-WRAPPER:
+**   return: VOID
+**   param value: INOUT SCALAR representation=NATIVE nullable=NO
+**   param delta: IN SCALAR representation=NATIVE
+*/
+PYTEST_API void ctd_scalar_ref_inout(int32_t *value, int32_t delta){
+    *value += delta;
+}
+
+/*
+** PYTEST-WRAPPER:
+**   return: VALUE
+**   param value: IN SCALAR representation=NATIVE nullable=YES
+*/
+PYTEST_API int32_t ctd_scalar_ref_nullable(const int32_t *value) {
+    return value != NULL ? *value : INT32_C(-1);
+}
+
+/*
+** PYTEST-WRAPPER:
+**   return: VALUE
+**   param values: IN ARRAY representation=NATIVE length=PARAM(count) nullable=NO
+**   param count: IN SCALAR representation=NATIVE
+*/
+PYTEST_API int64_t ctd_array_sum_i32(const int32_t *values, size_t count){
+    int64_t total = 0;
+    size_t i;
+
+    for (i = 0; i < count; ++i) {
+        total += values[i];
+    }
+    return total;
+}
+
+/*
+** PYTEST-WRAPPER:
+**   return: VOID
+**   param values: INOUT ARRAY representation=NATIVE length=PARAM(count) nullable=NO
+**   param count: IN SCALAR representation=NATIVE
+**   param delta: IN SCALAR representation=NATIVE
+*/
+PYTEST_API void ctd_array_shift_i32(int32_t *values, size_t count, int32_t delta){
+    size_t i;
+
+    for (i = 0; i < count; ++i) {
+        values[i] += delta;
+    }
+}
+
+/*
+** PYTEST-WRAPPER:
+**   return: VOID
+**   param values: OUT ARRAY representation=NATIVE length=FIXED(3) nullable=NO
+*/
+PYTEST_API void ctd_array_fixed_out(uint8_t *values){
+    values[0] = UINT8_C(3);
+    values[1] = UINT8_C(5);
+    values[2] = UINT8_C(8);
+}
+
+/*
+** PYTEST-WRAPPER:
+**   return: LENGTH(values)
+**   param values: OUT BUFFER representation=NATIVE capacity=PARAM(capacity)
+**                 length=RETURN nullable=NO
+**   param capacity: IN SCALAR representation=NATIVE
+*/
+PYTEST_API size_t ctd_buffer_i32_return_length(int32_t *values, size_t capacity){
+    static const int32_t source[] = { 2, 4, 6, 8 };
+    const size_t available = sizeof(source) / sizeof(source[0]);
+    const size_t written = capacity < available ? capacity : available;
+
+    if (written > 0) {
+        memcpy(values, source, written * sizeof(source[0]));
+    }
+    return written;
+}
+
+/*
+** PYTEST-WRAPPER:
+**   return: STATUS success=0
+**   param buffer: OUT BUFFER representation=BYTES capacity=PARAM(capacity)
+**                 length=OUT(written) nullable=NO
+**   param capacity: IN SCALAR representation=NATIVE
+**   param written: OUT SCALAR representation=NATIVE nullable=NO
+*/
+PYTEST_API int ctd_buffer_bytes_out(
+    unsigned char *buffer,
+    size_t capacity,
+    size_t *written
+){
+    static const unsigned char source[] = { 0x00, 0x11, 0x22, 0x00, 0x44 };
+    const size_t required = sizeof(source);
+
+    *written = required;
+    if (capacity < required) {
+        return 1;
+    }
+
+    memcpy(buffer, source, required);
+    return 0;
+}
+
+/*
+** PYTEST-WRAPPER:
+**   return: STATUS success=0
+**   param buffer: INOUT BUFFER representation=NATIVE
+**                 capacity=PARAM(capacity) length=INOUT(length) nullable=NO
+**   param capacity: IN SCALAR representation=NATIVE
+**   param length: INOUT SCALAR representation=NATIVE nullable=NO
+*/
+PYTEST_API int ctd_buffer_i32_inout(
+    int32_t *buffer,
+    size_t capacity,
+    size_t *length
+){
+    size_t i;
+    size_t used = *length;
+
+    if (used > capacity) {
+        return 1;
+    }
+
+    for (i = 0; i < used; ++i) {
+        buffer[i] *= 2;
+    }
+
+    if (used < capacity) {
+        buffer[used++] = INT32_C(99);
+    }
+
+    *length = used;
+    return 0;
+}
+
+/*
+** PYTEST-WRAPPER:
+**   return: VOID
+**   param memory: IN SCALAR representation=NATIVE nullable=YES expose=NO
+*/
+PYTEST_API void ctd_free(void *memory){
+    free(memory);
+}
+
+/*
+** PYTEST-WRAPPER:
+**   return: STATUS success=0
+**   param values: OUT ARRAY representation=NATIVE length=RETURN
+**                 storage=OWNED(ctd_free) nullable=YES
+*/
+PYTEST_API size_t ctd_owned_array_return_length(int32_t **values){
+    int32_t *result = (int32_t *)malloc(3 * sizeof(*result));
+
+    if (result == NULL) {
+        *values = NULL;
+        return 0;
+    }
+
+    result[0] = INT32_C(10);
+    result[1] = INT32_C(20);
+    result[2] = INT32_C(30);
+    *values = result;
+    return 3;
+}
+
+/*
+** PYTEST-WRAPPER:
+**   return: STATUS success=0
+**   param values: OUT ARRAY representation=NATIVE length=OUT(count)
+**                 storage=OWNED(ctd_free) nullable=YES
+**   param count: OUT SCALAR representation=NATIVE nullable=NO
+*/
+PYTEST_API int ctd_owned_array_out_length(int32_t **values, size_t *count){
+    int32_t *result = (int32_t *)malloc(2 * sizeof(*result));
+
+    if (result == NULL) {
+        *values = NULL;
+        *count = 0;
+        return 1;
+    }
+
+    result[0] = INT32_C(-4);
+    result[1] = INT32_C(12);
+    *values = result;
+    *count = 2;
+    return 0;
+}
+
+/*
+** PYTEST-WRAPPER:
+**   return: STATUS success=0
+**   param values: OUT ARRAY representation=NATIVE length=INOUT(count)
+**                 storage=OWNED(ctd_free) nullable=YES
+**   param count: INOUT SCALAR representation=NATIVE nullable=NO
+*/
+PYTEST_API int ctd_owned_array_inout_length(int32_t **values, size_t *count){
+    size_t requested = *count;
+    size_t i;
+    int32_t *result;
+
+    if (requested > 4) {
+        requested = 4;
+    }
+
+    if (requested == 0) {
+        *values = NULL;
+        *count = 0;
+        return 0;
+    }
+
+    result = (int32_t *)malloc(requested * sizeof(*result));
+    if (result == NULL) {
+        *values = NULL;
+        *count = 0;
+        return 1;
+    }
+
+    for (i = 0; i < requested; ++i) {
+        result[i] = (int32_t)(i + 1);
+    }
+
+    *values = result;
+    *count = requested;
+    return 0;
+}
+
+/*
+** PYTEST-WRAPPER:
+**   return: VALUE
+**   param text: IN STRING representation=UTF8 termination=NUL nullable=NO
+*/
+PYTEST_API size_t ctd_utf8_nul_byte_length(const char *text){
+    return strlen(text);
+}
+
+/*
+** PYTEST-WRAPPER:
+**   return: VALUE
+**   param text: IN STRING representation=UTF8 length=PARAM(byte_count)
+**               nullable=NO
+**   param byte_count: IN SCALAR representation=NATIVE
+*/
+PYTEST_API size_t ctd_utf8_length_delimited_ascii_count(
+    const char *text,
+    size_t byte_count
+){
+    size_t i;
+    size_t ascii_count = 0;
+
+    for (i = 0; i < byte_count; ++i) {
+        if (((unsigned char)text[i]) < 0x80) {
+            ++ascii_count;
+        }
+    }
+    return ascii_count;
+}
+
+/*
+** PYTEST-WRAPPER:
+**   return: VALUE
+**   param data: IN ARRAY representation=BYTES length=PARAM(size) nullable=NO
+**   param size: IN SCALAR representation=NATIVE
+*/
+PYTEST_API uint32_t ctd_bytes_checksum(const unsigned char *data, size_t size){
+    uint32_t checksum = 0;
+    size_t i;
+
+    for (i = 0; i < size; ++i) {
+        checksum = checksum * UINT32_C(33) + data[i];
+    }
+    return checksum;
+}
+
+/*
+** PYTEST-WRAPPER:
+**   return: STRING representation=UTF8 termination=NUL
+**           storage=BORROWED nullable=NO
+*/
+PYTEST_API const char * ctd_utf8_borrowed(void){
+    return "borrowed \xE2\x9C\x93";
+}
+
+/*
+** PYTEST-WRAPPER:
+**   return: STRING representation=UTF8 termination=NUL
+**           storage=OWNED(ctd_free) nullable=YES
+*/
+PYTEST_API char * ctd_utf8_owned(void){
+    static const char source[] = "owned \xE2\x9C\x93";
+    char *result = (char *)malloc(sizeof(source));
+
+    if (result != NULL) {
+        memcpy(result, source, sizeof(source));
+    }
+    return result;
+}
+
+/*
+** PYTEST-WRAPPER:
+**   return: ARRAY representation=BYTES length=OUT(size)
+**           storage=BORROWED nullable=NO
+**   param size: OUT SCALAR representation=NATIVE nullable=NO
+*/
+PYTEST_API const unsigned char * ctd_bytes_borrowed(size_t *size){
+    static const unsigned char data[] = { 0x00, 0xAA, 0x55, 0x00 };
+
+    *size = sizeof(data);
+    return data;
+}
+
+/*
+** PYTEST-WRAPPER:
+**   return: ARRAY representation=BYTES length=OUT(size)
+**           storage=OWNED(ctd_free) nullable=YES
+**   param size: OUT SCALAR representation=NATIVE nullable=NO
+*/
+PYTEST_API unsigned char * ctd_bytes_owned(size_t *size){
+    static const unsigned char source[] = { 0xDE, 0xAD, 0x00, 0xBE, 0xEF };
+    unsigned char *result = (unsigned char *)malloc(sizeof(source));
+
+    if (result == NULL) {
+        *size = 0;
+        return NULL;
+    }
+
+    memcpy(result, source, sizeof(source));
+    *size = sizeof(source);
+    return result;
+}
+
+/*
+** PYTEST-WRAPPER:
+**   return: STATUS success=0
+**   param text: INOUT STRING representation=UTF8 termination=NUL
+**               capacity=PARAM(capacity) length=OUT(byte_count) nullable=NO
+**   param capacity: IN SCALAR representation=NATIVE
+**   param byte_count: OUT SCALAR representation=NATIVE nullable=NO
+*/
+PYTEST_API int ctd_utf8_buffer_inout(
+    char *text,
+    size_t capacity,
+    size_t *byte_count
+){
+    size_t length = strlen(text);
+    size_t i;
+
+    if (length + 1 > capacity) {
+        *byte_count = length;
+        return 1;
+    }
+
+    for (i = 0; i < length; ++i) {
+        unsigned char ch = (unsigned char)text[i];
+        if (ch >= 'a' && ch <= 'z') {
+            text[i] = (char)(ch - ('a' - 'A'));
+        }
+    }
+
+    *byte_count = length;
+    return 0;
+}
+
+/*
+** PYTEST-WRAPPER:
+**   return: STRING representation=BYTES termination=NUL
+**           storage=BORROWED nullable=NO
+*/
+PYTEST_API const unsigned char * ctd_nul_bytes_borrowed(void){
+    static const unsigned char value[] = "byte-string";
+
+    return value;
+}
+```
