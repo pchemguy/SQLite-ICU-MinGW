@@ -7352,3 +7352,2245 @@ PYTEST_API const unsigned char * ctd_nul_bytes_borrowed(void){
 > [!NOTE] Prompt
 > 
 > Assuming I have this source with pseudo annotations, how do I actually proceed with SWIG and SIP? These annotations are not for either SWIG and SIP. Both will ignore these annotations. But how do I proceed with them? I need recipes for both.
+
+The comments can be ignored completely. Neither SWIG nor SIP needs them.
+
+You manually create a binding specification alongside the C source:
+
+```text
+ctypes_dummy_api.c        implementation
+ctypes_dummy_api.h        declarations visible to wrappers
+ctypes_dummy_api.i        SWIG binding specification
+ctypes_dummy_api.sip      SIP binding specification
+```
+
+The specification file says what each pointer means. It is effectively the annotation layer, but written in the binding generator’s own language.
+
+The two practical recipes are substantially different:
+
+* **SWIG:** declare the real C functions and attach reusable typemaps to exact parameter patterns.
+* **SIP:** use native annotations for simple cases; use `%MethodCode` to implement the Python-facing call for complex pointer groups.
+
+SWIG is the better fit for this particular API because it supports multi-argument typemaps: one Python argument can map to several consecutive C parameters, and several C arguments can be hidden or combined into Python results. ([Swig][1])
+
+### 1. Shared C header
+
+First, expose declarations in a header. The implementation stays unchanged.
+
+```c
+/* ctypes_dummy_api.h */
+
+#ifndef CTYPES_DUMMY_API_H
+#define CTYPES_DUMMY_API_H
+
+#include <stddef.h>
+#include <stdint.h>
+
+int32_t ctd_scalar_zero(void);
+int32_t ctd_scalar_negate(int32_t value);
+double ctd_scalar_add(double left, double right);
+int64_t ctd_scalar_affine(int32_t value, int32_t scale, int32_t offset);
+
+int32_t ctd_scalar_ref_in(const int32_t *value);
+void ctd_scalar_ref_out(int32_t *result);
+void ctd_scalar_ref_inout(int32_t *value, int32_t delta);
+int32_t ctd_scalar_ref_nullable(const int32_t *value);
+
+int64_t ctd_array_sum_i32(const int32_t *values, size_t count);
+void ctd_array_shift_i32(int32_t *values, size_t count, int32_t delta);
+void ctd_array_fixed_out(uint8_t *values);
+
+size_t ctd_buffer_i32_return_length(
+    int32_t *values,
+    size_t capacity
+);
+
+int ctd_buffer_bytes_out(
+    unsigned char *buffer,
+    size_t capacity,
+    size_t *written
+);
+
+int ctd_buffer_i32_inout(
+    int32_t *buffer,
+    size_t capacity,
+    size_t *length
+);
+
+void ctd_free(void *memory);
+
+size_t ctd_owned_array_return_length(int32_t **values);
+int ctd_owned_array_out_length(int32_t **values, size_t *count);
+int ctd_owned_array_inout_length(int32_t **values, size_t *count);
+
+size_t ctd_utf8_nul_byte_length(const char *text);
+
+size_t ctd_utf8_length_delimited_ascii_count(
+    const char *text,
+    size_t byte_count
+);
+
+uint32_t ctd_bytes_checksum(
+    const unsigned char *data,
+    size_t size
+);
+
+const char *ctd_utf8_borrowed(void);
+char *ctd_utf8_owned(void);
+
+const unsigned char *ctd_bytes_borrowed(size_t *size);
+unsigned char *ctd_bytes_owned(size_t *size);
+
+int ctd_utf8_buffer_inout(
+    char *text,
+    size_t capacity,
+    size_t *byte_count
+);
+
+const unsigned char *ctd_nul_bytes_borrowed(void);
+
+#endif
+```
+
+For a standalone DLL build, compile the implementation with:
+
+```cmd
+/DPYTEST_C_API
+```
+
+For an amalgamated `.pyd`, external exports are unnecessary if the wrapper and implementation are in the same translation unit.
+
+---
+
+### 2. SWIG recipe
+
+#### 2.1 Basic scalar functions
+
+Create:
+
+```swig
+/* ctypes_dummy_api.i */
+
+%module ctypes_dummy_api
+
+%{
+#include "ctypes_dummy_api.h"
+%}
+
+%include <stdint.i>
+%include <typemaps.i>
+```
+
+The ordinary scalar functions need no custom handling:
+
+```swig
+%include "ctypes_dummy_api.h"
+```
+
+Without additional rules, SWIG can already expose:
+
+```python
+ctd_scalar_zero()
+ctd_scalar_negate(value)
+ctd_scalar_add(left, right)
+ctd_scalar_affine(value, scale, offset)
+```
+
+The real work goes before `%include "ctypes_dummy_api.h"`.
+
+#### 2.2 Scalar pointer parameters
+
+SWIG’s `typemaps.i` provides `INPUT`, `OUTPUT`, and `INOUT` pointer patterns. `%apply` applies those patterns to selected arguments. ([Swig][1])
+
+```swig
+%apply int32_t *INPUT {
+    const int32_t *value
+};
+
+%apply int32_t *OUTPUT {
+    int32_t *result
+};
+
+%apply int32_t *INOUT {
+    int32_t *value
+};
+```
+
+The problem is that both `ctd_scalar_ref_in()` and `ctd_scalar_ref_nullable()` have a parameter named `value`. A global `%apply` would affect both identically, but nullable input needs different handling.
+
+Use function-qualified parameter names:
+
+```swig
+%apply int32_t *INPUT {
+    const int32_t *ctd_scalar_ref_in::value
+};
+
+%apply int32_t *OUTPUT {
+    int32_t *ctd_scalar_ref_out::result
+};
+
+%apply int32_t *INOUT {
+    int32_t *ctd_scalar_ref_inout::value
+};
+```
+
+The resulting Python interfaces are approximately:
+
+```python
+ctd_scalar_ref_in(10)          # returns 11
+ctd_scalar_ref_out()           # returns 41
+ctd_scalar_ref_inout(10, 3)    # returns 13
+```
+
+For `INOUT`, SWIG returns the modified primitive rather than mutating the Python integer, because Python integers are immutable. ([Swig][1])
+
+#### 2.3 Nullable scalar pointer
+
+Define a dedicated input typemap matching only that function parameter:
+
+```swig
+%typemap(in) const int32_t *ctd_scalar_ref_nullable::value
+    (int32_t temp)
+{
+    if ($input == Py_None) {
+        $1 = NULL;
+    }
+    else {
+        long value = PyLong_AsLong($input);
+        if (value == -1 && PyErr_Occurred()) {
+            SWIG_exception_fail(
+                SWIG_TypeError,
+                "value must be int or None"
+            );
+        }
+
+        if (value < INT32_MIN || value > INT32_MAX) {
+            SWIG_exception_fail(
+                SWIG_OverflowError,
+                "value is outside int32_t range"
+            );
+        }
+
+        temp = (int32_t)value;
+        $1 = &temp;
+    }
+}
+```
+
+Python:
+
+```python
+ctd_scalar_ref_nullable(None)  # -1
+ctd_scalar_ref_nullable(12)    # 12
+```
+
+### 2.4 Input `int32_t` array plus count
+
+Treat these two C arguments as one Python sequence:
+
+```c
+const int32_t *values, size_t count
+```
+
+A SWIG multi-argument typemap is exactly intended for this transformation. ([Swig][1])
+
+```swig
+%typemap(in)
+(
+    const int32_t *ctd_scalar_array_values,
+    size_t ctd_scalar_array_count
+)
+(
+    int32_t *temporary = NULL,
+    Py_ssize_t item_count = 0
+)
+{
+    PyObject *sequence = PySequence_Fast(
+        $input,
+        "expected a sequence of integers"
+    );
+
+    Py_ssize_t i;
+
+    if (sequence == NULL) {
+        SWIG_fail;
+    }
+
+    item_count = PySequence_Fast_GET_SIZE(sequence);
+
+    if ((size_t)item_count > SIZE_MAX / sizeof(int32_t)) {
+        Py_DECREF(sequence);
+        SWIG_exception_fail(
+            SWIG_OverflowError,
+            "array is too large"
+        );
+    }
+
+    if (item_count != 0) {
+        temporary = (int32_t *)malloc(
+            (size_t)item_count * sizeof(*temporary)
+        );
+
+        if (temporary == NULL) {
+            Py_DECREF(sequence);
+            SWIG_exception_fail(
+                SWIG_MemoryError,
+                "unable to allocate input array"
+            );
+        }
+    }
+
+    for (i = 0; i < item_count; ++i) {
+        long value = PyLong_AsLong(
+            PySequence_Fast_GET_ITEM(sequence, i)
+        );
+
+        if (value == -1 && PyErr_Occurred()) {
+            Py_DECREF(sequence);
+            free(temporary);
+            SWIG_fail;
+        }
+
+        if (value < INT32_MIN || value > INT32_MAX) {
+            Py_DECREF(sequence);
+            free(temporary);
+            SWIG_exception_fail(
+                SWIG_OverflowError,
+                "array item is outside int32_t range"
+            );
+        }
+
+        temporary[i] = (int32_t)value;
+    }
+
+    Py_DECREF(sequence);
+
+    $1 = temporary;
+    $2 = (size_t)item_count;
+}
+
+%typemap(freearg)
+(
+    const int32_t *ctd_scalar_array_values,
+    size_t ctd_scalar_array_count
+)
+{
+    free((void *)$1);
+}
+```
+
+Apply it to the real signature:
+
+```swig
+%apply (
+    const int32_t *ctd_scalar_array_values,
+    size_t ctd_scalar_array_count
+) {
+    (
+        const int32_t *ctd_array_sum_i32::values,
+        size_t ctd_array_sum_i32::count
+    )
+};
+```
+
+Python becomes:
+
+```python
+ctd_array_sum_i32([1, 2, 3])
+```
+
+rather than:
+
+```python
+ctd_array_sum_i32(pointer, 3)
+```
+
+### 2.5 Reuse the input-array converter
+
+Do not write the conversion directly under the real parameter names if several functions share the same policy. Define a synthetic typemap pattern, then `%apply` it.
+
+That is the recurring SWIG recipe:
+
+```swig
+%typemap(...) (synthetic semantic pattern) {
+    ...
+}
+
+%apply (synthetic semantic pattern) {
+    (actual function parameter tuple)
+};
+```
+
+The synthetic names do not exist in C. They exist only as a typemap key.
+
+### 2.6 Input UTF-8 string
+
+A NUL-terminated `const char *` can use SWIG’s normal Python string conversion, but explicitly requiring Python `str` and UTF-8 gives you exact behavior:
+
+```swig
+%typemap(in) const char *ctd_utf8_nul_byte_length::text
+    (PyObject *encoded = NULL)
+{
+    if (!PyUnicode_Check($input)) {
+        SWIG_exception_fail(
+            SWIG_TypeError,
+            "text must be str"
+        );
+    }
+
+    encoded = PyUnicode_AsUTF8String($input);
+    if (encoded == NULL) {
+        SWIG_fail;
+    }
+
+    $1 = PyBytes_AS_STRING(encoded);
+}
+
+%typemap(freearg) const char *ctd_utf8_nul_byte_length::text
+{
+    Py_XDECREF(encoded$argnum);
+}
+```
+
+A cleaner version usually uses a named local declared in the typemap argument list:
+
+```swig
+%typemap(in) const char *ctd_utf8_nul_byte_length::text
+    (PyObject *encoded)
+{
+    encoded = PyUnicode_AsUTF8String($input);
+    if (encoded == NULL) {
+        SWIG_fail;
+    }
+
+    $1 = PyBytes_AS_STRING(encoded);
+}
+
+%typemap(freearg) const char *ctd_utf8_nul_byte_length::text
+{
+    Py_DECREF(encoded$argnum);
+}
+```
+
+The exact generated local-name expansion should be verified against the generated wrapper. For production typemap libraries, it is often simpler to combine conversion and lifetime management using `PyUnicode_AsUTF8AndSize()` because the original Python string remains alive throughout the C call.
+
+### 2.7 UTF-8 plus byte count
+
+Map one Python `str` to:
+
+```c
+const char *text, size_t byte_count
+```
+
+```swig
+%typemap(in)
+(
+    const char *utf8_data,
+    size_t utf8_size
+)
+(
+    Py_ssize_t temporary_size
+)
+{
+    const char *temporary_data;
+
+    if (!PyUnicode_Check($input)) {
+        SWIG_exception_fail(
+            SWIG_TypeError,
+            "expected str"
+        );
+    }
+
+    temporary_data = PyUnicode_AsUTF8AndSize(
+        $input,
+        &temporary_size
+    );
+
+    if (temporary_data == NULL) {
+        SWIG_fail;
+    }
+
+    $1 = temporary_data;
+    $2 = (size_t)temporary_size;
+}
+
+%apply (
+    const char *utf8_data,
+    size_t utf8_size
+) {
+    (
+        const char *
+            ctd_utf8_length_delimited_ascii_count::text,
+        size_t
+            ctd_utf8_length_delimited_ascii_count::byte_count
+    )
+};
+```
+
+Python:
+
+```python
+ctd_utf8_length_delimited_ascii_count("abc✓")
+```
+
+The byte count is hidden and calculated after UTF-8 encoding.
+
+### 2.8 Input bytes plus length
+
+```swig
+%typemap(in)
+(
+    const unsigned char *byte_data,
+    size_t byte_size
+)
+(
+    Py_buffer view
+)
+{
+    if (PyObject_GetBuffer(
+            $input,
+            &view,
+            PyBUF_CONTIG_RO
+        ) != 0) {
+        SWIG_exception_fail(
+            SWIG_TypeError,
+            "expected a contiguous bytes-like object"
+        );
+    }
+
+    $1 = (const unsigned char *)view.buf;
+    $2 = (size_t)view.len;
+}
+
+%typemap(freearg)
+(
+    const unsigned char *byte_data,
+    size_t byte_size
+)
+{
+    PyBuffer_Release(&view$argnum);
+}
+
+%apply (
+    const unsigned char *byte_data,
+    size_t byte_size
+) {
+    (
+        const unsigned char *ctd_bytes_checksum::data,
+        size_t ctd_bytes_checksum::size
+    )
+};
+```
+
+Python:
+
+```python
+ctd_bytes_checksum(b"\x00\x11\x22")
+ctd_bytes_checksum(memoryview(data))
+```
+
+### 2.9 Fixed-size output array
+
+The C function:
+
+```c
+void ctd_array_fixed_out(uint8_t *values);
+```
+
+should become:
+
+```python
+ctd_array_fixed_out() == b"\x03\x05\x08"
+```
+
+Use an ignored input and an output conversion:
+
+```swig
+%typemap(in, numinputs=0)
+    uint8_t *ctd_array_fixed_out::values
+    (uint8_t temporary[3])
+{
+    $1 = temporary;
+}
+
+%typemap(argout)
+    uint8_t *ctd_array_fixed_out::values
+{
+    PyObject *value = PyBytes_FromStringAndSize(
+        (const char *)$1,
+        3
+    );
+
+    if (value == NULL) {
+        SWIG_fail;
+    }
+
+    $result = SWIG_Python_AppendOutput($result, value);
+}
+```
+
+`numinputs=0` hides the C output argument from Python, while `argout` appends its converted value to the Python result. This is the standard SWIG output-parameter mechanism. ([Swig][1])
+
+### 2.10 Output buffer whose length is the C return value
+
+For:
+
+```c
+size_t ctd_buffer_i32_return_length(
+    int32_t *values,
+    size_t capacity
+);
+```
+
+decide on a Python interface. A practical one is:
+
+```python
+ctd_buffer_i32_return_length(capacity) -> list[int]
+```
+
+The C return is implementation metadata and should not remain separately visible.
+
+The easiest SWIG implementation is a Python-facing adapter defined in `%inline`:
+
+```swig
+%inline %{
+static PyObject *py_ctd_buffer_i32_return_length(size_t capacity)
+{
+    int32_t *buffer;
+    size_t written;
+    PyObject *result;
+    size_t i;
+
+    if (capacity > PY_SSIZE_T_MAX / sizeof(*buffer)) {
+        PyErr_SetString(PyExc_OverflowError, "capacity is too large");
+        return NULL;
+    }
+
+    buffer = capacity != 0
+        ? (int32_t *)malloc(capacity * sizeof(*buffer))
+        : NULL;
+
+    if (capacity != 0 && buffer == NULL) {
+        return PyErr_NoMemory();
+    }
+
+    written = ctd_buffer_i32_return_length(buffer, capacity);
+
+    if (written > capacity) {
+        free(buffer);
+        PyErr_SetString(
+            PyExc_RuntimeError,
+            "C function returned a length greater than capacity"
+        );
+        return NULL;
+    }
+
+    result = PyList_New((Py_ssize_t)written);
+    if (result == NULL) {
+        free(buffer);
+        return NULL;
+    }
+
+    for (i = 0; i < written; ++i) {
+        PyObject *item = PyLong_FromLong(buffer[i]);
+
+        if (item == NULL) {
+            Py_DECREF(result);
+            free(buffer);
+            return NULL;
+        }
+
+        PyList_SET_ITEM(result, (Py_ssize_t)i, item);
+    }
+
+    free(buffer);
+    return result;
+}
+%}
+```
+
+Rename it to the intended public name and hide the raw function:
+
+```swig
+%ignore ctd_buffer_i32_return_length;
+%rename(ctd_buffer_i32_return_length)
+    py_ctd_buffer_i32_return_length;
+```
+
+Place `%ignore` and `%rename` before the declaration or `%inline` block they affect.
+
+This is not a workaround outside SWIG. `%inline` is a normal SWIG mechanism for adding wrapper-side C functions. The generated extension compiles this code directly.
+
+For a reusable framework, you would encode this as typemaps. For an initial binding, a wrapper-side adapter is much easier to debug.
+
+### 2.11 Status plus output bytes buffer
+
+For:
+
+```c
+int ctd_buffer_bytes_out(
+    unsigned char *buffer,
+    size_t capacity,
+    size_t *written
+);
+```
+
+choose:
+
+```python
+ctd_buffer_bytes_out(capacity) -> bytes
+```
+
+with nonzero status becoming an exception.
+
+```swig
+%ignore ctd_buffer_bytes_out;
+
+%inline %{
+static PyObject *py_ctd_buffer_bytes_out(size_t capacity)
+{
+    unsigned char *buffer;
+    size_t written = 0;
+    int status;
+    PyObject *result;
+
+    buffer = capacity != 0
+        ? (unsigned char *)malloc(capacity)
+        : NULL;
+
+    if (capacity != 0 && buffer == NULL) {
+        return PyErr_NoMemory();
+    }
+
+    status = ctd_buffer_bytes_out(
+        buffer,
+        capacity,
+        &written
+    );
+
+    if (status != 0) {
+        free(buffer);
+        PyErr_Format(
+            PyExc_ValueError,
+            "buffer is too small; required size is %zu",
+            written
+        );
+        return NULL;
+    }
+
+    if (written > capacity) {
+        free(buffer);
+        PyErr_SetString(
+            PyExc_RuntimeError,
+            "C function produced an invalid length"
+        );
+        return NULL;
+    }
+
+    result = PyBytes_FromStringAndSize(
+        (const char *)buffer,
+        (Py_ssize_t)written
+    );
+
+    free(buffer);
+    return result;
+}
+%}
+
+%rename(ctd_buffer_bytes_out) py_ctd_buffer_bytes_out;
+```
+
+### 2.12 Owned arrays returned through `T **`
+
+For:
+
+```c
+size_t ctd_owned_array_return_length(int32_t **values);
+```
+
+the clean public API is:
+
+```python
+ctd_owned_array_return_length() -> list[int]
+```
+
+The wrapper must:
+
+1. call the C function;
+2. receive pointer and length;
+3. copy values to Python;
+4. invoke `ctd_free()` exactly once.
+
+```swig
+%ignore ctd_owned_array_return_length;
+
+%inline %{
+static PyObject *py_ctd_owned_array_return_length(void)
+{
+    int32_t *values = NULL;
+    size_t count;
+    PyObject *result;
+    size_t i;
+
+    count = ctd_owned_array_return_length(&values);
+
+    if (count != 0 && values == NULL) {
+        PyErr_SetString(
+            PyExc_RuntimeError,
+            "C function returned NULL with a nonzero length"
+        );
+        return NULL;
+    }
+
+    result = PyList_New((Py_ssize_t)count);
+    if (result == NULL) {
+        ctd_free(values);
+        return NULL;
+    }
+
+    for (i = 0; i < count; ++i) {
+        PyObject *item = PyLong_FromLong(values[i]);
+
+        if (item == NULL) {
+            Py_DECREF(result);
+            ctd_free(values);
+            return NULL;
+        }
+
+        PyList_SET_ITEM(result, (Py_ssize_t)i, item);
+    }
+
+    ctd_free(values);
+    return result;
+}
+%}
+
+%rename(ctd_owned_array_return_length)
+    py_ctd_owned_array_return_length;
+```
+
+SWIG also has `%newobject`, `newfree`, and `ret` typemaps for returned ownership, but those mechanisms are most natural when the returned pointer itself becomes a wrapped Python object. Here you want an immediate copy followed by a specific C releaser, so an adapter or custom return typemap is clearer. SWIG documents `ret` and `newfree` as cleanup mechanisms for returned resources. ([Swig][1])
+
+### 2.13 Borrowed and owned strings
+
+Borrowed UTF-8:
+
+```swig
+%typemap(out) const char *ctd_utf8_borrowed
+{
+    if ($1 == NULL) {
+        Py_INCREF(Py_None);
+        $result = Py_None;
+    }
+    else {
+        $result = PyUnicode_DecodeUTF8(
+            $1,
+            (Py_ssize_t)strlen($1),
+            "strict"
+        );
+    }
+}
+```
+
+Owned UTF-8:
+
+```swig
+%typemap(out) char *ctd_utf8_owned
+{
+    if ($1 == NULL) {
+        Py_INCREF(Py_None);
+        $result = Py_None;
+    }
+    else {
+        $result = PyUnicode_DecodeUTF8(
+            $1,
+            (Py_ssize_t)strlen($1),
+            "strict"
+        );
+
+        ctd_free($1);
+
+        if ($result == NULL) {
+            SWIG_fail;
+        }
+    }
+}
+```
+
+The important distinction is simply that the second output typemap frees after copying.
+
+### 2.14 Recommended SWIG structure
+
+Do not put everything in one `.i` file.
+
+```text
+swig/
+    ctypes_dummy_api.i
+    ctd_scalar_typemaps.i
+    ctd_array_typemaps.i
+    ctd_buffer_typemaps.i
+    ctd_string_typemaps.i
+    ctd_adapters.i
+```
+
+Main file:
+
+```swig
+%module ctypes_dummy_api
+
+%{
+#include "ctypes_dummy_api.h"
+%}
+
+%include <stdint.i>
+%include <typemaps.i>
+
+%include "ctd_scalar_typemaps.i"
+%include "ctd_array_typemaps.i"
+%include "ctd_buffer_typemaps.i"
+%include "ctd_string_typemaps.i"
+
+%include "ctd_adapters.i"
+%include "ctypes_dummy_api.h"
+```
+
+### 2.15 Generate and build
+
+Generate:
+
+```cmd
+swig.exe -python -py3 ^
+  -Iinclude ^
+  -Iswig ^
+  -outdir build\python ^
+  -o build\ctypes_dummy_api_wrap.c ^
+  swig\ctypes_dummy_api.i
+```
+
+Current SWIG versions may treat `-py3` as obsolete because Python 3 is already assumed; omit it if SWIG warns.
+
+Compile wrapper separately:
+
+```cmd
+cl.exe /nologo /c /MD /O2 ^
+  /I"%PYTHON_INCLUDE%" ^
+  /Iinclude ^
+  /Fobuild\ctypes_dummy_api_wrap.obj ^
+  build\ctypes_dummy_api_wrap.c
+```
+
+Compile implementation:
+
+```cmd
+cl.exe /nologo /c /MD /O2 ^
+  /DPYTEST_C_API ^
+  /Iinclude ^
+  /Fobuild\ctypes_dummy_api.obj ^
+  ctypes_dummy_api.c
+```
+
+Link:
+
+```cmd
+link.exe /nologo /DLL ^
+  /OUT:build\python\_ctypes_dummy_api.pyd ^
+  build\ctypes_dummy_api.obj ^
+  build\ctypes_dummy_api_wrap.obj ^
+  /LIBPATH:"%PYTHON_LIBDIR%" ^
+  python311.lib
+```
+
+Or include the generated wrapper after the implementation in one amalgamation and compile one object.
+
+---
+
+## 3. SIP recipe
+
+SIP specifications describe the Python-visible API. They do not need to reproduce every C function literally, and SIP explicitly supports handwritten `%MethodCode` when the Python signature and C implementation signature differ. ([python-sip.readthedocs.io][2])
+
+For this fixture, that means:
+
+* ordinary values: direct SIP declarations;
+* simple scalar output pointers: `/Out/`;
+* simple arrays: `/Array/` and `/ArraySize/` where applicable;
+* buffers, ownership, `T **`, and status translation: handwritten `%MethodCode`.
+
+### 3.1 Basic module
+
+```sip
+/* ctypes_dummy_api.sip */
+
+%Module(name=ctypes_dummy_api, language="C")
+
+%ModuleHeaderCode
+#include <Python.h>
+#include <stdint.h>
+#include <stddef.h>
+#include <stdlib.h>
+#include <string.h>
+#include "ctypes_dummy_api.h"
+%End
+```
+
+Direct scalar declarations:
+
+```sip
+int32_t ctd_scalar_zero();
+int32_t ctd_scalar_negate(int32_t value);
+double ctd_scalar_add(double left, double right);
+
+int64_t ctd_scalar_affine(
+    int32_t value,
+    int32_t scale,
+    int32_t offset
+);
+```
+
+SIP generates direct wrappers for those.
+
+### 3.2 Simple scalar input pointer
+
+For this function:
+
+```c
+int32_t ctd_scalar_ref_in(const int32_t *value);
+```
+
+you do not need to expose a pointer in Python. Declare the Python signature you want and call the real function in `%MethodCode`:
+
+```sip
+int32_t ctd_scalar_ref_in(int32_t value);
+
+%MethodCode
+    sipRes = ctd_scalar_ref_in(&value);
+%End
+```
+
+The SIP declaration describes:
+
+```python
+ctd_scalar_ref_in(value: int) -> int
+```
+
+The handwritten body adapts it to the actual C function.
+
+This is an important SIP pattern:
+
+> The declaration above `%MethodCode` is the Python-facing signature, not necessarily the exact C signature.
+
+SIP documentation explicitly permits declarations that differ from the underlying implementation and uses `%MethodCode` to bridge them. ([python-sip.readthedocs.io][3])
+
+### 3.3 Simple output pointer
+
+SIP can express an output pointer directly:
+
+```sip
+void ctd_scalar_ref_out(int32_t *result /Out/);
+```
+
+Python:
+
+```python
+result = ctd_scalar_ref_out()
+```
+
+For a primitive output pointer, `/Out/` tells SIP that Python does not supply that argument and that its value is returned. SIP documents `/Out/`, `/Array/`, and `/ArraySize/` in its annotation reference. ([python-sip.readthedocs.io][4])
+
+### 3.4 Scalar in/out
+
+You may try:
+
+```sip
+void ctd_scalar_ref_inout(int32_t *value /In,Out/, int32_t delta);
+```
+
+However, for immutable Python scalars, an explicit Python-facing value signature is clearer:
+
+```sip
+int32_t ctd_scalar_ref_inout(int32_t value, int32_t delta);
+
+%MethodCode
+    ctd_scalar_ref_inout(&value, delta);
+    sipRes = value;
+%End
+```
+
+Python:
+
+```python
+value = ctd_scalar_ref_inout(value, delta)
+```
+
+### 3.5 Nullable scalar pointer
+
+Expose `object` because Python may pass either `None` or `int`:
+
+```sip
+int32_t ctd_scalar_ref_nullable(object value);
+
+%MethodCode
+    int32_t temporary;
+    const int32_t *pointer;
+
+    if (value == Py_None)
+    {
+        pointer = NULL;
+    }
+    else
+    {
+        long converted = PyLong_AsLong(value);
+
+        if (converted == -1 && PyErr_Occurred())
+            sipIsErr = 1;
+        else if (converted < INT32_MIN || converted > INT32_MAX)
+        {
+            PyErr_SetString(
+                PyExc_OverflowError,
+                "value is outside int32_t range"
+            );
+            sipIsErr = 1;
+        }
+        else
+        {
+            temporary = (int32_t)converted;
+            pointer = &temporary;
+        }
+    }
+
+    if (!sipIsErr)
+        sipRes = ctd_scalar_ref_nullable(pointer);
+%End
+```
+
+The generated variable names available inside `%MethodCode` depend on the SIP ABI and declaration. `sipRes` and `sipIsErr` are standard generated result/error variables, but you should inspect the first generated source to verify exact names for your SIP version.
+
+### 3.6 Input arrays
+
+SIP has `/Array/` and `/ArraySize/`, but this facility is primarily a low-level array mapping mechanism. It requires a corresponding size argument. ([python-sip.readthedocs.io][4])
+
+A native-looking declaration would be:
+
+```sip
+int64_t ctd_array_sum_i32(
+    const int32_t *values /Array/,
+    size_t count /ArraySize/
+);
+```
+
+This is the first thing to try.
+
+Whether SIP accepts a Python list directly, a `sip.array`, or another supported representation depends on the exact primitive type and SIP configuration. SIP exposes array conversion facilities through its runtime API, including conversion to `sip.array`. ([python-sip.readthedocs.io][5])
+
+For a predictable test-facing API accepting any Python sequence, use `%MethodCode`:
+
+```sip
+int64_t ctd_array_sum_i32(object values);
+
+%MethodCode
+    PyObject *sequence;
+    int32_t *native_values = NULL;
+    Py_ssize_t count;
+    Py_ssize_t i;
+
+    sequence = PySequence_Fast(
+        values,
+        "values must be a sequence of integers"
+    );
+
+    if (sequence == NULL)
+    {
+        sipIsErr = 1;
+    }
+    else
+    {
+        count = PySequence_Fast_GET_SIZE(sequence);
+
+        if (count != 0)
+        {
+            native_values = (int32_t *)malloc(
+                (size_t)count * sizeof(*native_values)
+            );
+
+            if (native_values == NULL)
+            {
+                Py_DECREF(sequence);
+                PyErr_NoMemory();
+                sipIsErr = 1;
+            }
+        }
+    }
+
+    if (!sipIsErr)
+    {
+        for (i = 0; i < count; ++i)
+        {
+            long converted = PyLong_AsLong(
+                PySequence_Fast_GET_ITEM(sequence, i)
+            );
+
+            if (converted == -1 && PyErr_Occurred())
+            {
+                sipIsErr = 1;
+                break;
+            }
+
+            if (converted < INT32_MIN || converted > INT32_MAX)
+            {
+                PyErr_SetString(
+                    PyExc_OverflowError,
+                    "array item is outside int32_t range"
+                );
+                sipIsErr = 1;
+                break;
+            }
+
+            native_values[i] = (int32_t)converted;
+        }
+    }
+
+    if (!sipIsErr)
+    {
+        sipRes = ctd_array_sum_i32(
+            native_values,
+            (size_t)count
+        );
+    }
+
+    free(native_values);
+    Py_XDECREF(sequence);
+%End
+```
+
+This is verbose, but it is direct and predictable.
+
+### 3.7 Output fixed array
+
+Expose the Python result as `bytes`:
+
+```sip
+bytes ctd_array_fixed_out();
+
+%MethodCode
+    uint8_t values[3];
+
+    ctd_array_fixed_out(values);
+
+    sipRes = PyBytes_FromStringAndSize(
+        (const char *)values,
+        3
+    );
+
+    if (sipRes == NULL)
+        sipIsErr = 1;
+%End
+```
+
+Here the SIP return type may need to be `object` rather than `bytes`, depending on the supported specification syntax of the selected SIP version:
+
+```sip
+object ctd_array_fixed_out();
+```
+
+The `%MethodCode` still returns a `PyObject *`.
+
+### 3.8 Buffer with return length
+
+```sip
+object ctd_buffer_i32_return_length(size_t capacity);
+
+%MethodCode
+    int32_t *values = NULL;
+    size_t written;
+    size_t i;
+
+    if (capacity != 0)
+    {
+        values = (int32_t *)malloc(
+            capacity * sizeof(*values)
+        );
+
+        if (values == NULL)
+        {
+            PyErr_NoMemory();
+            sipIsErr = 1;
+        }
+    }
+
+    if (!sipIsErr)
+    {
+        written = ctd_buffer_i32_return_length(
+            values,
+            capacity
+        );
+
+        if (written > capacity)
+        {
+            PyErr_SetString(
+                PyExc_RuntimeError,
+                "C function returned an invalid length"
+            );
+            sipIsErr = 1;
+        }
+    }
+
+    if (!sipIsErr)
+    {
+        sipRes = PyList_New((Py_ssize_t)written);
+
+        if (sipRes == NULL)
+        {
+            sipIsErr = 1;
+        }
+        else
+        {
+            for (i = 0; i < written; ++i)
+            {
+                PyObject *item = PyLong_FromLong(values[i]);
+
+                if (item == NULL)
+                {
+                    Py_CLEAR(sipRes);
+                    sipIsErr = 1;
+                    break;
+                }
+
+                PyList_SET_ITEM(
+                    sipRes,
+                    (Py_ssize_t)i,
+                    item
+                );
+            }
+        }
+    }
+
+    free(values);
+%End
+```
+
+### 3.9 Status plus output bytes
+
+```sip
+object ctd_buffer_bytes_out(size_t capacity);
+
+%MethodCode
+    unsigned char *buffer = NULL;
+    size_t written = 0;
+    int status;
+
+    if (capacity != 0)
+    {
+        buffer = (unsigned char *)malloc(capacity);
+
+        if (buffer == NULL)
+        {
+            PyErr_NoMemory();
+            sipIsErr = 1;
+        }
+    }
+
+    if (!sipIsErr)
+    {
+        status = ctd_buffer_bytes_out(
+            buffer,
+            capacity,
+            &written
+        );
+
+        if (status != 0)
+        {
+            PyErr_Format(
+                PyExc_ValueError,
+                "buffer is too small; required size is %zu",
+                written
+            );
+            sipIsErr = 1;
+        }
+        else if (written > capacity)
+        {
+            PyErr_SetString(
+                PyExc_RuntimeError,
+                "C function returned an invalid length"
+            );
+            sipIsErr = 1;
+        }
+    }
+
+    if (!sipIsErr)
+    {
+        sipRes = PyBytes_FromStringAndSize(
+            (const char *)buffer,
+            (Py_ssize_t)written
+        );
+
+        if (sipRes == NULL)
+            sipIsErr = 1;
+    }
+
+    free(buffer);
+%End
+```
+
+### 3.10 Owned arrays
+
+```sip
+object ctd_owned_array_return_length();
+
+%MethodCode
+    int32_t *values = NULL;
+    size_t count;
+    size_t i;
+
+    count = ctd_owned_array_return_length(&values);
+
+    if (count != 0 && values == NULL)
+    {
+        PyErr_SetString(
+            PyExc_RuntimeError,
+            "C function returned NULL with nonzero length"
+        );
+        sipIsErr = 1;
+    }
+
+    if (!sipIsErr)
+    {
+        sipRes = PyList_New((Py_ssize_t)count);
+
+        if (sipRes == NULL)
+        {
+            sipIsErr = 1;
+        }
+        else
+        {
+            for (i = 0; i < count; ++i)
+            {
+                PyObject *item = PyLong_FromLong(values[i]);
+
+                if (item == NULL)
+                {
+                    Py_CLEAR(sipRes);
+                    sipIsErr = 1;
+                    break;
+                }
+
+                PyList_SET_ITEM(
+                    sipRes,
+                    (Py_ssize_t)i,
+                    item
+                );
+            }
+        }
+    }
+
+    ctd_free(values);
+%End
+```
+
+This is exactly the same native algorithm as the SWIG `%inline` adapter. The distinction is where the code lives:
+
+* SWIG: `%inline` creates a wrapper-side C function and SWIG wraps it.
+* SIP: `%MethodCode` becomes the body of the generated Python callable.
+
+### 3.11 UTF-8 input
+
+```sip
+size_t ctd_utf8_nul_byte_length(str text);
+
+%MethodCode
+    Py_ssize_t byte_count;
+    const char *utf8 = PyUnicode_AsUTF8AndSize(
+        text,
+        &byte_count
+    );
+
+    if (utf8 == NULL)
+        sipIsErr = 1;
+    else
+        sipRes = ctd_utf8_nul_byte_length(utf8);
+%End
+```
+
+Again, the SIP declaration may use `object` instead of `str` depending on accepted built-in type spelling:
+
+```sip
+size_t ctd_utf8_nul_byte_length(object text);
+```
+
+Then explicitly validate with `PyUnicode_Check()`.
+
+### 3.12 Borrowed UTF-8 result
+
+```sip
+object ctd_utf8_borrowed();
+
+%MethodCode
+    const char *result = ctd_utf8_borrowed();
+
+    if (result == NULL)
+    {
+        PyErr_SetString(
+            PyExc_RuntimeError,
+            "unexpected NULL result"
+        );
+        sipIsErr = 1;
+    }
+    else
+    {
+        sipRes = PyUnicode_DecodeUTF8(
+            result,
+            (Py_ssize_t)strlen(result),
+            "strict"
+        );
+
+        if (sipRes == NULL)
+            sipIsErr = 1;
+    }
+%End
+```
+
+### 3.13 Owned UTF-8 result
+
+```sip
+object ctd_utf8_owned();
+
+%MethodCode
+    char *result = ctd_utf8_owned();
+
+    if (result == NULL)
+    {
+        Py_INCREF(Py_None);
+        sipRes = Py_None;
+    }
+    else
+    {
+        sipRes = PyUnicode_DecodeUTF8(
+            result,
+            (Py_ssize_t)strlen(result),
+            "strict"
+        );
+
+        ctd_free(result);
+
+        if (sipRes == NULL)
+            sipIsErr = 1;
+    }
+%End
+```
+
+### 3.14 SIP mapped types are not the primary answer here
+
+A SIP `%MappedType` is useful when a reusable semantic C type exists, for example:
+
+```c
+typedef struct {
+    int32_t *data;
+    size_t count;
+} ctd_i32_array;
+```
+
+You could map `ctd_i32_array` to a Python list once.
+
+Your API does not use such types. It repeatedly uses unrelated tuples of ordinary parameters:
+
+```c
+T *, size_t
+T **, size_t *
+char *, capacity, written
+```
+
+SIP mapped types do not naturally match arbitrary groups of adjacent parameters in the same way SWIG multi-argument typemaps do. SIP’s fallback for a Python signature that differs from the C signature is handwritten `%MethodCode`. That is an explicitly supported design, not an abuse. ([python-sip.readthedocs.io][2])
+
+### 3.15 Generate SIP sources
+
+The standard SIP 6 workflow uses `pyproject.toml`, but SIP can generate source into a build directory for your own compilation. A minimal project configuration is approximately:
+
+```toml
+[build-system]
+requires = ["sip >=6, <7"]
+build-backend = "sipbuild.api"
+
+[project]
+name = "ctypes-dummy-api"
+version = "0.1.0"
+
+[tool.sip.project]
+build-dir = "build/sip"
+compile = false
+
+[tool.sip.bindings.ctypes_dummy_api]
+sip-file = "sip/ctypes_dummy_api.sip"
+```
+
+Then:
+
+```cmd
+sip-build
+```
+
+With `compile = false`, generated sources remain available for your nmake pipeline rather than being compiled by SIP’s normal build step. SIP’s project configuration supports specifying additional sources and build metadata, but you do not need to let it own the final build. ([python-sip.readthedocs.io][6])
+
+You then inspect:
+
+```text
+build\sip\
+```
+
+and compile the generated C or C++ files with your own `cl` and `link` commands.
+
+SIP-generated code also uses the SIP runtime API and `sip.h`; this is a real additional integration dependency. Its handwritten-code API is exported through the SIP runtime. ([python-sip.readthedocs.io][7])
+
+---
+
+## 4. The concrete difference
+
+For this function:
+
+```c
+int64_t ctd_array_sum_i32(
+    const int32_t *values,
+    size_t count
+);
+```
+
+### SWIG
+
+You define one reusable multi-argument typemap:
+
+```swig
+%typemap(in) (
+    const int32_t *array_data,
+    size_t array_count
+) {
+    /* sequence → allocated C array and count */
+}
+```
+
+Then apply it:
+
+```swig
+%apply (
+    const int32_t *array_data,
+    size_t array_count
+) {
+    (
+        const int32_t *ctd_array_sum_i32::values,
+        size_t ctd_array_sum_i32::count
+    )
+};
+```
+
+The actual C declaration remains visible to SWIG.
+
+### SIP
+
+You describe a different Python signature:
+
+```sip
+int64_t ctd_array_sum_i32(object values);
+```
+
+and implement its body:
+
+```sip
+%MethodCode
+    /* sequence → C array */
+    sipRes = ctd_array_sum_i32(array, count);
+    /* cleanup */
+%End
+```
+
+That pattern repeats for every function unless you change the C API to use named mapped types.
+
+---
+
+## 5. Which parts are concise in each framework?
+
+| C pattern                          | SWIG                               | SIP                                |
+| ---------------------------------- | ---------------------------------- | ---------------------------------- |
+| Scalar value                       | Direct declaration                 | Direct declaration                 |
+| Scalar `T *` input                 | `INPUT` typemap                    | Short `%MethodCode`                |
+| Scalar `T *` output                | `OUTPUT` typemap                   | `/Out/`                            |
+| Scalar `T *` in/out                | `INOUT` typemap                    | `/In,Out/` or `%MethodCode`        |
+| Nullable scalar pointer            | Custom input typemap               | `%MethodCode`                      |
+| Input array plus count             | Multi-argument typemap             | `/Array/` attempt or `%MethodCode` |
+| Buffer plus capacity               | Multi-argument typemap             | `%MethodCode`                      |
+| Output buffer plus produced length | `in` + `argout` typemaps           | `%MethodCode`                      |
+| Length in C return                 | Return-aware typemap or adapter    | `%MethodCode`                      |
+| `T **` plus output count           | Multi-argument typemaps or adapter | `%MethodCode`                      |
+| Borrowed UTF-8 result              | Output typemap                     | `%MethodCode`                      |
+| Owned UTF-8 result                 | Output/cleanup typemap             | `%MethodCode`                      |
+| Owned array plus releaser          | Return/cleanup typemaps or adapter | `%MethodCode`                      |
+| Reusable arbitrary parameter tuple | Strong support                     | No direct equivalent               |
+
+## 6. Practical recommendation
+
+For your fixture, proceed with SWIG as follows:
+
+1. Put plain declarations in `ctypes_dummy_api.h`.
+2. Create one `.i` file that includes the header.
+3. Use built-in `INPUT`, `OUTPUT`, and `INOUT` rules for scalar pointers.
+4. Create reusable multi-argument typemaps for:
+    * input native array plus count;
+    * input bytes plus count;
+    * UTF-8 plus byte count;
+    * caller-allocated output buffer plus capacity;
+    * buffer plus capacity plus output length;
+    * pointer-to-pointer plus output length.
+5. Use function-qualified `%apply` declarations to attach those policies.
+6. Use small `%inline` adapters initially for the difficult ownership and return-length cases.
+7. Once behavior is correct, convert repeated adapters into generic typemaps where worthwhile.
+8. Generate C only; compile it in your existing nmake pipeline.
+
+For SIP:
+
+1. Put the desired Python signature directly in `.sip`.
+2. Use direct declarations for scalar values.
+3. Use `/Out/` for simple scalar outputs.
+4. Use `%MethodCode` for every signature where pointer, extent, ownership, status, or encoding semantics span multiple C parameters.
+5. Generate source with SIP.
+6. Compile generated files and SIP runtime dependencies in your nmake pipeline.
+
+For this API, **SWIG lets you build a reusable marshalling vocabulary. SIP mostly lets you write generated-extension methods in embedded C.** Both are workable, but only SWIG provides a natural reusable mechanism for the parameter-group patterns dominating your fixture.
+
+[1]: https://www.swig.org/Doc4.3/SWIGDocumentation.html "SWIG-4.3 Documentation"
+[2]: https://python-sip.readthedocs.io/en/latest/directives.html "Directives — sip documentation"
+[3]: https://python-sip.readthedocs.io/en/stable/specification_files.html "Specification Files — sip documentation"
+[4]: https://python-sip.readthedocs.io/en/latest/annotations.html "Annotations — sip documentation"
+[5]: https://python-sip.readthedocs.io/en/latest/abi_12.html "ABI v12 for Handwritten Code — sip documentation"
+[6]: https://python-sip.readthedocs.io/en/stable/pyproject_toml.html "pyproject.toml Reference — sip documentation"
+[7]: https://python-sip.readthedocs.io/en/latest/c_api.html "C API for Handwritten Code — sip documentation"
+
+---
+---
+
+## 📗 Annotation Based LLNL Shroud
+
+> [!NOTE] Prompt
+> 
+> Are there any system that can consume annotation similar to what I included and generate bloody wrappers!?
+
+**Yes: LLNL Shroud is the closest existing system to exactly what you described.**
+
+It accepts C/C++ declarations in YAML with semantic annotations such as:
+
+```text
++intent(in)
++intent(out)
++intent(inout)
++dimension(...)
++implied(...)
++hidden
++deref(scalar)
++deref(copy)
++owner(caller)
++owner(library)
++destructor_name(...)
+```
+
+and generates native CPython wrappers. Its documented purpose is to take declarations plus semantic information and produce readable Python wrapper code, without requiring a runtime support library. ([shroud.readthedocs.io][1])
+
+It does **not** parse your comments. You would manually reproduce each declaration once in a Shroud YAML file and add concise annotations there. That is the normal intended workflow, not custom machinery.
+
+### What this looks like
+
+A minimal file would start approximately as follows:
+
+```yaml
+library: ctypes_dummy_api
+language: c
+
+options:
+  wrap_python: true
+  wrap_fortran: false
+
+cxx_header: ctypes_dummy_api.h
+
+declarations:
+- decl: int32_t ctd_scalar_zero(void)
+
+- decl: int32_t ctd_scalar_negate(int32_t value)
+
+- decl: double ctd_scalar_add(double left, double right)
+
+- decl: int64_t ctd_scalar_affine(
+          int32_t value,
+          int32_t scale,
+          int32_t offset)
+```
+
+For ordinary scalars, that is essentially all the specification required.
+
+Shroud generates CPython C/C++ wrapper sources that you compile in your own build system. Its generated code is intended to resemble handwritten wrappers. ([shroud.readthedocs.io][2])
+
+### Scalar pointers
+
+#### Input scalar pointer
+
+Your C declaration:
+
+```c
+int32_t ctd_scalar_ref_in(const int32_t *value);
+```
+
+Shroud declaration:
+
+```yaml
+- decl: int32_t ctd_scalar_ref_in(
+          const int32_t *value +deref(scalar))
+```
+
+`deref(scalar)` says that the pointer represents one scalar, rather than an array or opaque address. For Python, this avoids creating a NumPy object for the pointer. ([shroud.readthedocs.io][3])
+
+Desired call:
+
+```python
+ctd_scalar_ref_in(10)
+```
+
+#### Output scalar pointer
+
+```yaml
+- decl: void ctd_scalar_ref_out(
+          int32_t *result +intent(out)+deref(scalar))
+```
+
+An `intent(out)` parameter is omitted from the Python argument list and returned as a Python result. ([shroud.readthedocs.io][3])
+
+Desired call:
+
+```python
+result = ctd_scalar_ref_out()
+```
+
+#### In/out scalar pointer
+
+```yaml
+- decl: void ctd_scalar_ref_inout(
+          int32_t *value +intent(inout)+deref(scalar),
+          int32_t delta)
+```
+
+Desired call:
+
+```python
+value = ctd_scalar_ref_inout(value, delta)
+```
+
+This is already much closer to your annotation vocabulary than SWIG typemap code.
+
+### Input array plus inferred count
+
+Your function:
+
+```c
+int64_t ctd_array_sum_i32(
+    const int32_t *values,
+    size_t count
+);
+```
+
+Shroud’s documented pattern uses an array annotation on the pointer and an implied expression on the count:
+
+```yaml
+- decl: int64_t ctd_array_sum_i32(
+          const int32_t *values +rank(1),
+          size_t count +implied(size(values)))
+```
+
+This hides `count` from Python and calculates it from the Python array or sequence. Shroud’s tutorial shows this exact general pattern: an array argument with `+rank(1)` and a length argument with `+implied(size(values))`. In Python, the caller supplies only the sequence. ([shroud.readthedocs.io][2])
+
+Desired call:
+
+```python
+total = ctd_array_sum_i32([1, 2, 3])
+```
+
+Depending on the selected Python array policy, Shroud may expose NumPy arrays rather than ordinary lists for some pointer patterns. Its documentation states that pointer arrays can be represented using NumPy and that output pointers with dimensions may become lists or NumPy arrays. ([shroud.readthedocs.io][3])
+
+### In/out array plus count
+
+```c
+void ctd_array_shift_i32(
+    int32_t *values,
+    size_t count,
+    int32_t delta
+);
+```
+
+The corresponding declaration is approximately:
+
+```yaml
+- decl: void ctd_array_shift_i32(
+          int32_t *values +intent(inout)+rank(1),
+          size_t count +implied(size(values)),
+          int32_t delta)
+```
+
+This tells Shroud:
+
+* `values` is an array;
+* its existing contents are input;
+* modified contents are output;
+* `count` comes from the Python argument’s size.
+
+The wrapper can then expose something conceptually like:
+
+```python
+shifted = ctd_array_shift_i32(values, delta)
+```
+
+You would need to test whether the generated Python interface mutates a writable NumPy array, returns the transformed array, or both under the selected options. Shroud’s `intent(out)` behavior is clearly documented; exact `inout` presentation varies with the pointer and array statement selected. ([shroud.readthedocs.io][3])
+
+### Fixed output array
+
+```c
+void ctd_array_fixed_out(uint8_t *values);
+```
+
+Shroud:
+
+```yaml
+- decl: void ctd_array_fixed_out(
+          uint8_t *values +intent(out)+dimension(3))
+```
+
+Shroud documents output-pointer arrays in this form:
+
+```text
+void ReturnPtrArg(double **arg +intent(out)+dimension(10))
+```
+
+and says Python creates a list or NumPy array. ([shroud.readthedocs.io][3])
+
+Desired result:
+
+```python
+values = ctd_array_fixed_out()
+```
+
+The default representation will probably be a numeric array, not `bytes`. If you specifically require `bytes`, that may require choosing or defining a different Python statement for `uint8_t *`.
+
+### Returned pointer plus output length
+
+Your borrowed bytes function:
+
+```c
+const unsigned char *ctd_bytes_borrowed(size_t *size);
+```
+
+The Shroud style is:
+
+```yaml
+- decl: const unsigned char *ctd_bytes_borrowed(
+          size_t *size +intent(out)+hidden)
+        +dimension(size)
+        +owner(library)
+```
+
+The important pieces are:
+
+* `size +intent(out)+hidden`: obtain the extent but do not expose it as a separate Python argument or result;
+* `+dimension(size)`: returned pointer has `size` elements;
+* `+owner(library)`: memory remains owned by the library.
+
+Shroud explicitly documents a return pointer whose dimension is supplied by an output argument:
+
+```text
+int *get_array(int **count +intent(out)+hidden) +dimension(count)
+```
+
+The hidden count defines the result shape without becoming part of the wrapped API. ([shroud.readthedocs.io][3])
+
+For borrowed storage, Shroud’s default ownership is library-owned. Python may copy the contents before returning, depending on the selected dereference policy. ([shroud.readthedocs.io][3])
+
+### Owned pointer plus output length
+
+```c
+unsigned char *ctd_bytes_owned(size_t *size);
+```
+
+A likely Shroud declaration is:
+
+```yaml
+- decl: unsigned char *ctd_bytes_owned(
+          size_t *size +intent(out)+hidden)
+        +dimension(size)
+        +owner(caller)
+        +destructor_name(ctd_free_memory)
+```
+
+and:
+
+```yaml
+destructors:
+  ctd_free_memory: |
+    ctd_free(ptr);
+```
+
+Shroud supports explicit ownership and named destructors. Its documentation states that `owner(caller)` represents memory transferred to the caller, while `owner(library)` represents borrowed library memory. A `destructor_name` can select custom cleanup code; without one, Shroud may use `free` for POD pointers. ([shroud.readthedocs.io][3])
+
+This is directly analogous to:
+
+```text
+storage=OWNED(ctd_free)
+```
+
+in your vocabulary.
+
+### Output pointer-to-pointer arrays
+
+Your function:
+
+```c
+int ctd_owned_array_out_length(
+    int32_t **values,
+    size_t *count
+);
+```
+
+The natural Shroud specification is approximately:
+
+```yaml
+- decl: int ctd_owned_array_out_length(
+          int32_t **values
+              +intent(out)
+              +dimension(count)
+              +owner(caller)
+              +destructor_name(ctd_free_memory),
+          size_t *count +intent(out)+hidden)
+```
+
+This pattern is within Shroud’s intended model:
+
+* pointer-to-pointer output;
+* dimension derived from an output parameter;
+* hidden metadata;
+* caller ownership;
+* generated Python array result.
+
+Shroud documents both `T **` output pointers with dimensions and output dimensions supplied through hidden parameters. ([shroud.readthedocs.io][3])
+
+The unresolved point is your C status return. By default Shroud is likely to preserve it, producing something like:
+
+```python
+status, values = ctd_owned_array_out_length()
+```
+
+rather than automatically converting nonzero status into an exception. Status-to-exception mapping may require a reusable Shroud statement or error pattern.
+
+### Length returned as the C function result
+
+This function is less naturally expressed:
+
+```c
+size_t ctd_owned_array_return_length(int32_t **values);
+```
+
+because the return value is simultaneously metadata for the output pointer.
+
+Conceptually you want:
+
+```yaml
+- decl: size_t ctd_owned_array_return_length(
+          int32_t **values
+              +intent(out)
+              +dimension(function-result)
+              +owner(caller))
+```
+
+But I have not found documentation confirming a built-in syntax for using the C return value directly as another argument’s Python dimension. Shroud clearly supports dimensions based on input and output arguments, but `length=RETURN` is one of the cases that needs an actual prototype test rather than assumption. ([shroud.readthedocs.io][3])
+
+This may require:
+
+* a Shroud statement override;
+* a small generated C adapter;
+* or changing the wrapped declaration presented to Shroud.
+
+So Shroud likely covers much of your matrix, but I would not claim it covers every case without extension.
+
+### Strings
+
+#### NUL-terminated input UTF-8
+
+```c
+size_t ctd_utf8_nul_byte_length(const char *text);
+```
+
+Likely declaration:
+
+```yaml
+- decl: size_t ctd_utf8_nul_byte_length(const char *text)
+```
+
+Shroud has built-in handling for character pointers and strings. Its string machinery handles NUL-terminated C strings and can add explicit lengths where required by the target wrapper. ([shroud.readthedocs.io][4])
+
+The important thing to verify is whether the Python wrapper accepts:
+
+* Python `str` and encodes it;
+* Python `bytes`;
+* or both.
+
+Your distinction between `UTF8` and `BYTES` may require separate typemap or statement selections.
+
+#### Length-delimited UTF-8
+
+```c
+size_t ctd_utf8_length_delimited_ascii_count(
+    const char *text,
+    size_t byte_count
+);
+```
+
+A plausible declaration is:
+
+```yaml
+- decl: size_t ctd_utf8_length_delimited_ascii_count(
+          const char *text,
+          size_t byte_count +implied(size(text)))
+```
+
+However, the size must be **UTF-8 byte length**, not Python character count. That distinction must be verified in Shroud’s generated Python string conversion. Do not assume `size(text)` necessarily means encoded byte length.
+
+#### NUL-terminated output buffer
+
+For a fixed or caller-sized string buffer, Shroud supports `+intent(out)` and `+charlen(...)`. Its documentation demonstrates:
+
+```text
+void returnOneName(char *name1 +intent(out)+charlen(MAXNAME))
+```
+
+and generates storage and copy logic around that declaration. ([shroud.readthedocs.io][5])
+
+Your in/out string buffer could therefore begin as:
+
+```yaml
+- decl: int ctd_utf8_buffer_inout(
+          char *text +intent(inout)+charlen(capacity),
+          size_t capacity,
+          size_t *byte_count +intent(out))
+```
+
+Whether Shroud can derive `capacity` from the Python object and hide it cleanly for an `inout` UTF-8 string is another case to prototype.
+
+### Bytes versus numeric `uint8_t` arrays
+
+This is likely the largest mismatch.
+
+Shroud naturally sees:
+
+```c
+unsigned char *
+```
+
+as a pointer to numeric elements. Your policy distinguishes:
+
+```text
+ARRAY representation=NATIVE
+ARRAY representation=BYTES
+STRING representation=BYTES
+STRING representation=UTF8
+```
+
+Those are not merely C-type distinctions.
+
+Shroud has a configurable statement system controlling conversions based on language, type, intent, and attributes. It includes built-in statements for common patterns and permits additional statement groups where defaults are insufficient. ([shroud.readthedocs.io][3])
+
+Therefore, the likely implementation is:
+
+* use built-in Shroud rules for numeric arrays;
+* select or define a bytes-oriented Python statement for `unsigned char *`;
+* select a Unicode-oriented statement for UTF-8 `char *`.
+
+That is still far less work than handwritten per-function SWIG typemaps, but it may not be zero customization.
+
+### What Shroud appears to cover directly
+
+Your model maps roughly as follows:
+
+| Your annotation               | Shroud                                        |
+| ----------------------------- | --------------------------------------------- |
+| `IN`                          | `+intent(in)` or inferred from `const`        |
+| `OUT`                         | `+intent(out)`                                |
+| `INOUT`                       | `+intent(inout)`                              |
+| scalar pointer                | `+deref(scalar)`                              |
+| array                         | `+rank(1)` or `+dimension(...)`               |
+| length from parameter         | `+dimension(name)`                            |
+| hidden length input           | `+implied(size(array))`                       |
+| hidden output length          | `+intent(out)+hidden`                         |
+| fixed length                  | `+dimension(3)`                               |
+| borrowed memory               | `+owner(library)`                             |
+| owned memory                  | `+owner(caller)`                              |
+| custom releaser               | `+destructor_name(...)`                       |
+| output not passed from Python | `+intent(out)`                                |
+| raw opaque pointer            | `+deref(raw)`                                 |
+| copy returned pointer         | `+deref(copy)` or generated conversion policy |
+| NUL character buffer          | `+charlen(...)` and character rules           |
+
+### What still needs verification
+
+I would specifically test these five difficult policies:
+
+1. **Array length taken from the C return value.**
+2. **Caller buffer with capacity and produced length.**
+3. **Status return automatically converted to an exception.**
+4. **Strict `bytes` versus `str` selection.**
+5. **Owned memory copied to Python and immediately released with `ctd_free`.**
+
+Shroud has extension mechanisms called statements, patterns, destructors, and generated-code overrides, but needing those for a few policy families is different from writing custom marshalling for every function. ([shroud.readthedocs.io][3])
+
+### Other candidates
+
+#### PyBindGen
+
+PyBindGen can generate Python bindings for C/C++, produces readable C/C++ code, and historically provided header parsing with inline or external annotations. However, its published documentation is old and its parsing path was based on GCC-XML/pygccxml. It is not the first system I would select for a new MSVC-centered project. ([Python Hosted][6])
+
+#### AutoWIG
+
+AutoWIG automates C++ bindings using Clang and Boost.Python, but it deliberately avoids wrapping ambiguous raw C pointer-array APIs unless they are represented with clearer C++ types such as `std::vector`. That makes it a poor match for your plain-C pointer policy. ([PubMed Central (PMC)][7])
+
+#### cppyy
+
+cppyy provides automatic runtime C++ bindings through Cling reflection. It solves declaration exposure, but raw-pointer direction, extents, ownership, bytes, and buffer semantics remain inherently ambiguous. It is also a C++ runtime/reflection architecture rather than a small generated test `.pyd`. ([arXiv][8])
+
+### Conclusion
+
+**Shroud is the system you were looking for conceptually.**
+
+Its input model is essentially:
+
+```yaml
+- decl: C declaration with +semantic(attributes)
+```
+
+rather than:
+
+```swig
+%typemap(in) ...
+%typemap(argout) ...
+%typemap(freearg) ...
+```
+
+For example:
+
+```yaml
+- decl: void Sum(
+          size_t count +implied(size(values)),
+          const int32_t *values +rank(1),
+          int64_t *result +intent(out)+deref(scalar))
+```
+
+is the kind of compact declaration Shroud is specifically designed to consume and turn into:
+
+```python
+result = Sum(values)
+```
+
+Its weakness is that it is a smaller and less broadly used project than SWIG, and your exact `BYTES`/`UTF8`, status, capacity, and return-as-length conventions may require several custom statement families. But it is the only established Python wrapper generator I found whose core input language already resembles your semantic annotation model rather than forcing you to encode everything in low-level typemap code.
+
+[1]: https://shroud.readthedocs.io/en/latest/introduction.html "Introduction — shroud 0.13.0 documentation"
+[2]: https://shroud.readthedocs.io/en/latest/tutorial.html "Tutorial — shroud 0.13.0 documentation"
+[3]: https://shroud.readthedocs.io/en/latest/input.html "Input — shroud 0.14.0 documentation"
+[4]: https://shroud.readthedocs.io/en/latest/types.html "Types — shroud 0.14.0 documentation"
+[5]: https://shroud.readthedocs.io/en/latest/appendix-A.html "Sample Fortran Wrappers — shroud 0.14.0 documentation"
+[6]: https://pythonhosted.org/PyBindGen/tutorial.html "PyBindGen Tutorial — PyBindGen 0.15.0 documentation"
+[7]: https://pmc.ncbi.nlm.nih.gov/articles/PMC12502903/ "AutoWIG: automatic generation of python bindings for C++ libraries - PMC"
+[8]: https://arxiv.org/abs/2304.02712 "Efficient and Accurate Automatic Python Bindings with cppyy & Cling"
