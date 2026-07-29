@@ -10148,3 +10148,206 @@ declarations:
 ```
 
 So yes: **adjust the C test-facing API to use semantically convenient, binding-friendly signatures rather than generating pointless wrapper functions around private helpers.**
+
+---
+---
+
+## 📗 Shroud Building
+
+> [!NOTE] Prompt
+> 
+> Where do I define the target dll (sqlite3.dll with alphabet in)?
+
+You do **not** define `sqlite3.dll` anywhere in the Shroud YAML.
+
+Shroud generated this:
+
+```c
+int SHCXX_rv = ab_utf8_byte_count(zText);
+```
+
+That is an ordinary unresolved C function reference. The generated wrapper source does not load a DLL and does not know which binary contains the function. **Your linker resolves it.**
+
+#### Build against `sqlite3.dll`
+
+Your custom `sqlite3.dll` must export:
+
+```text
+ab_utf8_byte_count
+ab_utf8_length
+ab_utf8_byte_offset
+ab_alphabet_select
+```
+
+Because you compile the amalgamation with:
+
+```cmd
+/DPYTEST_C_API
+```
+
+your macro expands to:
+
+```c
+__declspec(dllexport)
+```
+
+Then linking `sqlite3.dll` also produces an import library, typically:
+
+```text
+sqlite3.lib
+```
+
+Compile the generated Shroud source:
+
+```cmd
+cl /nologo /c /MD ^
+  /I"%PYTHON_INCLUDE%" ^
+  /I"path\to\alphabet" ^
+  /Fo"pyalphabet_testmodule.obj" ^
+  pyalphabet_testmodule.c
+```
+
+Link the `.pyd` against both Python and your SQLite import library:
+
+```cmd
+link /nologo /DLL ^
+  /OUT:alphabet_test.pyd ^
+  pyalphabet_testmodule.obj ^
+  sqlite3.lib ^
+  /LIBPATH:"%PYTHON_LIBDIR%" ^
+  python311.lib
+```
+
+That link establishes:
+
+```text
+alphabet_test.pyd
+    imports ab_* symbols from
+sqlite3.dll
+```
+
+The target DLL name is encoded indirectly through `sqlite3.lib`. The import library contains the information telling the Windows loader which DLL supplies those symbols.
+
+#### Runtime layout
+
+At runtime, Windows must find:
+
+```text
+alphabet_test.pyd
+sqlite3.dll
+```
+
+The important relationship is:
+
+```text
+Python imports alphabet_test.pyd
+    ↓
+Windows reads its import table
+    ↓
+Windows loads sqlite3.dll
+    ↓
+ab_utf8_length and the other symbols resolve
+```
+
+Shroud has no role in that stage.
+
+#### Verify the import library
+
+Check that your custom functions are exported:
+
+```cmd
+dumpbin /exports sqlite3.dll | findstr ab_
+```
+
+Expected output should include:
+
+```text
+ab_alphabet_select
+ab_utf8_byte_count
+ab_utf8_byte_offset
+ab_utf8_length
+```
+
+Check that the wrapper imports `sqlite3.dll`:
+
+```cmd
+dumpbin /dependents alphabet_test.pyd
+```
+
+Expected dependencies include:
+
+```text
+python311.dll
+sqlite3.dll
+```
+
+You can also inspect imported symbols:
+
+```cmd
+dumpbin /imports alphabet_test.pyd | findstr /C:"sqlite3.dll" /C:"ab_"
+```
+
+#### If your normal `sqlite3.lib` lacks the test functions
+
+SQLite’s standard Windows build often controls exports through a `.def` file. If the import library was generated only from the standard SQLite export list, it may not include your `ab_*` symbols even though you used `__declspec(dllexport)`.
+
+You have two robust options.
+
+##### Option 1: Add the helpers to the test export definition
+
+For the test build, add:
+
+```def
+EXPORTS
+    ab_utf8_byte_count
+    ab_utf8_length
+    ab_utf8_byte_offset
+    ab_alphabet_select
+```
+
+alongside the standard SQLite exports.
+
+Then the generated `sqlite3.lib` contains those imports.
+
+##### Option 2: Let `__declspec(dllexport)` create the exports
+
+Link the test DLL without a restrictive export definition, or ensure the existing `.def` does not suppress the directive-generated exports.
+
+Afterward, verify with `dumpbin /exports`.
+
+#### Your specific architecture
+
+```text
+Custom amalgamation:
+    sqlite3.c
+      includes alphabet.c
+        ↓
+    sqlite3.obj
+        ↓
+    sqlite3.dll + sqlite3.lib
+
+Shroud:
+    alphabet_test.yaml
+        ↓
+    pyalphabet_testmodule.c
+        ↓
+    pyalphabet_testmodule.obj
+
+Final link:
+    pyalphabet_testmodule.obj
+    + sqlite3.lib
+    + python311.lib
+        ↓
+    alphabet_test.pyd
+```
+
+Therefore:
+
+* `library: alphabet_test` controls the generated Python module naming.
+* `cxx_header: alphabet.h` tells generated code which declarations to include.
+* `sqlite3.lib` on the **link command** specifies where the implementation comes from.
+* `sqlite3.dll` is located by Windows at runtime.
+
+Shroud deliberately generates source wrappers and leaves compilation and linkage to the surrounding build system. Its `library` field is used primarily for generated naming, while the generated source includes the configured header; the actual implementation libraries are supplied by your build configuration. ([shroud.readthedocs.io][1])
+
+[1]: https://shroud.readthedocs.io/en/latest/tutorial.html "Tutorial — shroud 0.13.0 documentation"
