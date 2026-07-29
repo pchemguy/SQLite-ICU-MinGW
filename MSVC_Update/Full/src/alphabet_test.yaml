@@ -5,6 +5,7 @@ cxx_header: alphabet.h
 options:
   wrap_python: true
   wrap_fortran: false
+  wrap_c: false
 
 declarations:
 - decl: int ab_utf8_byte_count(const char *zText)
