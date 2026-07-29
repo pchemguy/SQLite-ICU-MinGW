@@ -1,0 +1,17 @@
+library: alphabet_test
+language: c
+cxx_header: alphabet.h
+
+options:
+  wrap_python: true
+  wrap_fortran: false
+
+declarations:
+- decl: int ab_utf8_byte_count(const char *zText)
+
+- decl: int64_t ab_utf8_length(const char *zText)
+
+- decl: int ab_utf8_byte_offset(const char *zText, int64_t i)
+
+- decl: const char *ab_alphabet_select(const char *zLanguage)
+        +owner(library)

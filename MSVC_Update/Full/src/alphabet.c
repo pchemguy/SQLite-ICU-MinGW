@@ -26,35 +26,14 @@
 ** https://chatgpt.com/c/6a6618c4-48b0-83eb-851b-7a60f648fbae
 */
 
-#ifndef SQLITE_CORE
-# include "sqlite3ext.h"
-  SQLITE_EXTENSION_INIT1
-#else
-# include "sqlite3.h"
-#endif
-
-#ifdef PYTEST_C_API
-# if defined(_WIN32)
-#  define PYTEST_API __declspec(dllexport)
-# else
-#  define PYTEST_API __attribute__((visibility("default")))
-# endif
-#else
-# define PYTEST_API static
-#endif
-
-#define LATIN_UTF8 \
-  "ABCDEFGHIJKLMNOPQRSTUVWXYZ" \
-  "abcdefghijklmnopqrstuvwxyz"
-
-#define CYRILLIC_UTF8 \
-  "АБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯ" \
-  "абвгдеёжзийклмнопрстуфхцчшщъыьэюя"
+#include "alphabet.h"
 
 /*
 ** Return the byte length of the UTF-8 code point beginning at z.
 */
-PYTEST_API int ab_utf8_byte_count(const unsigned char *z){
+PYTEST_API int ab_utf8_byte_count(const char *zText){
+  const unsigned char *z = (const unsigned char *)zText;
+
   if( z[0] < 0x80 ) return 1;
   if( (z[0] & 0xE0) == 0xC0 ) return 2;
   if( (z[0] & 0xF0) == 0xE0 ) return 3;
@@ -64,12 +43,11 @@ PYTEST_API int ab_utf8_byte_count(const unsigned char *z){
 /*
 ** Return the number of Unicode code points in a valid UTF-8 string.
 */
-PYTEST_API sqlite3_int64 ab_utf8_length(const char *z){
-  const unsigned char *p = (const unsigned char *)z;
-  sqlite3_int64 n = 0;
+PYTEST_API int64_t ab_utf8_length(const char *zText){
+  int64_t n = 0;
 
-  while( *p!=0 ){
-    p += ab_utf8_byte_count(p);
+  while( *zText!=0 ){
+    zText += ab_utf8_byte_count(zText);
     ++n;
   }
   return n;
@@ -77,17 +55,16 @@ PYTEST_API sqlite3_int64 ab_utf8_length(const char *z){
 
 /*
 ** Return the byte offset corresponding to Unicode code-point index i.
-** The caller guarantees 0 <= i <= ab_utf8_length(z).
+** The caller guarantees 0 <= i <= ab_utf8_length(zText).
 */
-PYTEST_API int ab_utf8_byte_offset(const char *z, sqlite3_int64 i){
-  const unsigned char *p = (const unsigned char *)z;
-  const unsigned char *pStart = p;
+PYTEST_API int ab_utf8_byte_offset(const char *zText, int64_t i){
+  const char *zStart = zText;
 
   while( i>0 ){
-    p += ab_utf8_byte_count(p);
+    zText += ab_utf8_byte_count(zText);
     --i;
   }
-  return (int)(p - pStart);
+  return (int)(zText - zStart);
 }
 
 /*

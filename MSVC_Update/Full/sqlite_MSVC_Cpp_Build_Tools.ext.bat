@@ -1186,10 +1186,11 @@ set OPT_XTRA=%OPT_XTRA%^
     -DSQLITE_ENABLE_ALPHABET
 
 set SOURCES=^
+    "%PROJDIR%\src\alphabet.h" ^
     "%PROJDIR%\src\alphabet.c"
 
 set MISC_EXT=^
-    "alphabet.c" 
+    "alphabet.c"
 
 echo {INFO} ========== Copy MISC_EXT ===========
 "%TCLSH_CMD%" "%SQLITEDIR%\tool\cp.tcl" %SOURCES% "%TSRC%" || exit /b !ERRORLEVEL!

@@ -7584,7 +7584,7 @@ ctd_scalar_ref_nullable(None)  # -1
 ctd_scalar_ref_nullable(12)    # 12
 ```
 
-### 2.4 Input `int32_t` array plus count
+#### 2.4 Input `int32_t` array plus count
 
 Treat these two C arguments as one Python sequence:
 
@@ -7705,7 +7705,7 @@ rather than:
 ctd_array_sum_i32(pointer, 3)
 ```
 
-### 2.5 Reuse the input-array converter
+#### 2.5 Reuse the input-array converter
 
 Do not write the conversion directly under the real parameter names if several functions share the same policy. Define a synthetic typemap pattern, then `%apply` it.
 
@@ -7723,7 +7723,7 @@ That is the recurring SWIG recipe:
 
 The synthetic names do not exist in C. They exist only as a typemap key.
 
-### 2.6 Input UTF-8 string
+#### 2.6 Input UTF-8 string
 
 A NUL-terminated `const char *` can use SWIG’s normal Python string conversion, but explicitly requiring Python `str` and UTF-8 gives you exact behavior:
 
@@ -7774,7 +7774,7 @@ A cleaner version usually uses a named local declared in the typemap argument li
 
 The exact generated local-name expansion should be verified against the generated wrapper. For production typemap libraries, it is often simpler to combine conversion and lifetime management using `PyUnicode_AsUTF8AndSize()` because the original Python string remains alive throughout the C call.
 
-### 2.7 UTF-8 plus byte count
+#### 2.7 UTF-8 plus byte count
 
 Map one Python `str` to:
 
@@ -7835,7 +7835,7 @@ ctd_utf8_length_delimited_ascii_count("abc✓")
 
 The byte count is hidden and calculated after UTF-8 encoding.
 
-### 2.8 Input bytes plus length
+#### 2.8 Input bytes plus length
 
 ```swig
 %typemap(in)
@@ -7889,7 +7889,7 @@ ctd_bytes_checksum(b"\x00\x11\x22")
 ctd_bytes_checksum(memoryview(data))
 ```
 
-### 2.9 Fixed-size output array
+#### 2.9 Fixed-size output array
 
 The C function:
 
@@ -7931,7 +7931,7 @@ Use an ignored input and an output conversion:
 
 `numinputs=0` hides the C output argument from Python, while `argout` appends its converted value to the Python result. This is the standard SWIG output-parameter mechanism. ([Swig][1])
 
-### 2.10 Output buffer whose length is the C return value
+#### 2.10 Output buffer whose length is the C return value
 
 For:
 
@@ -8023,7 +8023,7 @@ This is not a workaround outside SWIG. `%inline` is a normal SWIG mechanism for 
 
 For a reusable framework, you would encode this as typemaps. For an initial binding, a wrapper-side adapter is much easier to debug.
 
-### 2.11 Status plus output bytes buffer
+#### 2.11 Status plus output bytes buffer
 
 For:
 
@@ -8100,7 +8100,7 @@ static PyObject *py_ctd_buffer_bytes_out(size_t capacity)
 %rename(ctd_buffer_bytes_out) py_ctd_buffer_bytes_out;
 ```
 
-### 2.12 Owned arrays returned through `T **`
+#### 2.12 Owned arrays returned through `T **`
 
 For:
 
@@ -8171,7 +8171,7 @@ static PyObject *py_ctd_owned_array_return_length(void)
 
 SWIG also has `%newobject`, `newfree`, and `ret` typemaps for returned ownership, but those mechanisms are most natural when the returned pointer itself becomes a wrapped Python object. Here you want an immediate copy followed by a specific C releaser, so an adapter or custom return typemap is clearer. SWIG documents `ret` and `newfree` as cleanup mechanisms for returned resources. ([Swig][1])
 
-### 2.13 Borrowed and owned strings
+#### 2.13 Borrowed and owned strings
 
 Borrowed UTF-8:
 
@@ -8219,7 +8219,7 @@ Owned UTF-8:
 
 The important distinction is simply that the second output typemap frees after copying.
 
-### 2.14 Recommended SWIG structure
+#### 2.14 Recommended SWIG structure
 
 Do not put everything in one `.i` file.
 
@@ -8254,7 +8254,7 @@ Main file:
 %include "ctypes_dummy_api.h"
 ```
 
-### 2.15 Generate and build
+#### 2.15 Generate and build
 
 Generate:
 
@@ -8304,7 +8304,7 @@ Or include the generated wrapper after the implementation in one amalgamation an
 
 ---
 
-## 3. SIP recipe
+### 3. SIP recipe
 
 SIP specifications describe the Python-visible API. They do not need to reproduce every C function literally, and SIP explicitly supports handwritten `%MethodCode` when the Python signature and C implementation signature differ. ([python-sip.readthedocs.io][2])
 
@@ -8315,7 +8315,7 @@ For this fixture, that means:
 * simple arrays: `/Array/` and `/ArraySize/` where applicable;
 * buffers, ownership, `T **`, and status translation: handwritten `%MethodCode`.
 
-### 3.1 Basic module
+#### 3.1 Basic module
 
 ```sip
 /* ctypes_dummy_api.sip */
@@ -8348,7 +8348,7 @@ int64_t ctd_scalar_affine(
 
 SIP generates direct wrappers for those.
 
-### 3.2 Simple scalar input pointer
+#### 3.2 Simple scalar input pointer
 
 For this function:
 
@@ -8380,7 +8380,7 @@ This is an important SIP pattern:
 
 SIP documentation explicitly permits declarations that differ from the underlying implementation and uses `%MethodCode` to bridge them. ([python-sip.readthedocs.io][3])
 
-### 3.3 Simple output pointer
+#### 3.3 Simple output pointer
 
 SIP can express an output pointer directly:
 
@@ -8396,7 +8396,7 @@ result = ctd_scalar_ref_out()
 
 For a primitive output pointer, `/Out/` tells SIP that Python does not supply that argument and that its value is returned. SIP documents `/Out/`, `/Array/`, and `/ArraySize/` in its annotation reference. ([python-sip.readthedocs.io][4])
 
-### 3.4 Scalar in/out
+#### 3.4 Scalar in/out
 
 You may try:
 
@@ -8421,7 +8421,7 @@ Python:
 value = ctd_scalar_ref_inout(value, delta)
 ```
 
-### 3.5 Nullable scalar pointer
+#### 3.5 Nullable scalar pointer
 
 Expose `object` because Python may pass either `None` or `int`:
 
@@ -8464,7 +8464,7 @@ int32_t ctd_scalar_ref_nullable(object value);
 
 The generated variable names available inside `%MethodCode` depend on the SIP ABI and declaration. `sipRes` and `sipIsErr` are standard generated result/error variables, but you should inspect the first generated source to verify exact names for your SIP version.
 
-### 3.6 Input arrays
+#### 3.6 Input arrays
 
 SIP has `/Array/` and `/ArraySize/`, but this facility is primarily a low-level array mapping mechanism. It requires a corresponding size argument. ([python-sip.readthedocs.io][4])
 
@@ -8563,7 +8563,7 @@ int64_t ctd_array_sum_i32(object values);
 
 This is verbose, but it is direct and predictable.
 
-### 3.7 Output fixed array
+#### 3.7 Output fixed array
 
 Expose the Python result as `bytes`:
 
@@ -8593,7 +8593,7 @@ object ctd_array_fixed_out();
 
 The `%MethodCode` still returns a `PyObject *`.
 
-### 3.8 Buffer with return length
+#### 3.8 Buffer with return length
 
 ```sip
 object ctd_buffer_i32_return_length(size_t capacity);
@@ -8667,7 +8667,7 @@ object ctd_buffer_i32_return_length(size_t capacity);
 %End
 ```
 
-### 3.9 Status plus output bytes
+#### 3.9 Status plus output bytes
 
 ```sip
 object ctd_buffer_bytes_out(size_t capacity);
@@ -8730,7 +8730,7 @@ object ctd_buffer_bytes_out(size_t capacity);
 %End
 ```
 
-### 3.10 Owned arrays
+#### 3.10 Owned arrays
 
 ```sip
 object ctd_owned_array_return_length();
@@ -8790,7 +8790,7 @@ This is exactly the same native algorithm as the SWIG `%inline` adapter. The dis
 * SWIG: `%inline` creates a wrapper-side C function and SWIG wraps it.
 * SIP: `%MethodCode` becomes the body of the generated Python callable.
 
-### 3.11 UTF-8 input
+#### 3.11 UTF-8 input
 
 ```sip
 size_t ctd_utf8_nul_byte_length(str text);
@@ -8817,7 +8817,7 @@ size_t ctd_utf8_nul_byte_length(object text);
 
 Then explicitly validate with `PyUnicode_Check()`.
 
-### 3.12 Borrowed UTF-8 result
+#### 3.12 Borrowed UTF-8 result
 
 ```sip
 object ctd_utf8_borrowed();
@@ -8847,7 +8847,7 @@ object ctd_utf8_borrowed();
 %End
 ```
 
-### 3.13 Owned UTF-8 result
+#### 3.13 Owned UTF-8 result
 
 ```sip
 object ctd_utf8_owned();
@@ -8876,7 +8876,7 @@ object ctd_utf8_owned();
 %End
 ```
 
-### 3.14 SIP mapped types are not the primary answer here
+#### 3.14 SIP mapped types are not the primary answer here
 
 A SIP `%MappedType` is useful when a reusable semantic C type exists, for example:
 
@@ -8899,7 +8899,7 @@ char *, capacity, written
 
 SIP mapped types do not naturally match arbitrary groups of adjacent parameters in the same way SWIG multi-argument typemaps do. SIP’s fallback for a Python signature that differs from the C signature is handwritten `%MethodCode`. That is an explicitly supported design, not an abuse. ([python-sip.readthedocs.io][2])
 
-### 3.15 Generate SIP sources
+#### 3.15 Generate SIP sources
 
 The standard SIP 6 workflow uses `pyproject.toml`, but SIP can generate source into a build directory for your own compilation. A minimal project configuration is approximately:
 
@@ -8940,7 +8940,7 @@ SIP-generated code also uses the SIP runtime API and `sip.h`; this is a real add
 
 ---
 
-## 4. The concrete difference
+### 4. The concrete difference
 
 For this function:
 
@@ -8951,7 +8951,7 @@ int64_t ctd_array_sum_i32(
 );
 ```
 
-### SWIG
+#### SWIG
 
 You define one reusable multi-argument typemap:
 
@@ -8980,7 +8980,7 @@ Then apply it:
 
 The actual C declaration remains visible to SWIG.
 
-### SIP
+#### SIP
 
 You describe a different Python signature:
 
@@ -9002,7 +9002,7 @@ That pattern repeats for every function unless you change the C API to use named
 
 ---
 
-## 5. Which parts are concise in each framework?
+### 5. Which parts are concise in each framework?
 
 | C pattern                          | SWIG                               | SIP                                |
 | ---------------------------------- | ---------------------------------- | ---------------------------------- |
@@ -9021,7 +9021,7 @@ That pattern repeats for every function unless you change the C API to use named
 | Owned array plus releaser          | Return/cleanup typemaps or adapter | `%MethodCode`                      |
 | Reusable arbitrary parameter tuple | Strong support                     | No direct equivalent               |
 
-## 6. Practical recommendation
+### 6. Practical recommendation
 
 For your fixture, proceed with SWIG as follows:
 
@@ -9594,3 +9594,557 @@ Its weakness is that it is a smaller and less broadly used project than SWIG, an
 [6]: https://pythonhosted.org/PyBindGen/tutorial.html "PyBindGen Tutorial — PyBindGen 0.15.0 documentation"
 [7]: https://pmc.ncbi.nlm.nih.gov/articles/PMC12502903/ "AutoWIG: automatic generation of python bindings for C++ libraries - PMC"
 [8]: https://arxiv.org/abs/2304.02712 "Efficient and Accurate Automatic Python Bindings with cppyy & Cling"
+
+---
+---
+
+## 📗 LLNL Shroud - Alphabet.c
+
+For these four functions, Shroud can handle three cleanly and the fourth with an important representation choice.
+
+First, there is an apparent typo in `alphabet.c`:
+
+```c
+#include "alphabet.c"
+```
+
+That should presumably be:
+
+```c
+#include "alphabet.h"
+```
+
+Otherwise the file recursively includes itself.
+
+Also, when `alphabet.c` is incorporated into the SQLite amalgamation, the generated Shroud wrapper must either:
+
+* be incorporated into that same amalgamation; or
+* call exported test functions from the separately built `sqlite3.dll`.
+
+For the first experiment, keep the wrapper as a separate generated translation unit and link it into a dedicated `.pyd` together with the test amalgamation object.
+
+### 1. Desired Python interface
+
+A reasonable Python API is:
+
+```python
+import alphabet_test
+
+alphabet_test.ab_utf8_byte_count(b"\xe2\x9c\x93")  # 3
+alphabet_test.ab_utf8_length("abc✓")               # 4
+alphabet_test.ab_utf8_byte_offset("abc✓", 3)       # 3
+alphabet_test.ab_alphabet_select("en")              # Latin alphabet
+alphabet_test.ab_alphabet_select("unknown")         # None
+```
+
+The last three functions naturally use Python `str`, because their C arguments and results are NUL-terminated `char *`.
+
+The first function is different:
+
+```c
+int ab_utf8_byte_count(const unsigned char *z);
+```
+
+Shroud sees `unsigned char *` as a numeric pointer, not inherently as `bytes`. Shroud’s native pointer/array machinery normally maps ranked primitive pointers to lists or NumPy arrays; `+deref(scalar)` would be wrong because this function may inspect up to four bytes beginning at `z`. ([shroud.readthedocs.io][1])
+
+Therefore there are two possible first versions:
+
+1. Accept a NumPy `uint8` array.
+2. Add a tiny C-facing adapter that accepts `const char *`, allowing Shroud’s string machinery to handle it.
+
+The adapter is much cleaner.
+
+### 2. Add one binding adapter
+
+Add this declaration to `alphabet.h` under the test API:
+
+```c
+PYTEST_API int ab_utf8_byte_count_text(const char *z);
+```
+
+Add this implementation to `alphabet.c`:
+
+```c
+PYTEST_API int ab_utf8_byte_count_text(const char *z){
+  return ab_utf8_byte_count((const unsigned char *)z);
+}
+```
+
+This is not algorithmic wrapper-generation machinery. It is one C API adapter that gives the binding generator an unambiguous string type.
+
+You can keep `ab_utf8_byte_count()` exposed as well, but the Python binding should expose `ab_utf8_byte_count_text()` under the name `ab_utf8_byte_count`.
+
+### 3. Minimal Shroud YAML
+
+Create:
+
+```text
+test\shroud\alphabet_test.yaml
+```
+
+with:
+
+```yaml
+library: alphabet_test
+language: c
+
+options:
+  wrap_python: true
+  wrap_fortran: false
+
+format:
+  PY_module_name: alphabet_test
+  PY_impl_filename: alphabet_test_wrap.c
+
+declarations:
+- decl: typedef long long sqlite3_int64
+
+- decl: int ab_utf8_byte_count_text(const char *z)
+  format:
+    function_name: ab_utf8_byte_count
+
+- decl: sqlite3_int64 ab_utf8_length(const char *z)
+
+- decl: int ab_utf8_byte_offset(
+          const char *z,
+          sqlite3_int64 i)
+
+- decl: const char *ab_alphabet_select(
+          const char *zLanguage)
+        +owner(library)
+```
+
+Shroud’s input is a YAML file containing C/C++ declarations plus semantic attributes. Its generated Python wrappers use the CPython API. ([shroud.readthedocs.io][2])
+
+The `+owner(library)` annotation on `ab_alphabet_select()` says that the returned storage remains owned by the C library. Shroud’s default ownership is already borrowed/library-owned, but writing it explicitly documents the contract. For library-owned strings, Shroud copies the value into a Python string without releasing the original C memory. ([shroud.readthedocs.io][3])
+
+#### About `sqlite3_int64`
+
+Shroud parses declarations from the YAML; it does not automatically obtain every typedef from `sqlite3.h`. Therefore it needs a type declaration for `sqlite3_int64`.
+
+On Windows/MSVC, `long long` is a 64-bit integer, so this is ABI-compatible with SQLite’s signed 64-bit integer type:
+
+```yaml
+- decl: typedef long long sqlite3_int64
+```
+
+This typedef is for Shroud’s model. The generated wrapper source should include the real `alphabet.h`, so the compiler sees SQLite’s authoritative typedef.
+
+### 4. Tell the generated wrapper to include the real header
+
+The exact Shroud field used for wrapper-header injection depends on whether you generate a C or C++ wrapper and the selected Shroud version. A common top-level form is:
+
+```yaml
+cxx_header: alphabet.h
+```
+
+So the complete file becomes:
+
+```yaml
+library: alphabet_test
+language: c
+
+cxx_header: alphabet.h
+
+options:
+  wrap_python: true
+  wrap_fortran: false
+
+format:
+  PY_module_name: alphabet_test
+  PY_impl_filename: alphabet_test_wrap.c
+
+declarations:
+- decl: typedef long long sqlite3_int64
+
+- decl: int ab_utf8_byte_count_text(const char *z)
+  format:
+    function_name: ab_utf8_byte_count
+
+- decl: sqlite3_int64 ab_utf8_length(const char *z)
+
+- decl: int ab_utf8_byte_offset(
+          const char *z,
+          sqlite3_int64 i)
+
+- decl: const char *ab_alphabet_select(
+          const char *zLanguage)
+        +owner(library)
+```
+
+Shroud’s generated source should then compile against:
+
+```c
+#include "alphabet.h"
+```
+
+Inspect the generated file once to verify that the include is emitted in the expected location.
+
+### 5. Generate the wrapper
+
+Install Shroud:
+
+```cmd
+python -m pip install llnl-shroud
+```
+
+The documented package name is `llnl-shroud`; installation provides the `shroud` command. ([shroud.readthedocs.io][4])
+
+Generate into a dedicated directory:
+
+```cmd
+mkdir build\shroud
+cd build\shroud
+
+shroud ..\..\test\shroud\alphabet_test.yaml
+```
+
+Depending on the installed Shroud version and output options, expect files resembling:
+
+```text
+build\shroud\
+    alphabet_test_wrap.c
+    alphabet_test_helpers.c
+    alphabet_test_helpers.h
+```
+
+The exact file set must be taken from the generator output rather than assumed. Shroud may generate helper sources in addition to the principal Python wrapper.
+
+### 6. Compile with your custom nmake pipeline
+
+There are two useful build architectures.
+
+#### Architecture A — Link the amalgamation directly into the `.pyd`
+
+```text
+sqlite3.c
+    contains alphabet.c
+        ↓
+sqlite3_python.obj
+
+Shroud-generated sources
+        ↓
+alphabet_test_wrap.obj
+alphabet_test_helpers.obj
+
+all objects
+        ↓
+alphabet_test.pyd
+```
+
+Compile the amalgamation with test linkage enabled:
+
+```cmd
+cl /nologo /c /MD /O2 ^
+  /DSQLITE_CORE ^
+  /DPYTEST_C_API ^
+  /Ibuild ^
+  /Isrc ^
+  /I"%PYTHON_INCLUDE%" ^
+  /Fobuild\sqlite3_python.obj ^
+  build\sqlite3.c
+```
+
+Compile every Shroud-generated C source:
+
+```cmd
+cl /nologo /c /MD /O2 ^
+  /Ibuild ^
+  /Isrc ^
+  /Ibuild\shroud ^
+  /I"%PYTHON_INCLUDE%" ^
+  /Fobuild\alphabet_test_wrap.obj ^
+  build\shroud\alphabet_test_wrap.c
+```
+
+If Shroud emits helper sources, compile those as well.
+
+Link:
+
+```cmd
+link /nologo /DLL ^
+  /OUT:pytestenv\src\alphabet_test.pyd ^
+  build\sqlite3_python.obj ^
+  build\alphabet_test_wrap.obj ^
+  build\alphabet_test_helpers.obj ^
+  /LIBPATH:"%PYTHON_LIBDIR%" ^
+  python311.lib
+```
+
+Do not link with the SQLite export `.def` file. The `.pyd` needs its Python initialization export, not the ordinary `sqlite3.dll` export list.
+
+This architecture avoids any secondary `sqlite3.dll` dependency. The test `.pyd` contains both SQLite and the alphabet implementation.
+
+#### Architecture B — Wrapper `.pyd` calls your custom `sqlite3.dll`
+
+```text
+custom sqlite3.dll
+    contains alphabet.c and exported ab_* functions
+
+alphabet_test.pyd
+    contains Shroud wrappers
+    imports ab_* from sqlite3.dll
+```
+
+Compile the SQLite amalgamation with:
+
+```cmd
+/DPYTEST_C_API
+```
+
+This makes:
+
+```c
+PYTEST_API
+```
+
+expand to:
+
+```c
+__declspec(dllexport)
+```
+
+Then link the Shroud wrapper against the import library produced for that test `sqlite3.dll`:
+
+```cmd
+link /nologo /DLL ^
+  /OUT:pytestenv\src\alphabet_test.pyd ^
+  build\alphabet_test_wrap.obj ^
+  build\alphabet_test_helpers.obj ^
+  build\sqlite3.lib ^
+  /LIBPATH:"%PYTHON_LIBDIR%" ^
+  python311.lib
+```
+
+Architecture A is simpler for proving Shroud works. Architecture B is preferable only when Python’s normal SQLite extension and the test bindings must use the same SQLite library instance.
+
+### 7. Expected behavior without additional annotations
+
+These declarations:
+
+```yaml
+- decl: sqlite3_int64 ab_utf8_length(const char *z)
+
+- decl: int ab_utf8_byte_offset(
+          const char *z,
+          sqlite3_int64 i)
+```
+
+should expose Python calls equivalent to:
+
+```python
+ab_utf8_length("abc")
+ab_utf8_byte_offset("abc", 2)
+```
+
+Shroud has built-in handling for NUL-terminated `const char *` input and copies/terminates character inputs as needed. ([shroud.readthedocs.io][1])
+
+This declaration:
+
+```yaml
+- decl: const char *ab_alphabet_select(
+          const char *zLanguage)
+        +owner(library)
+```
+
+should produce:
+
+```python
+ab_alphabet_select("en")       # str
+ab_alphabet_select("unknown")  # likely None
+```
+
+A returned `char *` is copied into a Python `str`; borrowed/library ownership means the original pointer is not released. ([shroud.readthedocs.io][3])
+
+The precise handling of a `NULL` returned character pointer should be verified in the generated wrapper. It should normally map to `None`, but that is one of the first generated-code assertions to inspect rather than assume.
+
+### 8. Initial pytest
+
+```python
+import alphabet_test
+
+
+def test_utf8_byte_count_ascii():
+    assert alphabet_test.ab_utf8_byte_count("A") == 1
+
+
+def test_utf8_byte_count_cyrillic():
+    assert alphabet_test.ab_utf8_byte_count("А") == 2
+
+
+def test_utf8_byte_count_checkmark():
+    assert alphabet_test.ab_utf8_byte_count("✓") == 3
+
+
+def test_utf8_length_ascii():
+    assert alphabet_test.ab_utf8_length("English") == 7
+
+
+def test_utf8_length_mixed():
+    assert alphabet_test.ab_utf8_length("AБ✓") == 3
+
+
+def test_utf8_byte_offset():
+    assert alphabet_test.ab_utf8_byte_offset("AБ✓", 0) == 0
+    assert alphabet_test.ab_utf8_byte_offset("AБ✓", 1) == 1
+    assert alphabet_test.ab_utf8_byte_offset("AБ✓", 2) == 3
+    assert alphabet_test.ab_utf8_byte_offset("AБ✓", 3) == 6
+
+
+def test_select_latin():
+    result = alphabet_test.ab_alphabet_select("en")
+
+    assert result.startswith("ABCDEFGHIJKLMNOPQRSTUVWXYZ")
+    assert len(result) == 52
+
+
+def test_select_cyrillic():
+    result = alphabet_test.ab_alphabet_select("Russian")
+
+    assert result.startswith("АБВГДЕЁ")
+    assert result.endswith("эюя")
+
+
+def test_select_unknown():
+    assert alphabet_test.ab_alphabet_select("German") is None
+```
+
+Because the adapter accepts `const char *`, these examples use Python `str`, not `bytes`.
+
+### 9. The direct `unsigned char *` alternative
+
+Without the adapter, declare:
+
+```yaml
+- decl: int ab_utf8_byte_count(
+          const unsigned char *z +rank(1))
+```
+
+That tells Shroud the pointer is a one-dimensional primitive array. Ranked primitive pointers are represented through Shroud’s Python array machinery, generally involving NumPy. ([shroud.readthedocs.io][5])
+
+The Python call would probably be closer to:
+
+```python
+import numpy as np
+
+alphabet_test.ab_utf8_byte_count(
+    np.frombuffer("✓".encode("utf-8"), dtype=np.uint8)
+)
+```
+
+This is technically faithful but undesirable for a tiny UTF-8 helper. It adds NumPy merely to transport one to four bytes.
+
+The `const char *` adapter produces the better testing API.
+
+### 10. Important limitation exposed by this example
+
+This example does **not yet prove that Shroud satisfies your full wrapper project**.
+
+It proves only these patterns:
+
+* scalar return;
+* ordinary scalar input;
+* NUL-terminated UTF-8 input;
+* borrowed NUL-terminated UTF-8 return;
+* nullable returned pointer;
+* a pointer input made unambiguous through a C adapter.
+
+Those are Shroud’s easy cases.
+
+The decisive tests remain:
+
+```c
+void scalar_out(int32_t *result);
+
+int64_t array_sum(
+    const int32_t *values,
+    size_t count
+);
+
+int buffer_out(
+    unsigned char *buffer,
+    size_t capacity,
+    size_t *written
+);
+
+int owned_array(
+    int32_t **values,
+    size_t *count
+);
+```
+
+Shroud documents direct support for output arguments, dimensions, ranked pointers, ownership, and generated Python arrays. It also states that output pointer allocation requires a dimension known before the C call, which may be a problem for produced lengths known only afterward. ([shroud.readthedocs.io][1])
+
+So this alphabet example should be treated as the **minimal Shroud proof of integration**, not yet proof of complete semantic coverage.
+
+[1]: https://shroud.readthedocs.io/en/latest/input.html "Input — shroud 0.14.0 documentation"
+[2]: https://shroud.readthedocs.io/ "Shroud — shroud 0.14.0 documentation"
+[3]: https://shroud.readthedocs.io/en/latest/pointers.html "Pointers and Arrays — shroud 0.14.0 documentation"
+[4]: https://shroud.readthedocs.io/en/latest/installing.html "Installing — shroud 0.14.0 documentation"
+[5]: https://shroud.readthedocs.io/en/latest/introduction.html "Introduction — shroud 0.13.0 documentation"
+
+---
+---
+
+## 📗 LLNL Shroud - Revised Alphabet.c
+
+Yes.
+
+For this helper, change the exposed signature to:
+
+```c
+PYTEST_API int ab_utf8_byte_count(const char *z);
+```
+
+and cast internally:
+
+```c
+PYTEST_API int ab_utf8_byte_count(const char *z){
+  const unsigned char *p = (const unsigned char *)z;
+
+  if( p[0] < 0x80 ) return 1;
+  if( (p[0] & 0xE0) == 0xC0 ) return 2;
+  if( (p[0] & 0xF0) == 0xE0 ) return 3;
+  return 4;
+}
+```
+
+Then callers such as `ab_utf8_length()` can become:
+
+```c
+p += ab_utf8_byte_count((const char *)p);
+```
+
+or, better, use a `const char *` traversal consistently where practical.
+
+Shroud will then treat the argument as a normal NUL-terminated Python string instead of a numeric array. No additional adapter function is needed.
+
+The signature is still reasonable because the function operates on a UTF-8 string position. `unsigned char` is only needed internally to prevent sign extension and make bit tests reliable. It does not need to be part of the public function type.
+
+Your header becomes:
+
+```c
+PYTEST_API int ab_utf8_byte_count(const char *z);
+PYTEST_API sqlite3_int64 ab_utf8_length(const char *z);
+PYTEST_API int ab_utf8_byte_offset(const char *z, sqlite3_int64 i);
+PYTEST_API const char *ab_alphabet_select(const char *zLanguage);
+```
+
+This gives Shroud four straightforward string/scalar declarations:
+
+```yaml
+declarations:
+- decl: int ab_utf8_byte_count(const char *z)
+
+- decl: sqlite3_int64 ab_utf8_length(const char *z)
+
+- decl: int ab_utf8_byte_offset(
+          const char *z,
+          sqlite3_int64 i)
+
+- decl: const char *ab_alphabet_select(
+          const char *zLanguage)
+        +owner(library)
+```
+
+So yes: **adjust the C test-facing API to use semantically convenient, binding-friendly signatures rather than generating pointless wrapper functions around private helpers.**
