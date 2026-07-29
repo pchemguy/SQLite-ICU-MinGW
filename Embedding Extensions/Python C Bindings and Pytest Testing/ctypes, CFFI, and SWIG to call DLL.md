@@ -5969,3 +5969,806 @@ python tool\generate_ctypes.py ^
 ```
 
 I validated Python syntax and exercised the type-mapping and module-rendering paths with a synthetic smoke test. The execution environment here does not contain Python libclang, so the real translation-unit integration path could not be run locally; your confirmed working libclang environment is suitable for that test.
+
+---
+---
+
+## 📗 Extra C Semantics
+
+> [!NOTE] Prompt
+> 
+> I need to define a compact set of reasonable policies to enable sufficiently broad coverage without pretend for generality. How will be dealt afterwards, first I care about what. My initial thoughts:
+> 
+> - python/caller never cares about memory;
+> - python/caller must copy any returned data to its own memory;
+> - pointers need annotation in/out/inout
+> - arrays need annotation which param name indicate size in typed elements; 
+> - array returned in callee's memory (typed out pointer) may return size in {RETURNED VALUE} or out/bi param;
+> - for buffer, an additional variable must be identified that indicate capacity (in declared element count)
+> - any pointer is annotated as SCALAR/ARRAY/BUFFER
+> - I need to indicate a null terminated string and bytes vs utf8
+
+Your policy set is close. I would formalize it around a small number of **orthogonal annotations**, rather than special-case rules per function.
+
+The wrapper contract should answer only these questions:
+
+1. What logical value does each C parameter represent?
+2. Which direction does data flow?
+3. How is its extent determined?
+4. Is it text or raw data?
+5. Where does returned data reside, and how is it released after copying?
+6. What does the C function return value mean?
+
+### 1. Universal wrapper guarantee
+
+Adopt these invariants:
+
+* Python callers never allocate or free C memory explicitly.
+* Python callers never receive live C pointers.
+* All returned scalar values are converted to Python scalars.
+* All returned arrays, buffers, and strings are copied immediately into Python-owned objects.
+* Temporary C allocations created by the wrapper are released before the wrapper returns.
+* Callee-owned returned memory is copied and then released according to declared storage policy.
+* No pointer object escapes the generated wrapper unless explicitly marked as opaque, which can remain outside the initial scope.
+
+This gives the generated interface ordinary Python semantics:
+
+```python
+int
+float
+bool
+str
+bytes
+list[int]
+list[float]
+tuple[...]
+None
+```
+
+No `ctypes` values should normally escape.
+
+---
+
+### 2. Pointer shape
+
+Every pointer parameter or pointer return must have exactly one shape:
+
+```text
+SCALAR
+ARRAY
+BUFFER
+STRING
+OPAQUE
+```
+
+For the first implementation, `OPAQUE` can be unsupported.
+
+#### `SCALAR`
+
+Represents exactly one typed value.
+
+Examples:
+
+```c
+const int *value       /* input scalar */
+int *result            /* output scalar */
+double *value          /* input/output scalar */
+```
+
+Python forms:
+
+```python
+int
+float
+bool
+```
+
+#### `ARRAY`
+
+Represents a sequence of typed elements whose logical length is known separately.
+
+Examples:
+
+```c
+const double *values, size_t count
+int32_t *values, size_t count
+double **result, size_t *count
+```
+
+Python forms:
+
+```python
+Sequence[float]
+list[float]
+list[int]
+```
+
+An array has a **logical element count**, not merely allocated capacity.
+
+#### `BUFFER`
+
+Represents writable storage with a declared capacity. The callee may write fewer elements than the buffer can hold.
+
+Example:
+
+```c
+int encode(
+    const Value *input,
+    unsigned char *output,
+    size_t capacity,
+    size_t *written
+);
+```
+
+A buffer therefore has two distinct quantities:
+
+```text
+capacity
+produced length
+```
+
+The wrapper should return only the produced data, never unused capacity.
+
+Python forms are normally:
+
+```python
+bytes
+list[T]
+```
+
+#### `STRING`
+
+Represents character data under an encoding and termination policy.
+
+Examples:
+
+```c
+const char *name
+char *output
+const char *result
+```
+
+A string is effectively a specialized character array, but making it a distinct shape keeps annotations compact and prevents every string declaration from needing separate array metadata.
+
+---
+
+### 3. Direction
+
+Every pointer parameter must specify one of:
+
+```text
+IN
+OUT
+INOUT
+```
+
+#### `IN`
+
+Python supplies the logical value. The wrapper creates temporary C storage if needed.
+
+```c
+const int *value
+const double *values
+const char *text
+```
+
+#### `OUT`
+
+Python supplies nothing. The wrapper allocates storage and returns the result.
+
+```c
+int *result
+double **values
+char *buffer
+```
+
+The parameter disappears from the Python call signature.
+
+#### `INOUT`
+
+Python supplies an initial value. The wrapper passes mutable storage and returns the final value.
+
+```c
+int *state
+double *values
+char *buffer
+```
+
+The Python wrapper accepts the initial value and includes the updated value in its result.
+
+The `const` qualifier can provide validation:
+
+* `const T *` cannot be `OUT` or `INOUT`.
+* non-const `T *` may be any direction.
+* annotation remains authoritative.
+
+---
+
+### 4. Extent policy
+
+Every `ARRAY`, `BUFFER`, or non-NUL-terminated `STRING` needs an extent source.
+
+Use a compact set:
+
+```text
+PARAM(name)
+RETURN
+OUT(name)
+FIXED(n)
+NUL
+```
+
+#### `PARAM(name)`
+
+Length or capacity is supplied through another input parameter.
+
+```c
+int sum(const double *values, size_t count);
+```
+
+Metadata:
+
+```text
+values:
+    shape = ARRAY
+    direction = IN
+    length = PARAM(count)
+```
+
+The Python caller passes only `values`; the wrapper derives `count` automatically.
+
+The length parameter should normally disappear from the Python signature.
+
+#### `RETURN`
+
+The C function’s return value is the resulting element count.
+
+```c
+size_t read_values(double *buffer, size_t capacity);
+```
+
+Metadata:
+
+```text
+buffer:
+    shape = BUFFER
+    direction = OUT
+    capacity = PARAM(capacity)
+    length = RETURN
+```
+
+This requires annotating the function return role as `LENGTH`, not ordinary result data.
+
+#### `OUT(name)`
+
+Another output or input/output scalar parameter receives the resulting length.
+
+```c
+int get_values(
+    double **values,
+    size_t *count
+);
+```
+
+Metadata:
+
+```text
+values:
+    shape = ARRAY
+    direction = OUT
+    length = OUT(count)
+```
+
+The wrapper hides both pointer parameters and returns the copied Python array.
+
+For a caller-allocated buffer:
+
+```c
+int encode(
+    unsigned char *output,
+    size_t capacity,
+    size_t *written
+);
+```
+
+Metadata:
+
+```text
+output:
+    shape = BUFFER
+    direction = OUT
+    capacity = PARAM(capacity)
+    length = OUT(written)
+```
+
+#### `FIXED(n)`
+
+The logical extent is statically known.
+
+```c
+void get_digest(unsigned char digest[32]);
+```
+
+Metadata:
+
+```text
+digest:
+    shape = ARRAY
+    direction = OUT
+    length = FIXED(32)
+```
+
+#### `NUL`
+
+The extent ends at the first zero element.
+
+Primarily for strings:
+
+```c
+const char *name
+```
+
+Metadata:
+
+```text
+name:
+    shape = STRING
+    termination = NUL
+```
+
+It may also be allowed for raw bytes, but that should not be the default because zero bytes are valid binary content.
+
+---
+
+### 5. Array versus buffer
+
+The distinction should be explicit:
+
+#### Array
+
+```text
+logical length is known
+all elements within that length are meaningful
+```
+
+Example:
+
+```c
+const double *values, size_t count
+```
+
+#### Buffer
+
+```text
+allocated capacity is known
+callee determines how many output elements become meaningful
+```
+
+Example:
+
+```c
+char *output, size_t capacity, size_t *written
+```
+
+Therefore:
+
+```text
+ARRAY requires length
+BUFFER requires capacity
+OUT/INOUT BUFFER also requires produced length
+```
+
+An input-only buffer may not need a separate produced length because its input length is already known.
+
+---
+
+### 6. Strings and bytes
+
+For character pointers, add two independent attributes:
+
+```text
+representation = UTF8 | BYTES
+termination = NUL | LENGTH(...)
+```
+
+#### UTF-8 NUL-terminated string
+
+```c
+const char *name
+```
+
+Metadata:
+
+```text
+shape = STRING
+direction = IN
+representation = UTF8
+termination = NUL
+```
+
+Python:
+
+```python
+name: str
+```
+
+The wrapper:
+
+* encodes using UTF-8;
+* rejects embedded `\0`;
+* supplies NUL termination automatically.
+
+Returned form:
+
+```c
+const char *get_name(void);
+```
+
+Python:
+
+```python
+str | None
+```
+
+The wrapper copies through `ctypes.string_at()` and decodes UTF-8.
+
+#### NUL-terminated bytes
+
+```text
+representation = BYTES
+termination = NUL
+```
+
+Python:
+
+```python
+bytes
+```
+
+The wrapper copies bytes but does not decode them.
+
+Embedded NUL remains invalid because termination is NUL-based.
+
+#### Length-delimited UTF-8
+
+```c
+int parse_text(const char *text, size_t byte_count);
+```
+
+Metadata:
+
+```text
+shape = STRING
+direction = IN
+representation = UTF8
+termination = LENGTH(PARAM(byte_count))
+```
+
+Python accepts `str`; the wrapper encodes it and derives the byte count.
+
+The count must mean **encoded bytes**, not Unicode code points.
+
+#### Length-delimited bytes
+
+```c
+int parse_data(const unsigned char *data, size_t size);
+```
+
+Metadata:
+
+```text
+shape = STRING or ARRAY
+direction = IN
+representation = BYTES
+length = PARAM(size)
+```
+
+Python accepts:
+
+```python
+bytes | bytearray | memoryview
+```
+
+For compactness, you could treat this as:
+
+```text
+shape = ARRAY
+element = uint8_t
+```
+
+and reserve `STRING` for NUL-terminated or encoded text. That is probably cleaner:
+
+* UTF-8 character data → `STRING`
+* arbitrary binary data → `ARRAY<uint8_t>` or `BUFFER<uint8_t>`
+
+---
+
+### 7. Returned callee memory
+
+Your caller-facing rule is correct:
+
+> Python never cares about memory and always receives a copy.
+
+But the wrapper generator still needs to know what to do **after copying**.
+
+Use a small storage policy:
+
+```text
+BORROWED
+OWNED(releaser)
+```
+
+#### `BORROWED`
+
+The memory remains owned by the C library.
+
+Examples:
+
+* static strings;
+* pointers into persistent objects;
+* immutable tables.
+
+Wrapper behavior:
+
+```text
+copy → do not free
+```
+
+#### `OWNED(releaser)`
+
+The callee transfers ownership.
+
+Example:
+
+```c
+double *make_values(size_t *count);
+```
+
+Metadata:
+
+```text
+result:
+    shape = ARRAY
+    length = OUT(count)
+    storage = OWNED(sqlite3_free)
+```
+
+Wrapper behavior:
+
+```text
+call
+copy
+invoke releaser
+return Python value
+```
+
+The Python caller still never sees ownership.
+
+A project-wide default can keep annotations compact:
+
+```text
+default returned-pointer storage = BORROWED
+default owned-memory releaser = sqlite3_free
+```
+
+Then exceptional functions need explicit metadata only.
+
+Without storage metadata, returned pointers cannot be handled safely. Copying alone does not answer whether the original allocation must be freed.
+
+---
+
+### 8. Return-value role
+
+The C return value also needs one annotation because it may mean different things:
+
+```text
+VALUE
+STATUS
+LENGTH
+VOID
+```
+
+#### `VALUE`
+
+Ordinary function result:
+
+```c
+sqlite3_int64 length(const char *text);
+```
+
+Python returns `int`.
+
+#### `STATUS`
+
+The result controls success or failure:
+
+```c
+int parse(const char *text, int64_t *result);
+```
+
+A later policy can decide whether the Python wrapper:
+
+* returns `(status, result)`, or
+* raises on nonzero status and returns only `result`.
+
+For now, defining the role is sufficient.
+
+#### `LENGTH`
+
+The result is the logical length of an associated output array or buffer:
+
+```c
+size_t encode(unsigned char *output, size_t capacity);
+```
+
+The return is consumed by the wrapper and does not necessarily appear independently in Python.
+
+#### `VOID`
+
+No direct result.
+
+---
+
+### 9. Pointer-to-pointer output
+
+For returned callee memory:
+
+```c
+int get_values(
+    double **values,
+    size_t *count
+);
+```
+
+Annotate the outer parameter as:
+
+```text
+direction = OUT
+shape = ARRAY
+length = OUT(count)
+storage = BORROWED | OWNED(releaser)
+```
+
+The wrapper understands:
+
+* `double **` is the mechanism by which the callee returns the base address;
+* the logical Python result is `list[float]`;
+* `count` supplies the element count;
+* the pointed-to elements are copied;
+* the original storage is released according to policy.
+
+You do not need to expose pointer depth as a user-facing concept. Libclang already provides it.
+
+---
+
+### 10. Proposed compact annotation model
+
+For every pointer-bearing value:
+
+```text
+direction: IN | OUT | INOUT
+shape: SCALAR | ARRAY | BUFFER | STRING
+```
+
+Conditional attributes:
+
+```text
+length: PARAM(name) | OUT(name) | RETURN | FIXED(n) | NUL
+capacity: PARAM(name) | FIXED(n)
+representation: UTF8 | BYTES
+storage: BORROWED | OWNED(releaser)
+nullable: YES | NO
+```
+
+For the function return:
+
+```text
+role: VALUE | STATUS | LENGTH | VOID
+```
+
+This is sufficient to cover:
+
+* numeric scalar references;
+* numeric arrays;
+* input arrays;
+* output arrays;
+* mutable arrays;
+* caller-allocated buffers;
+* callee-allocated arrays;
+* fixed arrays;
+* NUL-terminated strings;
+* length-delimited UTF-8;
+* arbitrary byte sequences;
+* static returned strings;
+* allocated returned strings;
+* output lengths;
+* status-returning functions.
+
+---
+
+### 11. Defaults to keep annotation compact
+
+Reasonable defaults:
+
+```text
+non-pointer scalar parameter:
+    direction = IN
+    shape = SCALAR
+
+non-pointer scalar return:
+    role = VALUE
+
+const char * without length:
+    direction = IN
+    shape = STRING
+    representation = UTF8
+    length = NUL
+    nullable = NO
+
+const unsigned char * with length:
+    direction = IN
+    shape = ARRAY
+    representation = BYTES
+    length = associated PARAM
+
+solitary non-const numeric pointer:
+    direction = OUT
+    shape = SCALAR
+    nullable = NO
+
+returned const char *:
+    shape = STRING
+    representation = UTF8
+    length = NUL
+    storage = BORROWED
+    nullable = YES
+```
+
+I would be cautious with the last two defaults. They are practical but not guaranteed by C syntax. An explicit override must always be available.
+
+---
+
+### 12. Minimal conceptual vocabulary
+
+The smallest credible set is:
+
+```text
+Direction:
+    IN
+    OUT
+    INOUT
+
+Shape:
+    SCALAR
+    ARRAY
+    BUFFER
+    STRING
+
+Extent:
+    PARAM(name)
+    OUT(name)
+    RETURN
+    FIXED(n)
+    NUL
+
+Representation:
+    NATIVE
+    BYTES
+    UTF8
+
+Storage:
+    BORROWED
+    OWNED(releaser)
+
+Return role:
+    VALUE
+    STATUS
+    LENGTH
+    VOID
+
+Nullability:
+    NONNULL
+    NULLABLE
+```
+
+That is compact, orthogonal, and broad enough for a serious C testing interface without pretending to model arbitrary C APIs.
