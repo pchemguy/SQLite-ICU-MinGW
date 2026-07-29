@@ -7343,3 +7343,12 @@ PYTEST_API const unsigned char * ctd_nul_bytes_borrowed(void){
     return value;
 }
 ```
+
+---
+---
+
+## 📗 SWIG and SIP Recipes
+
+> [!NOTE] Prompt
+> 
+> Assuming I have this source with pseudo annotations, how do I actually proceed with SWIG and SIP? These annotations are not for either SWIG and SIP. Both will ignore these annotations. But how do I proceed with them? I need recipes for both.
