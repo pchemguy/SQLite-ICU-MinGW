@@ -1983,3 +1983,523 @@ Neither mode supplies the higher-level meaning of pointers, arrays, buffers, own
 
 [1]: https://cffi.readthedocs.io/en/stable/overview.html "Overview — CFFI 2.1.0 documentation"
 [2]: https://cffi.readthedocs.io/en/latest/whatsnew.html "What’s New — CFFI 2.2.0.dev0 documentation"
+
+---
+---
+
+## 📗 CFFI Out-of-line API mode
+
+> [!NOTE] Prompt
+> 
+> So, in Out-of-line API mode CFFI actually creates a Python C wrapper, builds it against the target dll, and exposes the Python wrapper to the caller, even though still with lower level unresolved C semantics, basically more or less literally translating C declarations without any semantic interpretation?
+
+**That is essentially correct**, with one important refinement: API mode does not produce a high-level Pythonic wrapper. It produces a compiled **CPython extension module containing generated C call stubs**.
+
+The path is approximately:
+
+```text
+Python caller
+    ↓
+generated CFFI extension module: _ctd.pyd
+    ↓ direct compiled C calls
+ctd.dll
+```
+
+CFFI generates C code from the declarations in `cdef()`. That generated code is compiled against `ctd.h` and linked to `ctd.lib`/`ctd.dll`. At runtime you import the generated extension and access its `ffi` and `lib` objects; you do not call `ffi.dlopen()` yourself in API mode. ([cffi.readthedocs.io][1])
+
+For example:
+
+```python
+from cffi import FFI
+
+ffibuilder = FFI()
+
+ffibuilder.cdef("""
+    int ctd_add(int a, int b);
+""")
+
+ffibuilder.set_source(
+    "_ctd",
+    """
+    #include "ctd.h"
+    """,
+    include_dirs=["."],
+    libraries=["ctd"],
+    library_dirs=["."]
+)
+
+ffibuilder.compile(verbose=True)
+```
+
+This produces something like:
+
+```text
+_ctd.c
+_ctd.cp313-win_amd64.pyd
+```
+
+Then:
+
+```python
+from _ctd import lib
+
+result = lib.ctd_add(10, 20)
+```
+
+### What CFFI understands
+
+CFFI understands the actual **C type system and calling interface** represented by the declarations:
+
+* scalar types;
+* pointers;
+* arrays;
+* structures and unions;
+* enumerations;
+* callbacks;
+* calling conventions;
+* function signatures;
+* field offsets and structure sizes;
+* integer constants;
+* global variables.
+
+In API mode, the real C compiler validates and completes these declarations. For example, CFFI can use declarations containing `...` and let the compiler determine omitted structure fields, enum values, constants, typedef widths, and similar details. It can also detect a mismatch between an exact `cdef()` declaration and the real header. ([cffi.readthedocs.io][1])
+
+So it is somewhat more than merely translating declarations textually. It obtains genuine compile-time C information.
+
+### What CFFI does not understand
+
+It does not infer the higher-level contract behind those types.
+
+Given:
+
+```c
+int process(char *p, size_t n);
+```
+
+CFFI does not know whether `p` is:
+
+* an input string;
+* an output string buffer;
+* an in/out byte buffer;
+* an array of `char`;
+* nullable;
+* NUL-terminated;
+* exactly `n` bytes long;
+* allocated by the caller;
+* retained by the callee;
+* UTF-8, ASCII, or arbitrary bytes.
+
+Likewise, given:
+
+```c
+int32_t *ctd_alloc_sequence_i32(int32_t start, size_t count);
+```
+
+CFFI knows that the result is an `int32_t *`. It does not know:
+
+* that it points to `count` elements;
+* that ownership transfers to the caller;
+* that it must be released using `ctd_free()`;
+* that `NULL` indicates allocation failure;
+* that Python should copy the data before freeing it.
+
+You still write such logic explicitly:
+
+```python
+pointer = lib.ctd_alloc_sequence_i32(start, count)
+
+if pointer == ffi.NULL:
+    raise MemoryError
+
+try:
+    result = list(ffi.unpack(pointer, count))
+finally:
+    lib.ctd_free(pointer)
+```
+
+### The exact distinction
+
+A useful formulation is:
+
+> CFFI API mode translates the C ABI/API declaration layer into a compiled Python-accessible interface, but it does not translate the library’s semantic contract into a Pythonic API.
+
+It handles:
+
+```text
+C declaration
+→ correct compiled call
+→ conversion between Python values and CFFI cdata
+```
+
+It does not automatically handle:
+
+```text
+ownership
+direction
+length relationships
+capacity relationships
+encoding
+nullability policy
+error-code interpretation
+lifetime
+copy policy
+Python result shape
+```
+
+For your proposed annotation system, CFFI would therefore replace the low-level machinery:
+
+* C declaration parsing;
+* C type representation;
+* call generation;
+* ABI correctness;
+* struct layout;
+* callbacks;
+* DLL linkage.
+
+Your machinery would still provide the semantic wrapper layer:
+
+```text
+annotated C contract
+        ↓
+generated Python policy wrapper
+        ↓
+CFFI ffi/lib interface
+        ↓
+generated C extension
+        ↓
+target DLL
+```
+
+For example, the low-level API might be:
+
+```python
+status = lib.ctd_compute_stats_i32(values, count, output)
+```
+
+Your generated high-level wrapper could become:
+
+```python
+stats = ctd.compute_stats_i32([10, 20, 30])
+```
+
+where it automatically:
+
+1. converts the Python sequence;
+2. allocates the input array;
+3. allocates `ctd_stats *`;
+4. supplies the element count;
+5. checks the returned status;
+6. converts the structure into a Python object;
+7. discards all temporary C storage.
+
+So yes: **CFFI solves the hard mechanical FFI layer but intentionally leaves unresolved C semantics unresolved.**
+
+[1]: https://cffi.readthedocs.io/en/latest/cdef.html?utm_source=chatgpt.com "Preparing Wrapper Modules — CFFI 2.2.0.dev0 documentation"
+
+---
+---
+
+## 📗 CFFI Out-of-line API mode - C Testing
+
+> [!NOTE] Prompt
+> 
+> If my objective is to test C code, I actually do not want any further interpretation? I mean, I want access to actual C parameters/return with minimal intermediary, and it sounds like I have the best match with Out-of-line API mode. I can let test code handle semantics as necessary?
+
+Yes. **For white-box or low-level testing of a C API, out-of-line API mode is probably the closest match to your objective.**
+
+You want tests to interact with the C interface substantially as a C caller would:
+
+```text
+pytest code
+    ↓
+CFFI cdata objects and lib functions
+    ↓
+generated compiled CFFI extension
+    ↓
+target DLL
+```
+
+CFFI’s out-of-line API mode is specifically intended to expose a C library through `ffi` and `lib`, with compiled calls checked against the actual C declarations. The official documentation describes it as accessing the library “at the level of C” and as the most flexible and fast mode. ([cffi.readthedocs.io][1])
+
+### What the test sees
+
+Given:
+
+```c
+ctd_status ctd_sum_i32(
+    const int32_t *values,
+    size_t count,
+    int64_t *result
+);
+```
+
+your test can remain explicitly C-like:
+
+```python
+values = ffi.new("int32_t[]", [10, 20, 30])
+result = ffi.new("int64_t *")
+
+status = lib.ctd_sum_i32(values, 3, result)
+
+assert status == lib.CTD_OK
+assert result[0] == 60
+```
+
+That is valuable for C testing because the test explicitly controls:
+
+* allocation;
+* pointer type;
+* array length;
+* null pointers;
+* input/output storage;
+* lifetime;
+* buffer capacity;
+* return-code interpretation.
+
+There is no need to hide this behind:
+
+```python
+assert sum_i32([10, 20, 30]) == 60
+```
+
+That higher-level wrapper would test both the C function and your Python adaptation layer. For focused C testing, it may obscure the actual contract.
+
+### “Minimal intermediary” needs one qualification
+
+CFFI API mode is minimal **semantically**, but not literally zero-intermediary.
+
+The generated extension still performs mechanical work:
+
+* converts acceptable Python values to C arguments;
+* represents pointers and structs as CFFI `cdata`;
+* checks CFFI types;
+* invokes generated C call stubs;
+* converts scalar results back to Python values.
+
+For example:
+
+```python
+lib.ctd_add(2, 3)
+```
+
+takes Python integers, validates/converts them as C `int`, calls the C function, and returns a Python integer.
+
+For pointer-oriented tests, however, you operate directly with CFFI storage:
+
+```python
+value = ffi.new("int32_t *", 41)
+
+status = lib.ctd_increment(value)
+
+assert status == lib.CTD_OK
+assert value[0] == 42
+```
+
+That is close enough to C semantics for testing purposes without manually managing addresses through `ctypes`.
+
+### It is especially suitable for testing these cases
+
+#### Output parameters
+
+```python
+result = ffi.new("double *")
+
+status = lib.ctd_divide(10.0, 4.0, result)
+
+assert status == lib.CTD_OK
+assert result[0] == 2.5
+```
+
+#### Nullability
+
+```python
+status = lib.ctd_get_magic(ffi.NULL)
+
+assert status == lib.CTD_ERROR_NULL
+```
+
+#### In/out parameters
+
+```python
+value = ffi.new("int32_t *", 10)
+
+status = lib.ctd_increment(value)
+
+assert status == lib.CTD_OK
+assert value[0] == 11
+```
+
+#### Typed arrays
+
+```python
+values = ffi.new("int32_t[]", [1, 2, 3, 4])
+
+status = lib.ctd_reverse_i32(values, 4)
+
+assert status == lib.CTD_OK
+assert list(values) == [4, 3, 2, 1]
+```
+
+#### Insufficient buffer capacity
+
+```python
+required = ffi.new("size_t *")
+buffer = ffi.new("int32_t[2]")
+
+status = lib.ctd_make_sequence_i32(
+    100,
+    5,
+    buffer,
+    2,
+    required,
+)
+
+assert status == lib.CTD_ERROR_CAPACITY
+assert required[0] == 5
+```
+
+#### Structs
+
+```python
+point = ffi.new("ctd_point *", {
+    "x": 2.0,
+    "y": 3.0,
+})
+
+status = lib.ctd_point_translate(point, 10.0, -1.0)
+
+assert status == lib.CTD_OK
+assert point.x == 12.0
+assert point.y == 2.0
+```
+
+#### Library-allocated memory
+
+```python
+pointer = lib.ctd_alloc_sequence_i32(10, 3)
+
+assert pointer != ffi.NULL
+
+try:
+    assert [pointer[i] for i in range(3)] == [10, 11, 12]
+finally:
+    lib.ctd_free(pointer)
+```
+
+The test itself handles ownership because ownership is part of what you are testing.
+
+### Advantages over ABI mode for this purpose
+
+Out-of-line API mode gives you several relevant safeguards.
+
+The generated C module includes the real header:
+
+```python
+ffibuilder.set_source(
+    "_ctd_cffi",
+    '#include "ctd.h"',
+    libraries=["ctd"],
+)
+```
+
+The C compiler therefore sees both:
+
+* CFFI’s declared interface;
+* the actual declarations from `ctd.h`.
+
+This provides compile-time checking and lets CFFI obtain details such as structure layout, enum values, typedef resolution, and constants from the compiler. ABI mode instead loads symbols dynamically and relies much more heavily on your manually supplied ABI description being correct. ([cffi.readthedocs.io][1])
+
+For testing, API mode therefore gives you:
+
+```text
+incorrect test binding declaration
+    → preferably build failure
+
+rather than
+
+incorrect runtime ABI description
+    → possible corruption, crash, or misleading result
+```
+
+That is an important advantage.
+
+### One caveat: exact ABI misuse may be blocked
+
+CFFI is still type-aware. It is not intended to permit arbitrary malformed calls.
+
+For example, it may prevent you from passing an unrelated pointer type:
+
+```python
+wrong = ffi.new("double *")
+
+lib.ctd_increment(wrong)
+```
+
+Rather than passing it unchecked like poorly configured `ctypes`, CFFI will normally reject the incompatible argument.
+
+This is usually desirable. You are testing the C function’s documented interface, not bypassing the C type system.
+
+You can still test semantically invalid but type-correct inputs:
+
+```python
+lib.ctd_increment(ffi.NULL)
+lib.ctd_sum_i32(ffi.NULL, 5, result)
+lib.ctd_make_sequence_i32(0, 100, buffer, 2, required)
+```
+
+Those are the kinds of invalid inputs a normal C caller can express without invoking undefined behavior in the call itself.
+
+### Recommended architecture
+
+For your use case, I would keep the structure deliberately thin:
+
+```text
+ctd.h
+ctd.c
+ctd.dll
+
+cffi_build.py
+    cdef declarations
+    set_source()
+    link to ctd.dll
+
+_ctd_cffi.pyd
+    generated CFFI extension
+
+tests/
+    test_scalars.py
+    test_pointers.py
+    test_arrays.py
+    test_buffers.py
+    test_strings.py
+    test_structs.py
+    test_callbacks.py
+    test_allocation.py
+```
+
+Tests import only:
+
+```python
+from _ctd_cffi import ffi, lib
+```
+
+No Python wrapper layer is necessary.
+
+### Conclusion
+
+Your formulation is correct:
+
+> Use CFFI out-of-line API mode as a compiled, type-checked access layer to the actual C API, and let pytest code explicitly implement whatever semantic handling each test requires.
+
+That gives you:
+
+* very little semantic distortion;
+* direct access to C-shaped arguments and results;
+* compile-time validation against the real header;
+* straightforward pointer and buffer construction;
+* explicit ownership and lifetime testing;
+* no need to invent a general Python wrapper policy.
+
+For this objective, adding a Pythonic semantic wrapper would generally be counterproductive unless the wrapper itself were also a subject under test.
+
+[1]: https://cffi.readthedocs.io/en/stable/overview.html "Overview — CFFI 2.1.0 documentation"
