@@ -28,6 +28,14 @@
 extern "C" {
 #endif
 
+
+/*
+** Constants.
+*/
+#define LATIN \
+  "ABCDEFGHIJKLMNOPQRSTUVWXYZ" \
+  "abcdefghijklmnopqrstuvwxyz"
+
 /*
 ** Error codes.
 */
