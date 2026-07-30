@@ -30,6 +30,15 @@ def main(argv: Sequence[str] | None = None) -> int:
         include_dirs=["include"],
         libraries=["ctd"],
         library_dirs=["lib"],
+        define_macros=[
+            ("CTD_C_API", None),
+            ("CTD_BUILD_EXE", None),
+        ],
+        extra_compile_args=[
+            "/TC",
+            "/W4",
+            "/O2",
+        ],
     )
 
     ffibuilder.compile(verbose=True)

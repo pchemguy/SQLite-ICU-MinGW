@@ -3066,3 +3066,41 @@ the result is:
 ```c
 int ctd_add(int a, int b);
 ```
+
+---
+---
+
+## 📗 Questions
+
+### Static Linking
+
+> [!NOTE] Prompt
+> 
+> Per your prior answer:
+> 
+> ~~~
+> ### 9. Linking behavior
+> 
+> #### API mode
+> 
+> The C compiler and linker resolve calls according to the extension build configuration:
+> 
+> ```python
+> ffibuilder.set_source(
+>     "_ctd",
+>     '#include "ctd.h"',
+>     libraries=["ctd"],
+>     library_dirs=["build"],
+> )
+> ```
+> 
+> The generated extension may:
+> 
+> * statically include the target implementation;
+> * statically link a library;
+> * dynamically depend on a DLL or shared library;
+> * contain wrapper code that calls symbols resolved by the native linker.
+> ~~~
+> 
+> But when I run compilation per your earlier instructions, I get dynamic linking to `ctd.dll`. How do I link statically?
+

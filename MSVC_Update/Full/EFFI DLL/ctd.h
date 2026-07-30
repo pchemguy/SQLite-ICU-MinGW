@@ -10,19 +10,58 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#ifdef CTD_STATIC
-# define CTD_API
-#elif defined(_WIN32)
-# ifdef CTD_BUILD_DLL
-#  define CTD_API __declspec(dllexport)
-# else
-#  define CTD_API __declspec(dllimport)
-# endif
-#elif defined(__GNUC__) || defined(__clang__)
-# define CTD_API __attribute__((visibility("default")))
+
+/****************************** API Declaration ******************************/
+
+/*
+** ```markdown
+** ## Build Modes
+** 
+** | Defines                       | `CTD_API`                                         |
+** | ----------------------------- | ------------------------------------------------- |
+** | `CTD_C_API` + `CTD_BUILD_LIB` | exported DLL/shared-library symbol                |
+** | `CTD_C_API` + `CTD_BUILD_EXE` | imported DLL symbol on Windows; default elsewhere |
+** | `CTD_C_API_DEFAULT`           | default declaration                               |
+** | none                          | `static`                                          |
+** ```
+*/
+
+#if defined(CTD_C_API)
+
+#  if defined(CTD_BUILD_LIB)
+
+#    if defined(_WIN32)
+#      define CTD_API __declspec(dllexport)
+#    elif defined(__GNUC__) || defined(__clang__)
+#      define CTD_API __attribute__((visibility("default")))
+#    else
+#      define CTD_API
+#    endif
+
+#  elif defined(CTD_BUILD_EXE)
+
+#    if defined(_WIN32)
+#      define CTD_API __declspec(dllimport)
+#    else
+#      define CTD_API
+#    endif
+
+#  else
+#    error "CTD_C_API requires CTD_BUILD_LIB or CTD_BUILD_EXE"
+#  endif
+
+#elif defined(CTD_C_API_DEFAULT)
+
+#  define CTD_API
+
 #else
-# define CTD_API
+
+#  define CTD_API static
+
 #endif
+
+/*----------------------------- API Declaration -----------------------------*/
+
 
 #ifdef __cplusplus
 extern "C" {
