@@ -1,6 +1,7 @@
 from typing import Sequence
 from pathlib import Path
 import re
+import platform
 
 from cffi import FFI
 
@@ -20,6 +21,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     declarations = load_cdef_header("ctd_api.h")
     ffibuilder.cdef(declarations)
 
+    extra_compile_args = (
+        ["/TC", "/W4", "/O2"]
+        if platform.python_compiler().startswith("MSC")
+        else []
+    )
+
     ffibuilder.set_source(
         "_ctd_wrapper",
     
@@ -34,11 +41,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             ("CTD_C_API", None),
             ("CTD_BUILD_EXE", None),
         ],
-        extra_compile_args=[
-            "/TC",
-            "/W4",
-            "/O2",
-        ],
+        extra_compile_args=extra_compile_args,
     )
 
     ffibuilder.compile(verbose=True)
