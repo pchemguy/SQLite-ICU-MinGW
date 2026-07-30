@@ -1,7 +1,8 @@
 ---
 urls:
- - https://chatgpt.com/c/6a683465-21cc-83eb-942f-54fe28dfe936
- - https://chatgpt.com/c/6a69ee1e-7120-83eb-80bc-b307bf9e9010
+  - https://chatgpt.com/c/6a683465-21cc-83eb-942f-54fe28dfe936
+  - https://chatgpt.com/c/6a69ee1e-7120-83eb-80bc-b307bf9e9010
+  - https://chatgpt.com/c/6a69a221-b8b8-83eb-b9a9-1c094fdaab78
 ---
 
 ## 📗 ctypes, CFFI, and SWIG to call DLL
