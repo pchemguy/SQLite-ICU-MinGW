@@ -3104,3 +3104,20 @@ int ctd_add(int a, int b);
 > 
 > But when I run compilation per your earlier instructions, I get dynamic linking to `ctd.dll`. How do I link statically?
 
+### API mode with compiled-in sources
+
+#### API mode with compiled-in sources
+
+No DLL export is required if the C implementation is compiled directly into the generated extension:
+
+```python
+ffibuilder.set_source(
+    "_ctd",
+    '#include "ctd.h"',
+    sources=["ctd.c"],
+)
+```
+
+The C symbol only needs linkage suitable for the generated wrapper within that native module.
+
+This can simplify distribution but changes the artifact model: Python is then using its own compiled copy of the C code, not necessarily the independently built DLL you wanted to test.
