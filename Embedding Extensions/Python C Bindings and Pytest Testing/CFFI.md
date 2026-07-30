@@ -2503,3 +2503,566 @@ That gives you:
 For this objective, adding a Pythonic semantic wrapper would generally be counterproductive unless the wrapper itself were also a subject under test.
 
 [1]: https://cffi.readthedocs.io/en/stable/overview.html "Overview — CFFI 2.1.0 documentation"
+
+---
+---
+
+## 📗 CFFI Out-of-line API cdef Input
+
+> [!NOTE] Prompt
+> 
+> Can I feed  ctd.h to cdef() in Out-of-line API mode?
+
+**Not directly in the general case.** `cdef()` does not run the C preprocessor and does not accept an arbitrary production header unchanged.
+
+You can read the file and pass its text:
+
+```python
+from cffi import FFI
+
+ffibuilder = FFI()
+
+with open("ctd.h", encoding="utf-8") as file:
+    ffibuilder.cdef(file.read())
+```
+
+But that only works when `ctd.h` already contains syntax accepted by CFFI’s parser.
+
+Your current header contains material that should not be given directly to `cdef()`, including:
+
+```c
+#ifndef CTD_H
+#define CTD_H
+
+#include <stddef.h>
+#include <stdint.h>
+
+#if defined(_WIN32)
+# define CTD_API __declspec(dllimport)
+#endif
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+```
+
+`cdef()` expects **C-like declarations**, not a fully preprocessed compilation unit. It does not generally process `#include`, conditional compilation, macro expansion, compiler attributes, or declarations hidden behind macros. CFFI documentation describes declarations as often being copy-pasted from headers, rather than treating `cdef()` as a full header parser. ([cffi.readthedocs.io][1])
+
+### The two inputs have different purposes
+
+In API mode, the same interface normally appears in two forms.
+
+#### `cdef()`: CFFI-readable interface description
+
+```python
+ffibuilder.cdef("""
+    typedef enum ctd_status {
+        CTD_OK = 0,
+        CTD_ERROR_NULL = 1,
+        CTD_ERROR_RANGE = 2
+    } ctd_status;
+
+    int ctd_add(int a, int b);
+
+    ctd_status ctd_divide(
+        double numerator,
+        double denominator,
+        double *result
+    );
+""")
+```
+
+#### `set_source()`: real header seen by the C compiler
+
+```python
+ffibuilder.set_source(
+    "_ctd_cffi",
+    """
+    #include "ctd.h"
+    """,
+    include_dirs=["."],
+    libraries=["ctd"],
+    library_dirs=["."],
+)
+```
+
+The source string passed to `set_source()` is inserted verbatim into the generated C source. Therefore, it can and normally should include the actual header. The compiler sees the complete real declaration, including macros, platform conditionals, attributes, typedef definitions, and includes. ([cffi.readthedocs.io][1])
+
+So:
+
+```text
+cdef()
+    → parsed by CFFI
+    → restricted C declaration language
+
+set_source("#include \"ctd.h\"")
+    → processed by MSVC
+    → full C header
+```
+
+### Practical options
+
+#### Option 1: Maintain a separate CFFI declaration file
+
+For example:
+
+```text
+ctd.h
+ctd.c
+ctd_cffi.h
+ctd_build.py
+```
+
+`ctd_cffi.h`:
+
+```c
+typedef enum ctd_status {
+    CTD_OK = 0,
+    CTD_ERROR_NULL = 1,
+    CTD_ERROR_RANGE = 2,
+    CTD_ERROR_CAPACITY = 3,
+    CTD_ERROR_ALLOCATION = 4,
+    CTD_ERROR_DIVIDE_BY_ZERO = 5
+} ctd_status;
+
+int ctd_add(int a, int b);
+
+ctd_status ctd_divide(
+    double numerator,
+    double denominator,
+    double *result
+);
+```
+
+Build script:
+
+```python
+from pathlib import Path
+
+from cffi import FFI
+
+ffibuilder = FFI()
+
+ffibuilder.cdef(
+    Path("ctd_cffi.h").read_text(encoding="utf-8")
+)
+
+ffibuilder.set_source(
+    "_ctd_cffi",
+    '#include "ctd.h"',
+    include_dirs=["."],
+    libraries=["ctd"],
+    library_dirs=["."],
+)
+
+if __name__ == "__main__":
+    ffibuilder.compile(verbose=True)
+```
+
+This is simple but duplicates the declarations.
+
+#### Option 2: Design the public header to be dual-use
+
+You can separate the declarations from the compiler machinery.
+
+For example:
+
+```c
+/*
+** ctd_api.h
+**
+** Plain declarations consumable by both CFFI and a C compiler.
+*/
+
+typedef enum ctd_status {
+    CTD_OK = 0,
+    CTD_ERROR_NULL = 1
+} ctd_status;
+
+int ctd_add(int a, int b);
+```
+
+Then `ctd.h` provides the compiler-facing wrapping:
+
+```c
+#ifndef CTD_H
+#define CTD_H
+
+#include <stddef.h>
+#include <stdint.h>
+
+#if defined(_WIN32)
+# if defined(CTD_BUILD_DLL)
+#  define CTD_API __declspec(dllexport)
+# else
+#  define CTD_API __declspec(dllimport)
+# endif
+#else
+# define CTD_API
+#endif
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+#include "ctd_api.h"
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif
+```
+
+However, this exact example loses `CTD_API` on declarations in `ctd_api.h`. You could use a declaration macro, but then CFFI would need the macro removed or defined away. In practice, making one unchanged file satisfy both a C compiler and `cdef()` often becomes awkward.
+
+#### Option 3: Preprocess the real header
+
+You can run the header through a C preprocessor and pass the cleaned result to `cdef()`:
+
+```text
+ctd.h
+   ↓ clang -E / cl /EP
+preprocessed declarations
+   ↓ filtering
+cdef()
+```
+
+But raw preprocessor output normally includes large amounts of system-header content, compiler extensions, built-in declarations, and implementation details that CFFI cannot or should not parse.
+
+This typically requires commands or tooling that:
+
+* defines `CTD_API` as empty;
+* removes system includes or supplies CFFI-compatible typedefs;
+* strips compiler-specific constructs;
+* retains only the target declarations.
+
+CFFI documentation notes preprocessing as a possible technique, but it is not equivalent to passing an arbitrary header directly. ([cffi.readthedocs.io][2])
+
+### Best approach for your testing fixture
+
+For a controlled exploration DLL, I would use a **single declaration fragment** that is deliberately valid in both contexts, then compose the real C header around it.
+
+For example:
+
+#### `ctd_api.h`
+
+```c
+typedef enum ctd_status {
+    CTD_OK = 0,
+    CTD_ERROR_NULL = 1,
+    CTD_ERROR_RANGE = 2
+} ctd_status;
+
+int ctd_add(int a, int b);
+
+ctd_status ctd_divide(
+    double numerator,
+    double denominator,
+    double *result
+);
+```
+
+#### `ctd.h`
+
+```c
+#ifndef CTD_H
+#define CTD_H
+
+#include <stddef.h>
+#include <stdint.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+#include "ctd_api.h"
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif
+```
+
+#### `ctd_build.py`
+
+```python
+from pathlib import Path
+
+from cffi import FFI
+
+ffibuilder = FFI()
+
+ffibuilder.cdef(
+    Path("ctd_api.h").read_text(encoding="utf-8")
+)
+
+ffibuilder.set_source(
+    "_ctd_cffi",
+    '#include "ctd.h"',
+    include_dirs=["."],
+    libraries=["ctd"],
+    library_dirs=["."],
+)
+
+if __name__ == "__main__":
+    ffibuilder.compile(verbose=True)
+```
+
+For Windows export annotations, you can either place them only on the definitions or generate/export the DLL through a `.def` file. Alternatively, keep a small transformation step that removes `CTD_API` before feeding declarations to `cdef()`.
+
+The key answer is:
+
+> You may feed the textual contents of a header to `cdef()`, but only if that header is deliberately written in CFFI’s restricted declaration language. An ordinary platform-aware C header normally must be simplified, transformed, or split into a CFFI-compatible declaration fragment.
+
+[1]: https://cffi.readthedocs.io/en/latest/cdef.html "Preparing Wrapper Modules — CFFI 2.2.0.dev0 documentation"
+[2]: https://cffi.readthedocs.io/en/release-1.16/cdef.html "Preparing and Distributing modules — CFFI 1.16.0 documentation"
+
+
+---
+---
+
+## 📗 CFFI Out-of-line API cdef Input
+
+> [!NOTE] Prompt
+> 
+> Say, I go with ctd_api.h, but with CTD_API. Can I tell CFFI to ignore the macro?
+
+Not by declaring the macro to `cdef()`. CFFI does not provide a general “ignore this identifier wherever it occurs” directive.
+
+Given:
+
+```c
+CTD_API int ctd_add(int a, int b);
+```
+
+you should remove or replace `CTD_API` in the text before passing it to `cdef()`:
+
+```python
+from pathlib import Path
+import re
+
+from cffi import FFI
+
+ffibuilder = FFI()
+
+header = Path("ctd_api.h").read_text(encoding="utf-8")
+header = re.sub(r"\bCTD_API\b", "", header)
+
+ffibuilder.cdef(header)
+```
+
+The real C compiler still sees the unmodified header:
+
+```python
+ffibuilder.set_source(
+    "_ctd_cffi",
+    '#include "ctd.h"',
+    include_dirs=["."],
+    libraries=["ctd"],
+    library_dirs=["."],
+)
+```
+
+So the two views are:
+
+```text
+cdef():
+    CTD_API removed
+    CFFI parses plain declarations
+
+generated C source:
+    #include "ctd.h"
+    compiler expands CTD_API normally
+```
+
+CFFI’s documentation explicitly recommends programmatically removing annotation-like tokens that its parser does not understand. ([cffi.readthedocs.io][1])
+
+### A more controlled replacement
+
+A plain regex is appropriate when `CTD_API` is a unique identifier:
+
+```python
+def load_cdef_header(path: str) -> str:
+    text = Path(path).read_text(encoding="utf-8")
+    return re.sub(r"\bCTD_API\b", " ", text)
+```
+
+Then:
+
+```python
+ffibuilder.cdef(load_cdef_header("ctd_api.h"))
+```
+
+The word boundaries prevent accidental modifications to identifiers such as:
+
+```c
+CTD_API_VERSION
+MY_CTD_API
+```
+
+### Could you prepend `#define CTD_API`?
+
+No, not in the normal C-preprocessor sense:
+
+```python
+ffibuilder.cdef("""
+#define CTD_API
+#include "ctd_api.h"
+""")
+```
+
+`cdef()` does not run the preprocessor or expand arbitrary macros. Its limited support for declarations such as:
+
+```c
+#define CTD_CONSTANT ...
+```
+
+is specifically for exposing integer macro values in API mode, not defining syntactic macros used within declarations. ([cffi.readthedocs.io][1])
+
+### Better header organization
+
+You can keep `CTD_API` directly in the shared declaration file:
+
+```c
+/*
+** ctd_api.h
+*/
+
+CTD_API int ctd_add(int a, int b);
+
+CTD_API ctd_status ctd_divide(
+    double numerator,
+    double denominator,
+    double *result
+);
+```
+
+Compiler-facing `ctd.h`:
+
+```c
+#ifndef CTD_H
+#define CTD_H
+
+#include <stddef.h>
+#include <stdint.h>
+
+#if defined(_WIN32)
+# if defined(CTD_BUILD_DLL)
+#  define CTD_API __declspec(dllexport)
+# else
+#  define CTD_API __declspec(dllimport)
+# endif
+#else
+# define CTD_API
+#endif
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+#include "ctd_api.h"
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif
+```
+
+CFFI builder:
+
+```python
+from pathlib import Path
+import re
+
+from cffi import FFI
+
+ffibuilder = FFI()
+
+declarations = Path("ctd_api.h").read_text(encoding="utf-8")
+declarations = re.sub(r"\bCTD_API\b", " ", declarations)
+
+ffibuilder.cdef(declarations)
+
+ffibuilder.set_source(
+    "_ctd_cffi",
+    '#include "ctd.h"',
+    include_dirs=["."],
+    libraries=["ctd"],
+    library_dirs=["."],
+)
+
+if __name__ == "__main__":
+    ffibuilder.compile(verbose=True)
+```
+
+This gives you one authoritative declaration file with only a trivial lexical normalization for CFFI. There is no duplicated function signature set.
+
+[1]: https://cffi.readthedocs.io/en/latest/cdef.html "Preparing Wrapper Modules — CFFI 2.2.0.dev0 documentation"
+
+---
+---
+
+## 📗 RegEx for API Macro
+
+> [!NOTE] Prompt
+> 
+> Change regex. I want to match a string, all capitals alphanum, \_,  at the beginning of a line with "\_API" suffix.
+
+Use multiline mode and match the complete leading macro plus its following horizontal whitespace:
+
+```python
+declarations = re.sub(
+    r"(?m)^[A-Z][A-Z0-9_]*_API[ \t]+",
+    "",
+    declarations,
+)
+```
+
+This matches:
+
+```c
+CTD_API int ctd_add(int a, int b);
+SQLITE_API void sqlite3_free(void *);
+MY_LIBRARY2_API const char *function(void);
+```
+
+It does not match:
+
+```c
+    CTD_API int ctd_add(int a, int b);  /* indented */
+extern CTD_API int value;               /* not at line start */
+ctd_API int function(void);             /* lowercase */
+CTD_API_VERSION                         /* does not end at _API */
+```
+
+Complete loader:
+
+```python
+from pathlib import Path
+import re
+
+
+def load_cdef_header(path: str | Path) -> str:
+    declarations = Path(path).read_text(encoding="utf-8")
+
+    return re.sub(
+        r"(?m)^[A-Z][A-Z0-9_]*_API[ \t]+",
+        "",
+        declarations,
+    )
+```
+
+For:
+
+```c
+CTD_API int ctd_add(int a, int b);
+```
+
+the result is:
+
+```c
+int ctd_add(int a, int b);
+```
