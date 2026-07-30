@@ -5,6 +5,7 @@ import platform
 
 from cffi import FFI
 
+PROGRAM_NAME = "CTD"
 
 def load_cdef_header(path: str | Path) -> str:
     declarations = Path(path).read_text(encoding="utf-8")
@@ -18,7 +19,7 @@ def load_cdef_header(path: str | Path) -> str:
 
 def main(argv: Sequence[str] | None = None) -> int:
     ffibuilder = FFI()
-    declarations = load_cdef_header("ctd_api.h")
+    declarations = load_cdef_header(f"{PROGRAM_NAME.lower()}_api.h")
     ffibuilder.cdef(declarations)
 
     extra_compile_args = (
@@ -28,19 +29,16 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
 
     ffibuilder.set_source(
-        "_ctd_wrapper",
+        f"_{PROGRAM_NAME.lower()}_wrapper",
     
-        """
-        #include "ctd.h"
-        """,
-    
-        #sources=["ctd.c"],
+        f"#include \"{PROGRAM_NAME.lower()}.h\"",
+        #sources=[f"{PROGRAM_NAME.lower()}.c"],
         include_dirs=[".", "include",],
-        libraries=["ctd"],
+        libraries=[PROGRAM_NAME.lower()],
         library_dirs=[".", "lib",],
         define_macros=[
-            ("CTD_C_API", None),
-            ("CTD_BUILD_EXE", None),
+            (f"{PROGRAM_NAME.upper()}_C_API", None),
+            (f"{PROGRAM_NAME.upper()}_BUILD_EXE", None),
         ],
         extra_compile_args=extra_compile_args,
     )
