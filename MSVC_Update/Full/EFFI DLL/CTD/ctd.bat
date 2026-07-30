@@ -1,7 +1,14 @@
 @echo off
 
+set "SOURCE=ctd.c"
+set "LIBOUT=ctd.lib"
+set "DLLOUT=ctd.dll"
+set "PREFIX=CTD"
+set FLAGS=^
+    /D%PREFIX%_C_API ^
+    /D%PREFIX%_BUILD_LIB
+
 cl /nologo /TC /O2 /LD ^
-  /DCTD_C_API ^
-  /DCTD_BUILD_LIB ^
-  ctd.c ^
-  /link /IMPLIB:ctd.lib /OUT:ctd.dll
+    %FLAGS% ^
+    "%SOURCE%" ^
+    /link /IMPLIB:"%LIBOUT%" /OUT:"%DLLOUT%"
