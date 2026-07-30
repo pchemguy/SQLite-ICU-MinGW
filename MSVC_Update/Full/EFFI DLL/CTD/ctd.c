@@ -14,14 +14,14 @@ struct ctd_counter {
     int value;
 };
 
-CTD_API int ctd_global_counter = 0;
-CTD_API const int ctd_global_constant = 1729;
+CTD_API extern int ctd_global_counter = 0;
+CTD_API extern const int ctd_global_constant = 1729;
 
-const char *ctd_version(void) {
+CTD_API const char *ctd_version(void) {
     return "ctd 1.0";
 }
 
-const char *ctd_status_name(ctd_status status) {
+CTD_API const char *ctd_status_name(ctd_status status) {
     switch (status) {
         case CTD_OK:
             return "CTD_OK";
@@ -40,27 +40,27 @@ const char *ctd_status_name(ctd_status status) {
     }
 }
 
-int ctd_add(int a, int b) {
+CTD_API int ctd_add(int a, int b) {
     return a + b;
 }
 
-int ctd_subtract(int a, int b) {
+CTD_API int ctd_subtract(int a, int b) {
     return a - b;
 }
 
-int32_t ctd_negate_i32(int32_t value) {
+CTD_API int32_t ctd_negate_i32(int32_t value) {
     return -value;
 }
 
-uint64_t ctd_add_u64(uint64_t a, uint64_t b) {
+CTD_API uint64_t ctd_add_u64(uint64_t a, uint64_t b) {
     return a + b;
 }
 
-double ctd_hypot_squared(double x, double y) {
+CTD_API double ctd_hypot_squared(double x, double y) {
     return x * x + y * y;
 }
 
-ctd_status ctd_divide(double numerator, double denominator, double *result) {
+CTD_API ctd_status ctd_divide(double numerator, double denominator, double *result) {
     if (result == NULL) {
         return CTD_ERROR_NULL;
     }
@@ -73,7 +73,7 @@ ctd_status ctd_divide(double numerator, double denominator, double *result) {
     return CTD_OK;
 }
 
-ctd_status ctd_get_magic(int32_t *result) {
+CTD_API ctd_status ctd_get_magic(int32_t *result) {
     if (result == NULL) {
         return CTD_ERROR_NULL;
     }
@@ -82,7 +82,7 @@ ctd_status ctd_get_magic(int32_t *result) {
     return CTD_OK;
 }
 
-ctd_status ctd_increment(int32_t *value) {
+CTD_API ctd_status ctd_increment(int32_t *value) {
     if (value == NULL) {
         return CTD_ERROR_NULL;
     }
@@ -95,7 +95,7 @@ ctd_status ctd_increment(int32_t *value) {
     return CTD_OK;
 }
 
-ctd_status ctd_swap_i32(int32_t *a, int32_t *b) {
+CTD_API ctd_status ctd_swap_i32(int32_t *a, int32_t *b) {
     int32_t temporary;
 
     if (a == NULL || b == NULL) {
@@ -109,7 +109,7 @@ ctd_status ctd_swap_i32(int32_t *a, int32_t *b) {
     return CTD_OK;
 }
 
-ctd_status ctd_sum_i32(const int32_t *values, size_t count, int64_t *result) {
+CTD_API ctd_status ctd_sum_i32(const int32_t *values, size_t count, int64_t *result) {
     size_t index;
     int64_t sum = 0;
 
@@ -129,7 +129,7 @@ ctd_status ctd_sum_i32(const int32_t *values, size_t count, int64_t *result) {
     return CTD_OK;
 }
 
-ctd_status ctd_scale_i32(int32_t *values, size_t count, int32_t factor) {
+CTD_API ctd_status ctd_scale_i32(int32_t *values, size_t count, int32_t factor) {
     size_t index;
 
     if (values == NULL && count != 0) {
@@ -143,7 +143,7 @@ ctd_status ctd_scale_i32(int32_t *values, size_t count, int32_t factor) {
     return CTD_OK;
 }
 
-ctd_status ctd_reverse_i32(int32_t *values, size_t count) {
+CTD_API ctd_status ctd_reverse_i32(int32_t *values, size_t count) {
     size_t left;
     size_t right;
     int32_t temporary;
@@ -171,7 +171,7 @@ ctd_status ctd_reverse_i32(int32_t *values, size_t count) {
     return CTD_OK;
 }
 
-ctd_status ctd_compute_stats_i32(
+CTD_API ctd_status ctd_compute_stats_i32(
     const int32_t *values,
     size_t count,
     ctd_stats *result
@@ -218,7 +218,7 @@ ctd_status ctd_compute_stats_i32(
     return CTD_OK;
 }
 
-ctd_status ctd_make_sequence_i32(
+CTD_API ctd_status ctd_make_sequence_i32(
     int32_t start,
     size_t count,
     int32_t *buffer,
@@ -252,7 +252,7 @@ ctd_status ctd_make_sequence_i32(
     return CTD_OK;
 }
 
-int32_t *ctd_alloc_sequence_i32(int32_t start, size_t count) {
+CTD_API int32_t *ctd_alloc_sequence_i32(int32_t start, size_t count) {
     int32_t *result;
     size_t index;
 
@@ -277,7 +277,7 @@ int32_t *ctd_alloc_sequence_i32(int32_t start, size_t count) {
     return result;
 }
 
-ctd_status ctd_copy_bytes(
+CTD_API ctd_status ctd_copy_bytes(
     const uint8_t *source,
     size_t source_count,
     uint8_t *destination,
@@ -306,7 +306,7 @@ ctd_status ctd_copy_bytes(
     return CTD_OK;
 }
 
-ctd_status ctd_xor_bytes(uint8_t *buffer, size_t count, uint8_t mask) {
+CTD_API ctd_status ctd_xor_bytes(uint8_t *buffer, size_t count, uint8_t mask) {
     size_t index;
 
     if (buffer == NULL && count != 0) {
@@ -320,7 +320,7 @@ ctd_status ctd_xor_bytes(uint8_t *buffer, size_t count, uint8_t mask) {
     return CTD_OK;
 }
 
-size_t ctd_string_length(const char *text) {
+CTD_API size_t ctd_string_length(const char *text) {
     if (text == NULL) {
         return 0;
     }
@@ -328,7 +328,7 @@ size_t ctd_string_length(const char *text) {
     return strlen(text);
 }
 
-const char *ctd_select_static_string(int selector) {
+CTD_API const char *ctd_select_static_string(int selector) {
     switch (selector) {
         case 0:
             return "zero";
@@ -341,7 +341,7 @@ const char *ctd_select_static_string(int selector) {
     }
 }
 
-char *ctd_alloc_greeting(const char *name) {
+CTD_API char *ctd_alloc_greeting(const char *name) {
     static const char prefix[] = "Hello, ";
     static const char suffix[] = "!";
     size_t prefix_size = sizeof(prefix) - 1;
@@ -375,7 +375,7 @@ char *ctd_alloc_greeting(const char *name) {
     return result;
 }
 
-ctd_status ctd_ascii_upper(char *buffer, size_t capacity) {
+CTD_API ctd_status ctd_ascii_upper(char *buffer, size_t capacity) {
     size_t index;
 
     if (buffer == NULL) {
@@ -397,7 +397,7 @@ ctd_status ctd_ascii_upper(char *buffer, size_t capacity) {
     return CTD_ERROR_CAPACITY;
 }
 
-ctd_status ctd_copy_string(
+CTD_API ctd_status ctd_copy_string(
     const char *source,
     char *destination,
     size_t destination_capacity,
@@ -420,7 +420,7 @@ ctd_status ctd_copy_string(
     return CTD_OK;
 }
 
-ctd_point ctd_point_make(double x, double y) {
+CTD_API ctd_point ctd_point_make(double x, double y) {
     ctd_point result;
 
     result.x = x;
@@ -429,7 +429,7 @@ ctd_point ctd_point_make(double x, double y) {
     return result;
 }
 
-ctd_point ctd_point_add(ctd_point a, ctd_point b) {
+CTD_API ctd_point ctd_point_add(ctd_point a, ctd_point b) {
     ctd_point result;
 
     result.x = a.x + b.x;
@@ -438,7 +438,7 @@ ctd_point ctd_point_add(ctd_point a, ctd_point b) {
     return result;
 }
 
-double ctd_point_dot(const ctd_point *a, const ctd_point *b) {
+CTD_API double ctd_point_dot(const ctd_point *a, const ctd_point *b) {
     if (a == NULL || b == NULL) {
         return 0.0;
     }
@@ -446,7 +446,7 @@ double ctd_point_dot(const ctd_point *a, const ctd_point *b) {
     return a->x * b->x + a->y * b->y;
 }
 
-ctd_status ctd_point_translate(ctd_point *point, double dx, double dy) {
+CTD_API ctd_status ctd_point_translate(ctd_point *point, double dx, double dy) {
     if (point == NULL) {
         return CTD_ERROR_NULL;
     }
@@ -457,7 +457,11 @@ ctd_status ctd_point_translate(ctd_point *point, double dx, double dy) {
     return CTD_OK;
 }
 
-ctd_status ctd_record_initialize(ctd_record *record, int32_t id, const char *name) {
+CTD_API ctd_status ctd_record_initialize(
+    ctd_record *record,
+    int32_t id,
+    const char *name
+) {
     size_t name_size;
 
     if (record == NULL || name == NULL) {
@@ -482,7 +486,7 @@ ctd_status ctd_record_initialize(ctd_record *record, int32_t id, const char *nam
     return CTD_OK;
 }
 
-ctd_value ctd_value_from_i64(int64_t value) {
+CTD_API ctd_value ctd_value_from_i64(int64_t value) {
     ctd_value result;
 
     result.kind = CTD_NUMBER_I64;
@@ -491,7 +495,7 @@ ctd_value ctd_value_from_i64(int64_t value) {
     return result;
 }
 
-ctd_value ctd_value_from_f64(double value) {
+CTD_API ctd_value ctd_value_from_f64(double value) {
     ctd_value result;
 
     result.kind = CTD_NUMBER_F64;
@@ -500,7 +504,7 @@ ctd_value ctd_value_from_f64(double value) {
     return result;
 }
 
-ctd_status ctd_value_as_f64(const ctd_value *value, double *result) {
+CTD_API ctd_status ctd_value_as_f64(const ctd_value *value, double *result) {
     if (value == NULL || result == NULL) {
         return CTD_ERROR_NULL;
     }
@@ -519,7 +523,7 @@ ctd_status ctd_value_as_f64(const ctd_value *value, double *result) {
     }
 }
 
-ctd_status ctd_apply_callback(
+CTD_API ctd_status ctd_apply_callback(
     int left,
     int right,
     ctd_binary_callback callback,
@@ -534,15 +538,15 @@ ctd_status ctd_apply_callback(
     return CTD_OK;
 }
 
-static int ctd_operation_add(int left, int right) {
+CTD_API int ctd_operation_add(int left, int right) {
     return left + right;
 }
 
-static int ctd_operation_multiply(int left, int right) {
+CTD_API int ctd_operation_multiply(int left, int right) {
     return left * right;
 }
 
-ctd_binary_operation ctd_get_binary_operation(int selector) {
+CTD_API ctd_binary_operation ctd_get_binary_operation(int selector) {
     switch (selector) {
         case 0:
             return ctd_operation_add;
@@ -553,16 +557,16 @@ ctd_binary_operation ctd_get_binary_operation(int selector) {
     }
 }
 
-int ctd_global_counter_increment(void) {
+CTD_API int ctd_global_counter_increment(void) {
     ctd_global_counter += 1;
     return ctd_global_counter;
 }
 
-void ctd_global_counter_reset(void) {
+CTD_API void ctd_global_counter_reset(void) {
     ctd_global_counter = 0;
 }
 
-ctd_counter *ctd_counter_create(int initial_value) {
+CTD_API ctd_counter *ctd_counter_create(int initial_value) {
     ctd_counter *counter;
 
     counter = (ctd_counter *)malloc(sizeof(*counter));
@@ -575,11 +579,11 @@ ctd_counter *ctd_counter_create(int initial_value) {
     return counter;
 }
 
-void ctd_counter_destroy(ctd_counter *counter) {
+CTD_API void ctd_counter_destroy(ctd_counter *counter) {
     free(counter);
 }
 
-ctd_status ctd_counter_get(const ctd_counter *counter, int *result) {
+CTD_API ctd_status ctd_counter_get(const ctd_counter *counter, int *result) {
     if (counter == NULL || result == NULL) {
         return CTD_ERROR_NULL;
     }
@@ -588,7 +592,7 @@ ctd_status ctd_counter_get(const ctd_counter *counter, int *result) {
     return CTD_OK;
 }
 
-ctd_status ctd_counter_add(ctd_counter *counter, int amount, int *result) {
+CTD_API ctd_status ctd_counter_add(ctd_counter *counter, int amount, int *result) {
     if (counter == NULL || result == NULL) {
         return CTD_ERROR_NULL;
     }
@@ -599,6 +603,6 @@ ctd_status ctd_counter_add(ctd_counter *counter, int amount, int *result) {
     return CTD_OK;
 }
 
-void ctd_free(void *pointer) {
+CTD_API void ctd_free(void *pointer) {
     free(pointer);
 }

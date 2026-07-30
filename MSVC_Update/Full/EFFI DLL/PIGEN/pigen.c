@@ -7,7 +7,7 @@
 #include "pigen.h"
 
 
-double pi_approx(int n) {
+PIGEN_API double pi_approx(int n) {
     int i;
     int inside = 0;
     double x;

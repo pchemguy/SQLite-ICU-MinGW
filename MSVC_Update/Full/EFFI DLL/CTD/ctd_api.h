@@ -103,6 +103,9 @@ CTD_API int32_t ctd_negate_i32(int32_t value);
 CTD_API uint64_t ctd_add_u64(uint64_t a, uint64_t b);
 CTD_API double ctd_hypot_squared(double x, double y);
 
+CTD_API int ctd_operation_add(int left, int right);
+CTD_API int ctd_operation_multiply(int left, int right);
+
 CTD_API ctd_status ctd_divide(
     double numerator,
     double denominator,

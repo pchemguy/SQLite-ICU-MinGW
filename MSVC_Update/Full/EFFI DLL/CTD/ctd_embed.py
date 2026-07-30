@@ -6,7 +6,7 @@ import platform
 from cffi import FFI
 
 
-PROGRAM_NAME = "PIGEN"
+PROGRAM_NAME = "CTD"
 
 
 def load_cdef_header(path: str | Path) -> str:
