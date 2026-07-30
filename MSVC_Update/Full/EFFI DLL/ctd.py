@@ -1,24 +1,39 @@
+from typing import Sequence
+from pathlib import Path
+import re
+
 from cffi import FFI
 
-ffibuilder = FFI()
 
-ffibuilder.cdef(
-"""
-    int ctd_add(int a, int b);
-"""
-)
+def load_cdef_header(path: str | Path) -> str:
+    declarations = Path(path).read_text(encoding="utf-8")
 
-ffibuilder.set_source(
-    "_ctd",
+    return re.sub(
+        r"(?m)^[A-Z][A-Z0-9_]*_API[ \t]+",
+        "",
+        declarations,
+    )
 
-    """
-    #include "ctd.h"
-    """,
 
-    include_dirs=["include"],
-    libraries=["ctd"],
-    library_dirs=["lib"],
-)
+def main(argv: Sequence[str] | None = None) -> int:
+    ffibuilder = FFI()
+    declarations = load_cdef_header("ctd_api.h")
+    ffibuilder.cdef(declarations)
+
+    ffibuilder.set_source(
+        "_ctd_wrapper",
+    
+        """
+        #include "ctd.h"
+        """,
+    
+        include_dirs=["include"],
+        libraries=["ctd"],
+        library_dirs=["lib"],
+    )
+
+    ffibuilder.compile(verbose=True)
+
 
 if __name__ == "__main__":
-    ffibuilder.compile(verbose=True)
+    raise SystemExit(main())
