@@ -4,7 +4,6 @@
 ** Standalone C99 DLL fixture for exploring Python CFFI.
 */
 
-#define CTD_BUILD_DLL
 #include "ctd.h"
 
 #include <limits.h>
