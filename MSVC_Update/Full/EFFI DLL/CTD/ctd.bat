@@ -1,6 +1,6 @@
 @echo off
 
-cl /nologo /TC /W4 /O2 /LD ^
+cl /nologo /TC /O2 /LD ^
   /DCTD_C_API ^
   /DCTD_BUILD_LIB ^
   ctd.c ^

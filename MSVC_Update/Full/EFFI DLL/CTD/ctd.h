@@ -74,7 +74,10 @@ extern "C" {
   "ABCDEFGHIJKLMNOPQRSTUVWXYZ" \
   "abcdefghijklmnopqrstuvwxyz"
 
+#ifndef CTD_API_H
+#define CTD_API_H
 #include "ctd_api.h"
+#endif
 
 #ifdef __cplusplus
 }

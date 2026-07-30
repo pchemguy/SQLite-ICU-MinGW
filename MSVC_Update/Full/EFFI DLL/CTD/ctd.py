@@ -22,7 +22,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     ffibuilder.cdef(declarations)
 
     extra_compile_args = (
-        ["/TC", "/W4", "/O2"]
+        ["/TC", "/O2"]
         if platform.python_compiler().startswith("MSC")
         else []
     )
@@ -34,9 +34,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         #include "ctd.h"
         """,
     
-        include_dirs=["include"],
+        #sources=["ctd.c"],
+        include_dirs=[".", "include",],
         libraries=["ctd"],
-        library_dirs=["lib"],
+        library_dirs=[".", "lib",],
         define_macros=[
             ("CTD_C_API", None),
             ("CTD_BUILD_EXE", None),

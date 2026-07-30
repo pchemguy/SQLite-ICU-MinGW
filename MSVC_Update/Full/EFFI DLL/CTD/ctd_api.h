@@ -2,6 +2,8 @@
 ** ctd_api.h
 */
 
+#define CTD_API_H 1
+
 /*
 ** Error codes.
 */
