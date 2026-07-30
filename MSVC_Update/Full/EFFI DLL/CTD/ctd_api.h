@@ -2,7 +2,8 @@
 ** ctd_api.h
 */
 
-#define CTD_API_H 1
+#ifndef CTD_API_H
+#define CTD_API_H
 
 /*
 ** Error codes.
@@ -242,3 +243,5 @@ CTD_API ctd_status ctd_counter_add(ctd_counter *counter, int amount, int *result
 ** Passing NULL is permitted.
 */
 CTD_API void ctd_free(void *pointer);
+
+#endif /* CTD_API_H */

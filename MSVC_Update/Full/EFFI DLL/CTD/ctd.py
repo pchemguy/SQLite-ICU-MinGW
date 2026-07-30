@@ -5,16 +5,48 @@ import platform
 
 from cffi import FFI
 
+
 PROGRAM_NAME = "CTD"
 
-def load_cdef_header(path: str | Path) -> str:
-    declarations = Path(path).read_text(encoding="utf-8")
 
-    return re.sub(
-        r"(?m)^[A-Z][A-Z0-9_]*_API[ \t]+",
+def load_cdef_header(path: str | Path) -> str:
+    header_path = Path(path)
+    declarations = header_path.read_text(encoding="utf-8")
+
+    guard = re.sub(r"[^A-Za-z0-9]", "_", header_path.name).upper()
+    escaped_guard = re.escape(guard)
+
+    declarations = re.sub(
+        rf"^[ \t]*#[ \t]*ifndef[ \t]+{escaped_guard}[ \t]*(?:\r?\n|$)",
         "",
         declarations,
+        flags=re.MULTILINE,
     )
+
+    declarations = re.sub(
+        rf"^[ \t]*#[ \t]*define[ \t]+{escaped_guard}[ \t]*(?:\r?\n|$)",
+        "",
+        declarations,
+        flags=re.MULTILINE,
+    )
+
+    declarations = re.sub(
+        rf"^[ \t]*#[ \t]*endif"
+        rf"(?:[ \t]*/\*[ \t]*{escaped_guard}[ \t]*\*/)?"
+        rf"[ \t]*(?:\r?\n|$)",
+        "",
+        declarations,
+        flags=re.MULTILINE,
+    )
+
+    declarations = re.sub(
+        r"^[A-Z][A-Z0-9_]*_API[ \t]+",
+        "",
+        declarations,
+        flags=re.MULTILINE,
+    )
+
+    return declarations
 
 
 def main(argv: Sequence[str] | None = None) -> int:

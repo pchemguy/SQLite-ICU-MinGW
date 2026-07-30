@@ -67,9 +67,7 @@
 extern "C" {
 #endif
 
-#ifndef PIGEN_API_H
 #include "pigen_api.h"
-#endif
 
 #ifdef __cplusplus
 }

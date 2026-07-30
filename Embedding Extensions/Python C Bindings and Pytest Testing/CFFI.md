@@ -1,5 +1,7 @@
 ---
-url: https://chatgpt.com/c/6a6acd3d-a91c-83eb-b3fb-a0bd8cbcaf63
+urls:
+  - https://chatgpt.com/c/6a6acd3d-a91c-83eb-b3fb-a0bd8cbcaf63
+  - https://chatgpt.com/c/6a6add0f-1f70-83eb-b67e-b8e80aaf9903
 ---
 
 ## 📗 CFFI Workflow
