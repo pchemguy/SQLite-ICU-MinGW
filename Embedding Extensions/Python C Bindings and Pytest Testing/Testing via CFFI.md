@@ -788,3 +788,15 @@ The correct boundary is therefore:
 * Function calls verify behavior.
 
 That is the complete contract surface you are trying to test.
+
+---
+---
+
+## 📗 C Contract - Global Type, Variables, Constants, Namespace
+
+> [!NOTE] Prompt
+> 
+> I need tests to verify the structures are there!
+
+
+You need explicit contract tests for declared types, including structs, unions, enums, typedefs, and opaque types.
