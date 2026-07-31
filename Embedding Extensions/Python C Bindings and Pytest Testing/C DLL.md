@@ -1074,6 +1074,3 @@ It also distinguishes:
 * `void *user_data`: uninterpreted callback context.
 
 These semantics are **not inferable from C declarations alone**. CFFI can represent the declarations, but wrapper-generation policy still needs metadata or manually written Python logic for direction, capacity, ownership, nullability, string encoding, and error interpretation.
-
----
----
