@@ -796,7 +796,908 @@ That is the complete contract surface you are trying to test.
 
 > [!NOTE] Prompt
 > 
-> I need tests to verify the structures are there!
+> So, cdef declarations may contain **types, functions, constants** and **global variables**, and I need comprehensive systematic testing strategy. Unit testing of functions is the second part, but first I want to get in order already touched types/typedefs, constants, and variables. I want to leave unions out for now, as this is specific low-level target beyond my present interests. So, I guess, we should limit scope for typedefs to structs and enums. I understand that I can inspect (and ultimately pytest) all names and types.
+> 
+> For constants, I should be able to verify both name a value (I might define a Python datatclass CConstants or CConst (or similar) for convenient verification of constant names and values).
+> 
+> For variables, I can probably also define CVariable(s)/CVar(s) and use it for automatic verification of variable names and types. I could also, possibly, add setters to define expected constraints (perhaps positive or zero intimal numeric values, or specific strings).
+> 
+> There is of course the need to consider non-scalar constants and variables as to what is the practical limit to automatic generic verification via Python classes. 
+> 
+> For enums, targets include names and values of enum members, enum tag (`enum ctd_status`), enum name (`ctd_status`), types of both. Members can be tested conveniently against Python-defined `IntEnum` subclass mirroring C enum.
+> 
+> For structs, similarly, I would want to verify struct tag (`struct ctd_point`), struct name (`ctd_point`), types of both, fields and there names and types (possibly also by defining a "mirror" Python class to be used as a reference "template")?
+
+Yes. That is the right decomposition, but the contract model should distinguish **declared types**, **value constants**, and **objects with storage**. They are exposed differently by CFFI and require different verification mechanisms.
+
+CFFI’s runtime introspection is sufficient for a systematic first-stage contract suite: `ffi.typeof()` exposes named C types, while `lib` exposes declared functions, constants, and globals. `CType` objects provide attributes such as `kind`, `cname`, `fields`, `elements`, and `relements`, depending on the type category. ([CFFI][1])
+
+### 1. Recommended scope
+
+For the first phase, cover:
+
+1. Struct types and their typedefs
+2. Enum types and their typedefs
+3. Enum members and integer constants
+4. Global variables:
+    * numeric scalars;
+    * character arrays;
+    * character pointers;
+    * fixed-size arrays;
+    * struct objects
+5. Explicitly exclude for now:
+    * unions;
+    * bitfields;
+    * flexible array members;
+    * arbitrary pointer graphs;
+    * function pointers;
+    * recursively linked structures;
+    * semantic ownership and lifetime validation
+
+That is a coherent and broad enough subset.
+
+---
+
+### 2. Terminology
+
+Consider:
+
+```c
+typedef struct ctd_point {
+    double x;
+    double y;
+} ctd_point;
+```
+
+This declares:
+
+* struct tag: `struct ctd_point`
+* typedef name: `ctd_point`
+
+Likewise:
+
+```c
+typedef enum ctd_status {
+    CTD_OK = 0
+} ctd_status;
+```
+
+declares:
+
+* enum tag: `enum ctd_status`
+* typedef name: `ctd_status`
+* enumerator: `CTD_OK`
+
+These are separate contract names and can all be tested.
+
+---
+
+### 3. A common type reference
+
+Use strings containing C type syntax as your canonical expected type references:
+
+```python
+from dataclasses import dataclass
 
 
-You need explicit contract tests for declared types, including structs, unions, enums, typedefs, and opaque types.
+@dataclass(frozen=True)
+class CTypeRef:
+    spelling: str
+```
+
+Examples:
+
+```python
+CTypeRef("int32_t")
+CTypeRef("double")
+CTypeRef("char[16]")
+CTypeRef("struct ctd_point")
+CTypeRef("ctd_point")
+```
+
+Do not generally compare `cname` strings to determine type equivalence. Instead, resolve the expected type through the same `ffi` instance:
+
+```python
+def assert_same_c_type(actual, expected: CTypeRef) -> None:
+    assert actual == ffi.typeof(expected.spelling)
+```
+
+This lets CFFI handle typedef resolution and canonicalization.
+
+---
+
+### 4. Enum contract
+
+A useful enum specification is:
+
+```python
+from dataclasses import dataclass
+from enum import IntEnum
+from typing import type as type_type
+```
+
+More practically:
+
+```python
+from dataclasses import dataclass
+from enum import IntEnum
+
+
+@dataclass(frozen=True)
+class CEnumSpec:
+    typedef_name: str
+    tag_name: str
+    mirror: type[IntEnum]
+```
+
+Mirror:
+
+```python
+class CtdStatus(IntEnum):
+    CTD_OK = 0
+    CTD_ERROR_NULL = 1
+    CTD_ERROR_RANGE = 2
+    CTD_ERROR_CAPACITY = 3
+    CTD_ERROR_ALLOCATION = 4
+    CTD_ERROR_DIVIDE_BY_ZERO = 5
+```
+
+Specification:
+
+```python
+CTD_STATUS = CEnumSpec(
+    typedef_name="ctd_status",
+    tag_name="enum ctd_status",
+    mirror=CtdStatus,
+)
+```
+
+#### Enum type verification
+
+```python
+def verify_enum_type(spec: CEnumSpec) -> None:
+    typedef_type = ffi.typeof(spec.typedef_name)
+    tagged_type = ffi.typeof(spec.tag_name)
+
+    assert typedef_type.kind == "enum"
+    assert tagged_type.kind == "enum"
+    assert typedef_type == tagged_type
+```
+
+This verifies that:
+
+* `ctd_status` exists;
+* `enum ctd_status` exists;
+* both designate the same enum type.
+
+#### Enumerator verification through `lib`
+
+```python
+import pytest
+
+
+@pytest.mark.parametrize(
+    "member",
+    list(CtdStatus),
+    ids=lambda member: member.name,
+)
+def test_ctd_status_member(member: CtdStatus) -> None:
+    assert getattr(lib, member.name) == member.value
+```
+
+You can also cross-check CFFI’s enum metadata:
+
+```python
+def verify_enum_members(spec: CEnumSpec) -> None:
+    ctype = ffi.typeof(spec.typedef_name)
+
+    expected = {
+        member.name: member.value
+        for member in spec.mirror
+    }
+
+    assert ctype.relements == expected
+
+    for member in spec.mirror:
+        assert getattr(lib, member.name) == member.value
+```
+
+CFFI enum types expose `elements` and `relements` for value-to-name and name-to-value inspection. ([CFFI][2])
+
+Using both mechanisms verifies two distinct surfaces:
+
+* `ctype.relements`: the enum declaration known to CFFI;
+* `lib.CTD_OK`: the public constant exposed to Python.
+
+---
+
+### 5. Struct contract
+
+Define fields explicitly:
+
+```python
+@dataclass(frozen=True)
+class CFieldSpec:
+    name: str
+    type: CTypeRef
+
+
+@dataclass(frozen=True)
+class CStructSpec:
+    typedef_name: str
+    tag_name: str
+    fields: tuple[CFieldSpec, ...]
+```
+
+For `ctd_point`:
+
+```python
+CTD_POINT = CStructSpec(
+    typedef_name="ctd_point",
+    tag_name="struct ctd_point",
+    fields=(
+        CFieldSpec("x", CTypeRef("double")),
+        CFieldSpec("y", CTypeRef("double")),
+    ),
+)
+```
+
+For `ctd_record`:
+
+```python
+CTD_RECORD = CStructSpec(
+    typedef_name="ctd_record",
+    tag_name="struct ctd_record",
+    fields=(
+        CFieldSpec("id", CTypeRef("int32_t")),
+        CFieldSpec("name", CTypeRef("char[16]")),
+        CFieldSpec("values", CTypeRef("double[3]")),
+    ),
+)
+```
+
+#### Generic struct verifier
+
+```python
+def verify_struct_type(spec: CStructSpec) -> None:
+    typedef_type = ffi.typeof(spec.typedef_name)
+    tagged_type = ffi.typeof(spec.tag_name)
+
+    assert typedef_type.kind == "struct"
+    assert tagged_type.kind == "struct"
+    assert typedef_type == tagged_type
+
+    assert typedef_type.fields is not None
+
+    actual_fields = typedef_type.fields
+
+    assert [name for name, _ in actual_fields] == [
+        field.name for field in spec.fields
+    ]
+
+    for expected, (actual_name, actual_field) in zip(
+        spec.fields,
+        actual_fields,
+        strict=True,
+    ):
+        assert actual_name == expected.name
+        assert actual_field.type == ffi.typeof(expected.type.spelling)
+```
+
+This verifies:
+
+* struct typedef exists;
+* struct tag exists;
+* both refer to the same type;
+* the type is a struct;
+* fields appear in the expected order;
+* field names match;
+* field types match;
+* fixed array element types and lengths match automatically through type equality.
+
+#### Optional layout verification
+
+You may additionally verify:
+
+```python
+ffi.sizeof("ctd_point")
+ffi.alignof("ctd_point")
+ffi.offsetof("ctd_point", "x")
+ffi.offsetof("ctd_point", "y")
+```
+
+But I would keep layout tests separate:
+
+```python
+@dataclass(frozen=True)
+class CStructLayout:
+    size: int
+    alignment: int
+    offsets: dict[str, int]
+```
+
+Layout is platform- and compiler-dependent. Since your API-mode build already uses the real compiler, exact layout assertions are useful only when binary layout is itself part of your expected contract—for example, serialized records, shared memory, or an externally fixed ABI.
+
+---
+
+### 6. Opaque structs
+
+Although you may not need them in the first type subset, `ctd_counter` is worth distinguishing:
+
+```c
+typedef struct ctd_counter ctd_counter;
+```
+
+It is a named incomplete struct, not a defined struct.
+
+```python
+@dataclass(frozen=True)
+class COpaqueStructSpec:
+    typedef_name: str
+    tag_name: str
+```
+
+Verifier:
+
+```python
+def verify_opaque_struct(spec: COpaqueStructSpec) -> None:
+    typedef_type = ffi.typeof(spec.typedef_name)
+    tagged_type = ffi.typeof(spec.tag_name)
+
+    assert typedef_type.kind == "struct"
+    assert tagged_type.kind == "struct"
+    assert typedef_type == tagged_type
+    assert typedef_type.fields is None
+```
+
+This explicitly verifies that the object remains opaque.
+
+---
+
+### 7. Constants
+
+You should separate three kinds of C constants:
+
+#### Enum members
+
+```c
+CTD_OK
+CTD_ERROR_NULL
+```
+
+They are exposed as Python integers on `lib`.
+
+#### Integer macro constants
+
+In CFFI API mode, an integer macro can be exposed when represented appropriately in the `cdef()` input, commonly with:
+
+```c
+#define CTD_CAPACITY ...
+```
+
+CFFI asks the compiler for the actual integer value and exposes it on `lib`. ([CFFI][3])
+
+#### Typed constant objects
+
+```c
+extern const int ctd_global_constant;
+```
+
+This is not merely a compile-time constant. It is a global object with storage and an address, so it belongs under variables rather than macro constants.
+
+#### Constant specification
+
+For enum members and integer macros:
+
+```python
+from dataclasses import dataclass
+
+
+@dataclass(frozen=True)
+class CConstant:
+    name: str
+    value: int
+```
+
+Example:
+
+```python
+CONSTANTS = (
+    CConstant("CTD_BUFFER_CAPACITY", 16),
+    CConstant("CTD_DEFAULT_LIMIT", 100),
+)
+```
+
+Verifier:
+
+```python
+@pytest.mark.parametrize(
+    "constant",
+    CONSTANTS,
+    ids=lambda constant: constant.name,
+)
+def test_constant(constant: CConstant) -> None:
+    assert getattr(lib, constant.name) == constant.value
+```
+
+A generic integer constant exposed by `lib` does not necessarily preserve enough information to verify its original source-level integer type. Its useful exposed contract is normally:
+
+* name;
+* Python integer value.
+
+If exact C type matters, declare a typed global object instead.
+
+---
+
+### 8. Global variables
+
+Variables need three independent checks:
+
+1. Symbol name exists.
+2. Declared C type matches.
+3. Initial value satisfies an expected condition.
+
+The important point is that reading a scalar global loses its C type:
+
+```python
+value = lib.ctd_global_counter
+type(value)  # int
+```
+
+To recover the actual declared C type, take its address:
+
+```python
+pointer = ffi.addressof(lib, "ctd_global_counter")
+variable_type = ffi.typeof(pointer).item
+```
+
+CFFI documents `ffi.addressof(lib, "name")` for obtaining the address of a named global variable or function. ([CFFI][2])
+
+#### Variable specification
+
+```python
+from collections.abc import Callable
+from dataclasses import dataclass
+from typing import Any
+
+
+ValueValidator = Callable[[Any], bool]
+
+
+@dataclass(frozen=True)
+class CVariable:
+    name: str
+    type: CTypeRef
+    initial: ValueValidator | None = None
+```
+
+Generic verifier:
+
+```python
+def verify_variable(spec: CVariable) -> None:
+    address = ffi.addressof(lib, spec.name)
+    actual_type = ffi.typeof(address).item
+
+    assert actual_type == ffi.typeof(spec.type.spelling)
+
+    if spec.initial is not None:
+        assert spec.initial(getattr(lib, spec.name))
+```
+
+Missing variables naturally fail at `ffi.addressof()` or `getattr()`.
+
+---
+
+### 9. Reusable initial-value constraints
+
+Rather than arbitrary lambdas everywhere, define small explicit matcher objects.
+
+```python
+from dataclasses import dataclass
+from typing import Any, Protocol
+
+
+class ValueConstraint(Protocol):
+    def __call__(self, value: Any) -> bool:
+        ...
+```
+
+#### Exact value
+
+```python
+@dataclass(frozen=True)
+class Equals:
+    expected: Any
+
+    def __call__(self, value: Any) -> bool:
+        return value == self.expected
+```
+
+#### Zero
+
+```python
+@dataclass(frozen=True)
+class Zero:
+    def __call__(self, value: Any) -> bool:
+        return value == 0
+```
+
+#### Positive number
+
+```python
+@dataclass(frozen=True)
+class Positive:
+    def __call__(self, value: Any) -> bool:
+        return value > 0
+```
+
+#### Range
+
+```python
+@dataclass(frozen=True)
+class Between:
+    minimum: int | float
+    maximum: int | float
+
+    def __call__(self, value: Any) -> bool:
+        return self.minimum <= value <= self.maximum
+```
+
+Then:
+
+```python
+VARIABLES = (
+    CVariable(
+        name="ctd_global_counter",
+        type=CTypeRef("int"),
+        initial=Zero(),
+    ),
+    CVariable(
+        name="ctd_global_constant",
+        type=CTypeRef("const int"),
+        initial=Equals(1729),
+    ),
+)
+```
+
+One qualification: top-level `const` representation may be normalized by CFFI. For variable mutability, the declaration itself matters because CFFI generates write access only for non-const globals. CFFI notes that `const` on a global declaration determines whether the variable is treated as writable. ([CFFI][3])
+
+---
+
+### 10. String globals
+
+C has multiple materially different “string-like” global types.
+
+#### Fixed character array
+
+```c
+extern const char ctd_name[16];
+```
+
+Expected type:
+
+```python
+CTypeRef("const char[16]")
+```
+
+Value extraction:
+
+```python
+ffi.string(lib.ctd_name)
+```
+
+#### Character pointer
+
+```c
+extern const char *ctd_name;
+```
+
+Expected type:
+
+```python
+CTypeRef("const char *")
+```
+
+Value may be `NULL`, so validation must account for that.
+
+#### String constraint
+
+```python
+@dataclass(frozen=True)
+class CStringEquals:
+    expected: str
+    encoding: str = "utf-8"
+
+    def __call__(self, value: Any) -> bool:
+        return (
+            value != ffi.NULL
+            and ffi.string(value).decode(self.encoding) == self.expected
+        )
+```
+
+Nullable variant:
+
+```python
+@dataclass(frozen=True)
+class NullableCStringEquals:
+    expected: str | None
+    encoding: str = "utf-8"
+
+    def __call__(self, value: Any) -> bool:
+        if value == ffi.NULL:
+            return self.expected is None
+
+        return ffi.string(value).decode(self.encoding) == self.expected
+```
+
+The declaration alone does not tell you that a `char *` is NUL-terminated text, which encoding it uses, or how long the valid region is. Therefore, a generic variable verifier should not automatically interpret every `char *` as a string. That semantic choice belongs in the constraint.
+
+---
+
+### 11. Fixed arrays
+
+For:
+
+```c
+extern const int32_t ctd_values[4];
+```
+
+you can generically validate both type and contents.
+
+```python
+@dataclass(frozen=True)
+class ArrayEquals:
+    expected: tuple[Any, ...]
+
+    def __call__(self, value: Any) -> bool:
+        return tuple(value) == self.expected
+```
+
+Specification:
+
+```python
+CVariable(
+    name="ctd_values",
+    type=CTypeRef("const int32_t[4]"),
+    initial=ArrayEquals((1, 2, 3, 4)),
+)
+```
+
+Fixed arrays are a practical automatic boundary because the element type and length are present in the C type.
+
+Unsized arrays, pointers to arrays, or pointer-plus-length conventions require additional semantic metadata.
+
+---
+
+### 12. Struct-valued variables
+
+For:
+
+```c
+extern const ctd_point ctd_origin;
+```
+
+you can provide a field constraint.
+
+```python
+@dataclass(frozen=True)
+class StructFields:
+    expected: dict[str, Any]
+
+    def __call__(self, value: Any) -> bool:
+        return all(
+            getattr(value, name) == expected
+            for name, expected in self.expected.items()
+        )
+```
+
+Specification:
+
+```python
+CVariable(
+    name="ctd_origin",
+    type=CTypeRef("const ctd_point"),
+    initial=StructFields({
+        "x": 0.0,
+        "y": 0.0,
+    }),
+)
+```
+
+For floating-point values, use an explicit approximate matcher rather than hiding approximation inside the generic struct verifier.
+
+For example:
+
+```python
+@dataclass(frozen=True)
+class Approx:
+    expected: float
+    relative: float = 1e-12
+    absolute: float = 1e-12
+
+    def __call__(self, value: Any) -> bool:
+        return value == pytest.approx(
+            self.expected,
+            rel=self.relative,
+            abs=self.absolute,
+        )
+```
+
+A richer `StructFields` implementation can recursively apply constraints:
+
+```python
+@dataclass(frozen=True)
+class StructFields:
+    expected: dict[str, Any]
+
+    def __call__(self, value: Any) -> bool:
+        for name, expected in self.expected.items():
+            actual = getattr(value, name)
+
+            if callable(expected):
+                if not expected(actual):
+                    return False
+            elif actual != expected:
+                return False
+
+        return True
+```
+
+Then:
+
+```python
+StructFields({
+    "x": Approx(0.0),
+    "y": Approx(0.0),
+})
+```
+
+---
+
+### 13. Practical generic-verification boundary
+
+The following are safely generic:
+
+| Category           | Generic checks                                         |
+| ------------------ | ------------------------------------------------------ |
+| Scalar type        | Exact C type                                           |
+| Enum               | Tag, typedef, members, numeric values                  |
+| Struct             | Tag, typedef, ordered fields, field types              |
+| Opaque struct      | Tag, typedef, incompleteness                           |
+| Integer constant   | Name and value                                         |
+| Scalar global      | Name, C type, value constraint                         |
+| Fixed array global | Name, element type, length, contents                   |
+| Character array    | Name, exact array type, optional string interpretation |
+| Struct global      | Name, exact struct type, selected field constraints    |
+
+The following require semantic policy and should not be automatically guessed:
+
+| Category                  | Missing information                                   |
+| ------------------------- | ----------------------------------------------------- |
+| `char *`                  | text vs bytes, encoding, NUL termination, nullability |
+| arbitrary `T *`           | scalar vs array, valid length, ownership              |
+| pointer inside struct     | lifetime, pointee validity, count relationship        |
+| unsized array             | runtime length                                        |
+| recursive structure       | traversal limits and ownership                        |
+| flexible array member     | allocation size                                       |
+| externally mutable global | stable initial-state timing                           |
+| address-valued constant   | identity and lifetime semantics                       |
+
+That should be the deliberate stopping point.
+
+---
+
+### 14. Suggested module architecture
+
+```text
+tests/
+    contract/
+        model.py
+        constraints.py
+        enums.py
+        structs.py
+        constants.py
+        variables.py
+        test_enums.py
+        test_structs.py
+        test_constants.py
+        test_variables.py
+```
+
+`model.py`:
+
+```python
+@dataclass(frozen=True)
+class CTypeRef:
+    spelling: str
+
+
+@dataclass(frozen=True)
+class CFieldSpec:
+    name: str
+    type: CTypeRef
+
+
+@dataclass(frozen=True)
+class CStructSpec:
+    typedef_name: str
+    tag_name: str
+    fields: tuple[CFieldSpec, ...]
+
+
+@dataclass(frozen=True)
+class CEnumSpec:
+    typedef_name: str
+    tag_name: str
+    mirror: type[IntEnum]
+
+
+@dataclass(frozen=True)
+class CConstant:
+    name: str
+    value: int
+
+
+@dataclass(frozen=True)
+class CVariable:
+    name: str
+    type: CTypeRef
+    initial: ValueConstraint | None = None
+```
+
+This is compact enough to remain transparent while covering the important C declaration surface.
+
+---
+
+### 15. Recommended test hierarchy
+
+The first-stage suite should verify:
+
+#### Declared type contract
+
+* expected enum typedefs exist;
+* expected enum tags exist;
+* each tag and typedef pair resolve to the same type;
+* expected struct typedefs exist;
+* expected struct tags exist;
+* each tag and typedef pair resolve to the same type;
+* struct field order, names, and types match;
+* opaque structs remain incomplete.
+
+#### Constant contract
+
+* expected constant names are exposed;
+* expected integer values match;
+* enum metadata and exposed enum member values agree.
+
+#### Global-object contract
+
+* expected global names are exposed;
+* exact declared C types match;
+* mutability/constness is represented correctly where relevant;
+* initial values satisfy declared constraints;
+* string interpretation occurs only when explicitly requested;
+* fixed arrays have expected shape and values;
+* struct objects have expected selected fields.
+
+#### Function contract
+
+This remains the second phase:
+
+* names;
+* signatures;
+* behavior;
+* errors;
+* pointer semantics;
+* memory ownership;
+* callbacks.
+
+Your proposed split is therefore sound. The principal refinement is:
+
+> A Python mirror class is useful for enum members, but structs should be represented by an explicit `CStructSpec`, not by a normal Python data class pretending to be the struct value type.
+
+A normal dataclass can represent expected struct **values**, but it cannot by itself represent all declaration details such as tag spelling, typedef spelling, field order, C array dimensions, pointer qualifiers, or opaque/incomplete status.
+
+[1]: https://cffi.readthedocs.io/en/stable/overview.html "Overview — CFFI 2.1.0 documentation"
+[2]: https://cffi.readthedocs.io/en/latest/ref.html "CFFI Reference — CFFI 2.2.0.dev0 documentation"
+[3]: https://cffi.readthedocs.io/en/latest/cdef.html "Preparing Wrapper Modules — CFFI 2.2.0.dev0 documentation"
