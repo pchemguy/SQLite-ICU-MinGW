@@ -784,16 +784,16 @@ echo ===== Verifying environment =====
 
 if "/%VisualStudioVersion%/"=="//" (
     echo %%VisualStudioVersion%% is not set. Run this script from an MSVC shell.
-  set "ERROR_STATUS=1"
-)   else (
-  echo VisualStudioVersion=%VisualStudioVersion%
+    set "ERROR_STATUS=1"
+) else (
+    echo VisualStudioVersion=%VisualStudioVersion%
 )
 
 if "/%VSINSTALLDIR%/"=="//" (
     echo %%VSINSTALLDIR%% is not set. Run this script from an MSVC shell.
-  set "ERROR_STATUS=1"
+    set "ERROR_STATUS=1"
 ) else (
-    echo VSINSTALLDIR=%VSINSTALLDIR%
+    echo VSINSTALLDIR="%VSINSTALLDIR%"
 )
 
 if "/%VCINSTALLDIR%/"=="//" (
