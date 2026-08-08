@@ -622,6 +622,8 @@ if "%USE_TEST%"=="1" (set "BUILDDIR=%BUILDDIR%_test")
 call :MKDIR__DIR "%BUILDDIR%" || exit /b !ERRORLEVEL!
 set "TSRC=%BUILDDIR%\tsrc"
 call :MKDIR__DIR "%TSRC%" || exit /b !ERRORLEVEL!
+set "INCDIR=%OUT%\include"
+call :MKDIR__DIR "%INCDIR%" || exit /b !ERRORLEVEL!
 set "BINDIR=%OUT%\bin"
 call :MKDIR__DIR "%BINDIR%" || exit /b !ERRORLEVEL!
 
@@ -1260,6 +1262,8 @@ if exist "%BUILDDIR%\sqlite3.dll" copy /Y "%BUILDDIR%\sqlite3.dll" "%BINDIR%"
 if exist "%BUILDDIR%\sqlite3.exe" copy /Y "%BUILDDIR%\sqlite3.exe" "%BINDIR%"
 if exist "%BUILDDIR%\sqlite3.def" copy /Y "%BUILDDIR%\sqlite3.def" "%BINDIR%"
 if exist "%BUILDDIR%\sqlite3.lib" copy /Y "%BUILDDIR%\sqlite3.lib" "%BINDIR%"
+copy /Y "%BUILDDIR%\sqlite3*.h" "%INCDIR%"
+copy /Y "%PROJDIR%\src\*.h" "%INCDIR%"
 if "%USE_ICU%"=="1" (copy /Y "%ICUBINDIR%\icu*.dll" "%BINDIR%")
 if "%USE_ZLIB%"=="1" (copy /Y "%ZLIBDIR%\zlib1.dll"  "%BINDIR%")
 echo ---------- Copied  binaries -----------
