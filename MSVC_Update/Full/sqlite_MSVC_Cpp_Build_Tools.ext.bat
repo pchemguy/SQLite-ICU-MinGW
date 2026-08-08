@@ -1223,7 +1223,26 @@ set "SECTION=SQLITE_BUILD"
 
 cd /d "%BUILDDIR%" || exit /b !ERRORLEVEL!
 
+nmake /nologo "EXTRA_SRC=%EXTRA_SRC%" "TOP=%SQLITEDIR%" /f "%SQLITE_MAKEFILE%" sqlite3.def
+
+:: ----- Replace sqlite3.def -----
+
+echo EXPORTS >"%BUILDDIR%\sqlite3.def"
+
+set "PATTERN=^[ ]*[0-9][0-9]*[ ]*[A-Za-z0-9][A-Za-z0-9]*_"
+for /f "usebackq tokens=2 delims=@ " %%A in (
+    `dumpbin /linkermember:2 libsqlite3.lib ^| findstr /R /C:"%PATTERN%"`
+) do (
+    echo %%A
+) >>"%BUILDDIR%\exports.txt"
+type "%BUILDDIR%\exports.txt" | sort >>"%BUILDDIR%\sqlite3.def"
+del /Q "%BUILDDIR%\exports.txt"
+
 nmake /nologo "EXTRA_SRC=%EXTRA_SRC%" "TOP=%SQLITEDIR%" /f "%SQLITE_MAKEFILE%" %*
+
+:: ----- Replace sqlite3.lib -----
+
+lib /def:"%BUILDDIR%\sqlite3.def" /out:"%BUILDDIR%\sqlite3.lib" /machine:x64
 
 echo ~~~~~ %SECTION% ~~~~~
 echo:
