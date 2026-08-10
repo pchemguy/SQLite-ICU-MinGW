@@ -645,25 +645,4 @@ static int pblobRegister(sqlite3 *db) {
     );
 }
 
-
-/*
-** Standard SQLite extension initializer.
-**
-** In an amalgamation/auto-extension build, this function can be registered
-** with sqlite3_auto_extension() or invoked from the project's aggregate
-** auto-extension initializer.
-*/
-#ifdef _WIN32
-__declspec(dllexport)
-#endif
-int sqlite3_pblob_init(
-    sqlite3 *db,
-    char **pzErrMsg,
-    const sqlite3_api_routines *pApi
-) {
-    UNUSED_PARAMETER(pzErrMsg);
-    UNUSED_PARAMETER(pApi);
-return pblobRegister(db);
-}
-
 #endif /* SQLITE_OMIT_JSON */
