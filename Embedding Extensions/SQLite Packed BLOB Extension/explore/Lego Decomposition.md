@@ -2159,3 +2159,80 @@ That gives you four valid encodings only:
 ```
 
 I would use exactly this scheme.
+
+---
+---
+
+## 📗 Revised API
+
+> [!NOTE] Prompt
+> 
+> So, If I use trailer, I would have to have 
+> 
+> ```sql
+> pblob_pack(json_vector, format) -> BLOB
+> pblob_unpack(blob_data) -> TEXT
+> ```
+
+Exactly.
+
+With the 4-byte trailer carrying both **element type** and **endianness**, `unpack` no longer needs a format argument:
+
+```sql
+pblob_pack(json_vector, format) -> BLOB
+pblob_unpack(blob_data)         -> TEXT
+```
+
+For example:
+
+```sql
+pblob_pack('[1.23, 4.56, -7.89]', '<f4')
+pblob_pack('[1.23, 4.56, -7.89]', '>f2')
+```
+
+produce:
+
+```text
+[payload ...][01 01 01 01]   <f2
+[payload ...][03 03 03 03]   >f2
+[payload ...][05 05 05 05]   <f4
+[payload ...][07 07 07 07]   >f4
+```
+
+Then:
+
+```sql
+pblob_unpack(blob)
+```
+
+does:
+
+```text
+read final 4 bytes
+     ↓
+validate repeated tag
+     ↓
+determine f2/f4 + LE/BE
+     ↓
+payload_size = blob_size - 4
+     ↓
+validate payload_size % element_size == 0
+     ↓
+decode elements
+     ↓
+JSON TEXT
+```
+
+This also gives you a useful invariant:
+
+```c
+nBlob >= 4
+```
+
+and:
+
+```c
+count = (nBlob - 4) / element_size;
+```
+
+So yes, the trailer makes the BLOB **self-describing**, and the asymmetric SQL API is the natural result: `pack` needs to be told what representation to create; `unpack` discovers the representation from the BLOB itself.
