@@ -1161,7 +1161,7 @@ One thing I would change from the earlier interface: call it something like **`j
 ---
 ---
 
-## 📗 API Draft
+## 📗 Modeling After `json()` and `jsonb()`
 
 > [!NOTE] Prompt
 > 
@@ -1714,8 +1714,6 @@ The latter operation includes both **precision conversion and conversion to bits
 float fp16_ieee_to_fp32_value(uint16_t h);
 ```
 
-
-
 It does **not** return anything in an endian-specific order. “Endianness” does not meaningfully apply to the abstract numeric value returned by a C expression.
 
 After:
@@ -1752,10 +1750,10 @@ So for your code, keep these three concepts separate:
 numeric value        bit pattern          serialized bytes
 -------------        -----------          ----------------
 float 1.0f       ->  uint32 0x3f800000 -> 00 00 80 3f   LE
-                                         3f 80 00 00   BE
+                                          3f 80 00 00   BE
 
 float 1.0f       ->  uint16 0x3c00     -> 00 3c         LE
-                                         3c 00         BE
+                                          3c 00         BE
 ```
 
 The FP16/bitcast functions get you from **numeric value ↔ integer bit pattern**. Your byte-writing code determines **endianness**.
