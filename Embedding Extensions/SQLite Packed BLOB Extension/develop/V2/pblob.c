@@ -276,18 +276,14 @@ static int pblobJsonNumberToDouble(
     int rc;
 
     nHdr = jsonbPayloadSize(pParse, iNode, &nPayload);
-    if (nHdr == 0) {
-        return pblobError(ctx, "malformed JSON");
-    }
+    if (nHdr == 0) {return pblobError(ctx, "malformed JSON");}
 
     eType = pParse->aBlob[iNode] & 0x0f;
     if (eType != JSONB_INT && eType != JSONB_FLOAT) {
         return pblobError(ctx, "JSON array must contain only ordinary numbers");
     }
 
-    if (nPayload == 0) {
-        return pblobError(ctx, "malformed JSON number");
-    }
+    if (nPayload == 0) {return pblobError(ctx, "malformed JSON number");}
 
     db = sqlite3_context_db_handle(ctx);
     z = sqlite3DbStrNDup(
@@ -303,9 +299,7 @@ static int pblobJsonNumberToDouble(
     rc = sqlite3AtoF(z, pValue);
     sqlite3DbFree(db, z);
 
-    if (rc <= 0) {
-        return pblobError(ctx, "malformed JSON number");
-    }
+    if (rc <= 0) {return pblobError(ctx, "malformed JSON number");}
 
     return SQLITE_OK;
 }
@@ -401,9 +395,7 @@ static void pblobPackFunc(
 
     assert(argc == 1 || argc == 2);
 
-    if (sqlite3_value_type(argv[0]) == SQLITE_NULL) {
-        return;
-    }
+    if (sqlite3_value_type(argv[0]) == SQLITE_NULL) {return;}
 
     if (sqlite3_value_type(argv[0]) != SQLITE_TEXT) {
         sqlite3_result_error(ctx, "pblob_pack() JSON argument must be TEXT", -1);
@@ -419,14 +411,10 @@ static void pblobPackFunc(
         }
         rc = pblobParseFormatArg(ctx, argv[1], &info);
     }
-    if (rc != SQLITE_OK) {
-        return;
-    }
+    if (rc != SQLITE_OK) {return;}
 
     pParse = jsonParseFuncArg(ctx, argv[0], 0);
-    if (pParse == 0) {
-        return;
-    }
+    if (pParse == 0) {return;}
 
     /*
     ** SQLite's JSON parser accepts JSON5, but pblob accepts canonical numeric
@@ -488,9 +476,7 @@ static void pblobPackFunc(
         }
 
         rc = pblobJsonNumberToDouble(ctx, pParse, iNode, &x);
-        if (rc != SQLITE_OK) {
-            goto pack_cleanup;
-        }
+        if (rc != SQLITE_OK) {goto pack_cleanup;}
 
         rc = pblobEncodeValue(
             ctx,
@@ -498,9 +484,7 @@ static void pblobPackFunc(
             x,
             &info
         );
-        if (rc != SQLITE_OK) {
-            goto pack_cleanup;
-        }
+        if (rc != SQLITE_OK) {goto pack_cleanup;}
 
         iElem++;
         iNode += nHdr + nPayload;
@@ -627,17 +611,13 @@ static int pblobRegister(sqlite3 *db) {
         db, "pblob_pack", 1, flags, 0,
         pblobPackFunc, 0, 0, 0
     );
-    if (rc != SQLITE_OK) {
-        return rc;
-    }
+    if (rc != SQLITE_OK) {return rc;}
 
     rc = sqlite3_create_function_v2(
         db, "pblob_pack", 2, flags, 0,
         pblobPackFunc, 0, 0, 0
     );
-    if (rc != SQLITE_OK) {
-        return rc;
-    }
+    if (rc != SQLITE_OK) {return rc;}
 
     return sqlite3_create_function_v2(
         db, "pblob_unpack", 1, flags, 0,
