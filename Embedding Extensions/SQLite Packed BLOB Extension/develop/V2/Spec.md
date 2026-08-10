@@ -1,5 +1,7 @@
 ---
-url: https://chatgpt.com/c/6a79c755-5a4c-83eb-b039-2804fac50575
+urls:
+  - https://chatgpt.com/c/6a79c755-5a4c-83eb-b039-2804fac50575
+  - https://chatgpt.com/c/6a79cc83-25dc-83eb-944c-5d819e7af573
 ---
 
 # Packed Blob (`pblob`) SQLite Auto-Extension Specification
