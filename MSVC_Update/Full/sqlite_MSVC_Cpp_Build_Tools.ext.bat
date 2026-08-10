@@ -747,10 +747,11 @@ set "SECTION=SQLITE_BUILD_INIT"
 cd /d "%BUILDDIR%" || exit /b !ERRORLEVEL!
 
 nmake /nologo "TOP=%SQLITEDIR%" /f "%SQLITE_MAKEFILE%" .target_source
+set "ERROR_STATUS=%ERRORLEVEL%"
 
 echo ~~~~~ %SECTION% ~~~~~
 echo:
-exit /b %ERRORLEVEL%
+exit /b %ERROR_STATUS%
 
 
 :: ============================================================================
@@ -842,6 +843,10 @@ set "SECTION=SQLITE_BUILD"
 cd /d "%BUILDDIR%" || exit /b !ERRORLEVEL!
 
 nmake /nologo "EXTRA_SRC=%EXTRA_SRC%" "TOP=%SQLITEDIR%" /f "%SQLITE_MAKEFILE%" sqlite3.def
+if not "%ERRORLEVEL%"=="0" (
+    echo {ERROR} Error creating sqlite3.def
+    exit /b %ERRORLEVEL%
+)
 
 :: ----- Replace sqlite3.def -----
 
@@ -853,14 +858,26 @@ for /f "usebackq tokens=2 delims=@ " %%A in (
 ) do (
     echo %%A
 ) >>"%BUILDDIR%\exports.txt"
+if not "%ERRORLEVEL%"=="0" (
+    echo {ERROR} Error updating sqlite3.def
+    exit /b %ERRORLEVEL%
+)
 type "%BUILDDIR%\exports.txt" | sort >>"%BUILDDIR%\sqlite3.def"
 del /Q "%BUILDDIR%\exports.txt"
 
 nmake /nologo "EXTRA_SRC=%EXTRA_SRC%" "TOP=%SQLITEDIR%" /f "%SQLITE_MAKEFILE%" %*
+if not "%ERRORLEVEL%"=="0" (
+    echo {ERROR} Error building SQLite.
+    exit /b %ERRORLEVEL%
+)
 
 :: ----- Replace sqlite3.lib -----
 
 lib /def:"%BUILDDIR%\sqlite3.def" /out:"%BUILDDIR%\sqlite3.lib" /machine:%VSCMD_ARG_TGT_ARCH%
+if not "%ERRORLEVEL%"=="0" (
+    echo {ERROR} Error updating static SQLite lib.
+    exit /b %ERRORLEVEL%
+)
 
 echo ~~~~~ %SECTION% ~~~~~
 echo:
