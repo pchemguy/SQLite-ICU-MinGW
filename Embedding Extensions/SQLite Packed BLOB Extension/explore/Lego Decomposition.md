@@ -1301,3 +1301,861 @@ pblob_unpack()
 ```
 
 That is substantially cleaner than trying to force an end-to-end SQLite JSON function to do something it was never designed to do.
+
+---
+---
+
+## 📗 Format Conversion - Size and Endianness
+
+> [!NOTE] Prompt
+> 
+> For f8 <-> f4 I simply use C typecasting?
+> For f4 <-> f2 which FP 16 functions do I use? 
+> ---
+> FP16 attachments:
+> - bitcasts.h
+> - fp16.h
+> - macros.h
+
+Yes.
+
+For **f8 ↔ f4**, ordinary C casts are the right operation:
+
+```c
+float  f4 = (float)f8;
+double f8 = (double)f4;
+```
+
+The `double -> float` direction performs the normal IEEE-754 narrowing/rounding supported by the implementation; `float -> double` is exact for all finite binary32 values.
+
+For **f4 ↔ f2**, from the FP16 library you attached, use exactly these two functions:
+
+```c
+uint16_t fp16_ieee_from_fp32_value(float f);
+float    fp16_ieee_to_fp32_value(uint16_t h);
+```
+
+Those are the intended value-level IEEE binary16 conversion APIs. 
+
+So your conversion chain becomes:
+
+```c
+/* f8 -> f4 */
+float f4 = (float)f8;
+
+/* f4 -> f2 bits */
+uint16_t f2 = fp16_ieee_from_fp32_value(f4);
+
+/* f2 bits -> f4 */
+float f4 = fp16_ieee_to_fp32_value(f2);
+
+/* f4 -> f8 */
+double f8 = (double)f4;
+```
+
+For your `pblob_pack()` path, where SQLite's JSON parser gives you a `double`, the f2 case is therefore simply:
+
+```c
+double x = ...;  /* parsed JSON value */
+
+uint16_t h = fp16_ieee_from_fp32_value((float)x);
+```
+
+and f4:
+
+```c
+float f = (float)x;
+```
+
+For `pblob_unpack()`:
+
+```c
+/* f2 */
+float f = fp16_ieee_to_fp32_value(h);
+double x = (double)f;
+
+/* f4 */
+double x = (double)f;
+```
+
+Then feed `x` to the JSON formatter.
+
+### Important distinction for your BLOB
+
+`fp16_ieee_from_fp32_value()` returns a `uint16_t` containing the **binary16 bit pattern**, not a native C half type. That is exactly what you want for `<f2` / `>f2`. 
+
+Similarly, for f4, use the supplied bitcast helper:
+
+```c
+uint32_t bits = fp32_to_bits(f);
+```
+
+and reverse with:
+
+```c
+float f = fp32_from_bits(bits);
+```
+
+That gives you a particularly clean implementation for endianness:
+
+```text
+double
+  |
+  +-- f4 --> (float) --> fp32_to_bits() ------------> uint32_t --> bytes
+  |
+  +-- f2 --> (float) --> fp16_ieee_from_fp32_value() -> uint16_t --> bytes
+```
+
+and on unpack:
+
+```text
+bytes --> uint32_t --> fp32_from_bits() ------------> float --> double
+bytes --> uint16_t --> fp16_ieee_to_fp32_value() ---> float --> double
+```
+
+So I would **not** byte-swap a `float` object itself. Convert to integer bits first, then explicitly emit/read the integer bytes according to `<` or `>`.
+
+Also, use the `ieee` functions, not the `alt` functions. The `fp16_alt_*` family implements ARM's alternative half-precision format, which is not the standard IEEE binary16 representation you mean by `f2`. 
+
+The library also automatically selects native F16C/ARM conversion paths where available and otherwise falls back to its portable implementation. 
+
+---
+---
+
+## 📗 Default Endianness
+
+> [!NOTE] Prompt
+> 
+> What is endianness of C float and uint16_t? If I actually do not care about endianness now, which one I use?
+
+For ordinary C objects, the byte order of both `float` and `uint16_t` is the platform’s native endianness.
+
+So on a typical x86/x64 machine:
+
+```text
+uint16_t 0x1234  -> bytes 34 12
+float    1.0f    -> IEEE-754 bits 0x3f800000 -> bytes 00 00 80 3f
+```
+
+That is little-endian.
+
+If you **do not care about endianness now**, use native representation directly. For your current Windows/x64 target, that means effectively little-endian.
+
+For f4 packing, simplest is:
+
+```c
+float f = (float)x;
+memcpy(pOut, &f, sizeof(f));
+```
+
+For f2:
+
+```c
+uint16_t h = fp16_ieee_from_fp32_value((float)x);
+memcpy(pOut, &h, sizeof(h));
+```
+
+And unpack symmetrically:
+
+```c
+float f;
+memcpy(&f, pIn, sizeof(f));
+double x = (double)f;
+```
+
+and:
+
+```c
+uint16_t h;
+memcpy(&h, pIn, sizeof(h));
+double x = (double)fp16_ieee_to_fp32_value(h);
+```
+
+That is the simplest and cleanest approach if portability of the stored BLOB across big-endian machines is not currently a requirement.
+
+I would then simplify your format names to just:
+
+```text
+f2
+f4
+```
+
+and add explicit `<f2`, `>f2`, etc. only if you later decide the BLOB format must have defined cross-platform byte order.
+
+---
+---
+
+## 📗 Endianness Handling
+
+> [!NOTE] Prompt
+> 
+> So, if native endianness is platform dependent, how do I ensure in C that I return result in specific endianness?
+
+You ensure it by **serializing bytes explicitly**, rather than copying the native object representation directly.
+
+For f2, after:
+
+```c
+uint16_t h = fp16_ieee_from_fp32_value((float)x);
+```
+
+write bytes yourself.
+
+Little-endian:
+
+```c
+pOut[0] = (unsigned char)(h);
+pOut[1] = (unsigned char)(h >> 8);
+```
+
+Big-endian:
+
+```c
+pOut[0] = (unsigned char)(h >> 8);
+pOut[1] = (unsigned char)(h);
+```
+
+For f4, first get the IEEE-754 bit pattern:
+
+```c
+uint32_t u = fp32_to_bits((float)x);
+```
+
+Then little-endian:
+
+```c
+pOut[0] = (unsigned char)(u);
+pOut[1] = (unsigned char)(u >> 8);
+pOut[2] = (unsigned char)(u >> 16);
+pOut[3] = (unsigned char)(u >> 24);
+```
+
+Big-endian:
+
+```c
+pOut[0] = (unsigned char)(u >> 24);
+pOut[1] = (unsigned char)(u >> 16);
+pOut[2] = (unsigned char)(u >> 8);
+pOut[3] = (unsigned char)(u);
+```
+
+This is independent of the machine's native endianness.
+
+The reverse is symmetrical. For example, read f4 little-endian as:
+
+```c
+uint32_t u =
+    ((uint32_t)pIn[0]      ) |
+    ((uint32_t)pIn[1] <<  8) |
+    ((uint32_t)pIn[2] << 16) |
+    ((uint32_t)pIn[3] << 24);
+
+float f = fp32_from_bits(u);
+```
+
+and big-endian as:
+
+```c
+uint32_t u =
+    ((uint32_t)pIn[0] << 24) |
+    ((uint32_t)pIn[1] << 16) |
+    ((uint32_t)pIn[2] <<  8) |
+    ((uint32_t)pIn[3]);
+
+float f = fp32_from_bits(u);
+```
+
+So the rule is:
+
+```text
+numeric value
+   ↓
+integer bit pattern
+   ↓
+explicit byte order
+   ↓
+BLOB
+```
+
+That is the cleanest way to guarantee `<f2`, `>f2`, `<f4`, `>f4` regardless of host architecture.
+
+---
+---
+
+## 📗 Endianness Clarification
+
+> [!NOTE] Prompt
+> 
+> Is ieee byte order platform independent?
+> Are you sure fp16_ieee_from_fp32_value and fp32_to_bits return byte order independent of native?
+> You use fp32_to_bits, but not fp16_to_bits - why?
+> fp16_ieee_to_fp32_value return native order?
+
+1. **IEEE-754 defines the bit layout of binary16/binary32/binary64 values, but not the byte order used to store those bits in memory.** Byte order is a platform/ABI property.
+
+So, for example, the binary32 value `1.0f` has the IEEE bit pattern:
+
+```text
+0x3f800000
+```
+
+That bit pattern is platform-independent as a 32-bit integer value. Its **memory bytes** are not:
+
+```text
+little-endian memory: 00 00 80 3f
+big-endian memory:    3f 80 00 00
+```
+
+2. Yes, `fp32_to_bits()` is byte-order independent in the sense that it returns the **integer bit pattern**, not a byte sequence.
+
+Your attached implementation is effectively a bitcast:
+
+```c
+static inline uint32_t fp32_to_bits(float f)
+```
+
+and returns a `uint32_t` whose numeric value is the IEEE-754 representation of `f`. 
+
+For `1.0f`:
+
+```c
+uint32_t u = fp32_to_bits(1.0f);
+
+/* u == 0x3f800000 */
+```
+
+That numeric integer value is the same on little- and big-endian machines.
+
+Only when you inspect:
+
+```c
+(unsigned char *)&u
+```
+
+does native endianness enter the picture.
+
+3. `fp16_ieee_from_fp32_value()` works the same way conceptually:
+
+```c
+uint16_t h = fp16_ieee_from_fp32_value(f);
+```
+
+It returns the **16-bit IEEE binary16 bit pattern as a `uint16_t` integer value**. 
+
+For example, binary16 `1.0` has:
+
+```text
+0x3c00
+```
+
+so:
+
+```c
+uint16_t h = fp16_ieee_from_fp32_value(1.0f);
+
+/* h == 0x3c00 */
+```
+
+regardless of host byte order.
+
+Again, if you `memcpy()` `h` into a BLOB, the bytes will follow native endianness. If you explicitly shift `h`, you control the serialized byte order.
+
+4. There is no need for an `fp16_to_bits()` function because **the FP16 library already represents binary16 as bits**.
+
+This API:
+
+```c
+uint16_t fp16_ieee_from_fp32_value(float f);
+```
+
+does not return a C half-float object. It returns:
+
+```c
+uint16_t
+```
+
+containing the binary16 encoding itself.
+
+So:
+
+```text
+float value
+    ↓
+fp16_ieee_from_fp32_value()
+    ↓
+uint16_t bit pattern
+```
+
+There is nothing left to bitcast.
+
+By contrast, `float` is a floating-point C object, so to get its binary representation you need:
+
+```c
+fp32_to_bits(float)
+```
+
+Hence the asymmetry:
+
+```c
+float
+  -> fp32_to_bits()
+  -> uint32_t
+
+float
+  -> fp16_ieee_from_fp32_value()
+  -> uint16_t
+```
+
+The latter operation includes both **precision conversion and conversion to bits**.
+
+5. `fp16_ieee_to_fp32_value()` returns a normal C `float` value:
+
+```c
+float fp16_ieee_to_fp32_value(uint16_t h);
+```
+
+
+
+It does **not** return anything in an endian-specific order. “Endianness” does not meaningfully apply to the abstract numeric value returned by a C expression.
+
+After:
+
+```c
+float f = fp16_ieee_to_fp32_value(0x3c00);
+```
+
+you have:
+
+```text
+f == 1.0f
+```
+
+The compiler/platform decides how that `float` object is stored in memory.
+
+If you subsequently need the IEEE binary32 bit pattern:
+
+```c
+uint32_t u = fp32_to_bits(f);
+```
+
+then:
+
+```text
+u == 0x3f800000
+```
+
+independent of native byte order.
+
+So for your code, keep these three concepts separate:
+
+```text
+numeric value        bit pattern          serialized bytes
+-------------        -----------          ----------------
+float 1.0f       ->  uint32 0x3f800000 -> 00 00 80 3f   LE
+                                         3f 80 00 00   BE
+
+float 1.0f       ->  uint16 0x3c00     -> 00 3c         LE
+                                         3c 00         BE
+```
+
+The FP16/bitcast functions get you from **numeric value ↔ integer bit pattern**. Your byte-writing code determines **endianness**.
+
+---
+---
+
+## 📗 Format header
+
+> [!NOTE] Prompt
+> 
+> I actually want prepend each vector with one extra element to indicate size and endianness. Is this an established approach?
+
+Yes, **prefixing binary payloads with a small header describing the representation is an established binary-format pattern**. What is *not* particularly established is pretending that header is another floating-point vector element.
+
+For your format, I would treat it as:
+
+```text
++-------------+-----------------------------+
+| format tag  | packed floating-point data  |
++-------------+-----------------------------+
+```
+
+rather than conceptually:
+
+```text
+float[N+1]
+```
+
+The payload remains a bare homogeneous array; the first 1–2 bytes are metadata.
+
+For what you need, a **single byte is enough**. You have only four formats:
+
+```text
+0x00   <f2
+0x01   >f2
+0x02   <f4
+0x03   >f4
+```
+
+Then:
+
+```text
+<f2:  [00] [2-byte value] [2-byte value] ...
+>f2:  [01] [2-byte value] [2-byte value] ...
+<f4:  [02] [4-byte value] [4-byte value] ...
+>f4:  [03] [4-byte value] [4-byte value] ...
+```
+
+The vector length does **not need to be stored** because SQLite already gives you the BLOB byte length. Once the format byte tells you element width:
+
+```c
+count = (blob_size - 1) / element_size;
+```
+
+and you validate:
+
+```c
+(blob_size - 1) % element_size == 0
+```
+
+### I would probably make the tag bit-oriented
+
+For example:
+
+```text
+bit 0     endianness: 0 = little, 1 = big
+bits 1-2  element type:
+          0 = f2
+          1 = f4
+          2 = reserved f8
+          3 = reserved
+bits 3-7  reserved
+```
+
+Then:
+
+```c
+#define PBLOB_F2_LE  0x00
+#define PBLOB_F2_BE  0x01
+#define PBLOB_F4_LE  0x02
+#define PBLOB_F4_BE  0x03
+#define PBLOB_F8_LE  0x04
+#define PBLOB_F8_BE  0x05
+```
+
+This gives you room to extend without changing the format.
+
+### One concern: alignment
+
+Once you put a one-byte header in front:
+
+```text
+header byte | f4 | f4 | f4 ...
+             ^
+             offset 1
+```
+
+the f4 payload is no longer naturally aligned. That's completely fine **if you treat this as serialized bytes**, which you already should because of explicit endianness.
+
+Do not do:
+
+```c
+const float *a = (const float *)(blob + 1);
+```
+
+Instead decode from bytes / integer bit patterns as discussed earlier.
+
+Likewise for f2.
+
+### An alternative: one element-sized header
+
+If by "one extra element" you literally mean:
+
+```text
+f2 format -> 2-byte header + N × 2-byte values
+f4 format -> 4-byte header + N × 4-byte values
+```
+
+that gives you natural alignment, but now you have a chicken-and-egg problem: **you need to know the element size before you know how large the header is**.
+
+You can solve that, but it makes the format unnecessarily awkward.
+
+I'd therefore prefer:
+
+```text
+1-byte format tag
+N packed values
+```
+
+This is essentially the minimal version of the standard **header + payload** binary-format pattern. It makes your BLOB self-describing while adding exactly one byte of overhead.
+
+And it has another nice consequence: your SQL API can eventually simplify from:
+
+```sql
+pblob_unpack(blob, '<f4')
+```
+
+to simply:
+
+```sql
+pblob_unpack(blob)
+```
+
+because the BLOB itself says what it contains. For `pblob_pack()`, the format argument still selects what to create.
+
+---
+---
+
+## 📗 Suffix Header
+
+> [!NOTE] Prompt
+> 
+> Not good. Header MUST NOT screw alignment regardless. I guess, the simplest option is to have a fixed 4-byte header (I do not store f8, only f4 or f2. Vector length in practice is several hundreds, so 2 extra elements for even for 100 f2 is 2% overhead. In practice it will be probably less than 1%. Because I know blob size, the header shall be APPENDED to the vector, not PRE-. There is no good reason to deal with freaking off by 1 index.
+
+Yes. A **fixed 4-byte trailer** is cleaner for your case.
+
+Layout:
+
+```text
++-----------------------------+------------------+
+| packed f2/f4 vector payload | 4-byte metadata  |
++-----------------------------+------------------+
+```
+
+That preserves payload alignment automatically:
+
+* f2 payload starts at offset 0, aligned to 2
+* f4 payload starts at offset 0, aligned to 4
+* metadata is out of the way at the end
+* no payload indexing offset
+* `count` derives from `(blob_size - 4) / element_size`
+
+So for f4:
+
+```text
+[value0][value1][value2]...[valueN-1][meta4]
+```
+
+and for f2:
+
+```text
+[value0][value1][value2]...[valueN-1][meta4]
+```
+
+The validation becomes trivial:
+
+```c
+if( nBlob < 4 ){
+    error;
+}
+
+meta = pBlob + nBlob - 4;
+
+element_size = ...from metadata...;
+
+payload_size = nBlob - 4;
+
+if( payload_size % element_size != 0 ){
+    error;
+}
+
+count = payload_size / element_size;
+```
+
+A 4-byte metadata word also gives you plenty of room. For example:
+
+```text
+byte 0: format/version marker
+byte 1: element type   2=f2, 4=f4
+byte 2: endianness     0=LE, 1=BE
+byte 3: reserved
+```
+
+or, more compactly, define the whole trailer as one fixed `uint32_t` tag space:
+
+```c
+#define PBLOB_F2_LE  ...
+#define PBLOB_F2_BE  ...
+#define PBLOB_F4_LE  ...
+#define PBLOB_F4_BE  ...
+```
+
+I would slightly prefer the latter if the format is intentionally tiny and closed.
+
+One more point: since the trailer itself is metadata, **its own endianness should not need interpretation**. Easiest is to make the four trailer bytes literal tag bytes, not a native `uint32_t` written with `memcpy()`. Then the payload endianness can vary while trailer parsing remains platform-independent.
+
+So yes: **payload first, fixed 4-byte trailer last** is a very reasonable design here, and better than a 1-byte prefix for your alignment-sensitive use case.
+
+---
+---
+
+## 📗 Symmetric Trailer
+
+> [!NOTE] Prompt
+> 
+> So, this is fine
+> ```text
+> bit 0     endianness: 0 = little, 1 = big
+> bits 1-2  element type:
+>           0 = f2
+>           1 = f4
+>           2 = reserved f8
+>           3 = reserved
+> bits 3-7  reserved
+> ```
+> 
+> Then:
+> 
+> ```c
+> #define PBLOB_F2_LE  0x00000000
+> #define PBLOB_F2_BE  0x01010101
+> #define PBLOB_F4_LE  0x02020202
+> #define PBLOB_F4_BE  0x03030303
+> #define PBLOB_F8_LE  0x04040404
+> #define PBLOB_F8_BE  0x05050505
+> ```
+
+Yes. That is internally consistent, and the repeated-byte 32-bit trailer is actually a useful trick.
+
+Your 8-bit encoding is:
+
+```text
+bits 1-2  type
+bit 0     endian
+
+000 = f2 LE
+001 = f2 BE
+010 = f4 LE
+011 = f4 BE
+100 = f8 LE
+101 = f8 BE
+```
+
+So the corresponding byte values are exactly `0x00` through `0x05` as you show.
+
+Repeating that byte four times:
+
+```c
+#define PBLOB_F2_LE  UINT32_C(0x00000000)
+#define PBLOB_F2_BE  UINT32_C(0x01010101)
+#define PBLOB_F4_LE  UINT32_C(0x02020202)
+#define PBLOB_F4_BE  UINT32_C(0x03030303)
+#define PBLOB_F8_LE  UINT32_C(0x04040404)
+#define PBLOB_F8_BE  UINT32_C(0x05050505)
+```
+
+has a nice property: **the trailer itself is endian-independent even if you write/read it as a native `uint32_t`**, because reversing four identical bytes changes nothing:
+
+```text
+0x03030303
+
+LE memory: 03 03 03 03
+BE memory: 03 03 03 03
+```
+
+So you can safely do something like:
+
+```c
+uint32_t format = PBLOB_F4_LE;
+memcpy(pOut + payload_size, &format, sizeof(format));
+```
+
+without caring about host endianness.
+
+Likewise, reading:
+
+```c
+uint32_t format;
+memcpy(&format, pBlob + nBlob - 4, sizeof(format));
+```
+
+produces the same constant on either endian architecture.
+
+There is also some useful redundancy: you can interpret the trailer as four format bytes and require all four to agree. A malformed trailer such as:
+
+```text
+02 02 03 02
+```
+
+is immediately invalid.
+
+One caveat is `PBLOB_F2_LE == 0`. Therefore four zero bytes at the end of an arbitrary BLOB accidentally constitute a valid-looking trailer. If `pblob` BLOBs are always produced and consumed by your own functions, that may be perfectly acceptable. If you want stronger identification of arbitrary/corrupt BLOBs, you could eventually spend some of those reserved bits on a marker/version.
+
+But as a **minimal four-byte format trailer**, this design is simple, alignment-safe, endian-safe, and easy to decode. I would use it.
+
+---
+---
+
+## 📗 Adjusted Marker Encoding
+
+> [!NOTE] Prompt
+> 
+> Change to 
+> 
+> ```text
+> bit 0     reserved, must be 1
+> bit 1     endian
+> bit 2     type
+> 
+> 001 = f2 LE
+> 011 = f2 BE
+> 101 = f4 LE
+> 111 = f4 BE
+> ```
+
+Yes. That is cleaner.
+
+```text
+bit 0     reserved, must be 1
+bit 1     endian
+bit 2     type
+
+001 = f2 LE
+011 = f2 BE
+101 = f4 LE
+111 = f4 BE
+```
+
+So:
+
+```c
+#define PBLOB_F2_LE  UINT32_C(0x01010101)
+#define PBLOB_F2_BE  UINT32_C(0x03030303)
+#define PBLOB_F4_LE  UINT32_C(0x05050505)
+#define PBLOB_F4_BE  UINT32_C(0x07070707)
+```
+
+This is better than starting at zero because an all-zero trailer is now automatically invalid.
+
+Decoding one trailer byte is trivial:
+
+```c
+uint8_t tag = pTrailer[0];
+
+if( (tag & 0x01)==0 ){
+    /* invalid */
+}
+
+int big_endian = (tag >> 1) & 0x01;
+int is_f4      = (tag >> 2) & 0x01;
+```
+
+And with the repeated-byte trailer, you can additionally require:
+
+```c
+pTrailer[0] == pTrailer[1] &&
+pTrailer[0] == pTrailer[2] &&
+pTrailer[0] == pTrailer[3]
+```
+
+before interpreting it.
+
+That gives you four valid encodings only:
+
+```text
+01 01 01 01   f2 LE
+03 03 03 03   f2 BE
+05 05 05 05   f4 LE
+07 07 07 07   f4 BE
+```
+
+I would use exactly this scheme.
