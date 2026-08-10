@@ -214,7 +214,7 @@ static uint16_t pblobReadU16(const u8 *p, int bigEndian) {
     } else {
         return (uint16_t)(
             (uint16_t)p[0] | ((uint16_t)p[1] << 8)
-       );
+        );
     }
 }
 
@@ -291,9 +291,9 @@ static int pblobJsonNumberToDouble(
 
     db = sqlite3_context_db_handle(ctx);
     z = sqlite3DbStrNDup(
-            db,
-            (const char*)&pParse->aBlob[iNode+nHdr],
-            (int)nPayload
+        db,
+        (const char*)&pParse->aBlob[iNode+nHdr],
+        (int)nPayload
     );
     if (z == 0) {
         sqlite3_result_error_nomem(ctx);
@@ -476,7 +476,7 @@ static void pblobPackFunc(
     iEnd = nRootHdr + nRootPayload;
     iElem = 0;
 
-    while(iNode < iEnd) {
+    while (iNode < iEnd) {
         u32 nHdr;
         u32 nPayload;
         double x;
@@ -493,11 +493,11 @@ static void pblobPackFunc(
         }
 
         rc = pblobEncodeValue(
-                ctx,
-                &aOut[(sqlite3_uint64)iElem * info.elementSize],
-                x,
-                &info
-       );
+            ctx,
+            &aOut[(sqlite3_uint64)iElem * info.elementSize],
+            x,
+            &info
+        );
         if (rc != SQLITE_OK) {
             goto pack_cleanup;
         }
@@ -582,7 +582,7 @@ static void pblobUnpackFunc(
     jsonStringInit(&out, ctx);
     jsonAppendChar(&out, '[');
 
-    for(i=0; i < nElem; i++) {
+    for (i=0; i < nElem; i++) {
         const u8 *pIn = &aBlob[i * info.elementSize];
         double x = pblobDecodeValue(pIn, &info);
 
@@ -624,25 +624,25 @@ static int pblobRegister(sqlite3 *db) {
     int rc;
 
     rc = sqlite3_create_function_v2(
-            db, "pblob_pack", 1, flags, 0,
-            pblobPackFunc, 0, 0, 0
-   );
+        db, "pblob_pack", 1, flags, 0,
+        pblobPackFunc, 0, 0, 0
+    );
     if (rc != SQLITE_OK) {
         return rc;
     }
 
     rc = sqlite3_create_function_v2(
-            db, "pblob_pack", 2, flags, 0,
-            pblobPackFunc, 0, 0, 0
-   );
+        db, "pblob_pack", 2, flags, 0,
+        pblobPackFunc, 0, 0, 0
+    );
     if (rc != SQLITE_OK) {
         return rc;
     }
 
     return sqlite3_create_function_v2(
-            db, "pblob_unpack", 1, flags, 0,
-            pblobUnpackFunc, 0, 0, 0
-   );
+        db, "pblob_unpack", 1, flags, 0,
+        pblobUnpackFunc, 0, 0, 0
+    );
 }
 
 
