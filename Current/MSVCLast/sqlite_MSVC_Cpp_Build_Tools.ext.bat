@@ -482,64 +482,69 @@ set "SECTION=CHECK_PREREQUISITES"
 
 echo ===== Verifying environment =====
 
-if "/%VisualStudioVersion%/"=="//" (
-    echo %%VisualStudioVersion%% is not set. Run this script from an MSVC shell.
+if "%VisualStudioVersion%"=="" (
+    echo {ERROR} %%VisualStudioVersion%% is not set. Run this script from an MSVC shell.
     set "ERROR_STATUS=1"
 ) else (
-    echo VisualStudioVersion=%VisualStudioVersion%
+    echo {INFO} VisualStudioVersion=%VisualStudioVersion%
 )
 
-if "/%VSINSTALLDIR%/"=="//" (
-    echo %%VSINSTALLDIR%% is not set. Run this script from an MSVC shell.
+if "%VSINSTALLDIR%"=="" (
+    echo {ERROR} %%VSINSTALLDIR%% is not set. Run this script from an MSVC shell.
     set "ERROR_STATUS=1"
 ) else (
-    echo VSINSTALLDIR="%VSINSTALLDIR%"
+    echo {INFO} VSINSTALLDIR="%VSINSTALLDIR%"
 )
 
-if "/%VCINSTALLDIR%/"=="//" (
-    echo %%VSINSTALLDIR%% is not set. Run this script from an MSVC shell.
+if "%VCINSTALLDIR%"=="" (
+    echo {ERROR} %%VSINSTALLDIR%% is not set. Run this script from an MSVC shell.
     set "ERROR_STATUS=1"
 ) else (
-    echo VCINSTALLDIR=%VCINSTALLDIR%
+    echo {INFO} VCINSTALLDIR=%VCINSTALLDIR%
 )
 
 set "CommandLocation="
 for /f "usebackq delims=" %%I in (`where cl.exe 2^>nul`) do (
-    if "/!CommandLocation!/"=="//" (set "CommandLocation=%%~I")
+    if "!CommandLocation!"=="" (set "CommandLocation=%%~I")
 )
-if "/%CommandLocation%/"=="//" (
-    echo cl.exe is not found. Run this script from an MSVC shell.
+if "%CommandLocation%"=="" (
+    echo {ERROR} cl.exe is not found. Run this script from an MSVC shell.
     set "ERROR_STATUS=1"
 ) else (
-    echo CL_EXE=%CommandLocation%
+    echo {INFO} CL_EXE=%CommandLocation%
 )
 
 set "CommandLocation="
 for /f "usebackq delims=" %%I in (`where nmake.exe 2^>nul`) do (
-    if "/!CommandLocation!/"=="//" (set "CommandLocation=%%~i")
+    if "!CommandLocation!"=="" (set "CommandLocation=%%~i")
 )
-if "/%CommandLocation%/"=="//" (
-    echo nmake.exe is not found. Run this script from an MSVC shell.
+if "%CommandLocation%"=="" (
+    echo {ERROR} nmake.exe is not found. Run this script from an MSVC shell.
     set "ERROR_STATUS=1"
 ) else (
-    echo NMAKE_EXE=%CommandLocation%
+    echo {INFO} NMAKE_EXE=%CommandLocation%
 )
 
 set "CommandLocation="
 for /f "usebackq delims=" %%I in (`where tclsh.exe 2^>nul`) do (
-    if "/!CommandLocation!/"=="//" (set "CommandLocation=%%I")
+    if "!CommandLocation!"=="" (set "CommandLocation=%%I")
 )
-if "/%CommandLocation%/"=="//" (
-    echo tclsh.exe is not found. TCL is required and must be in the path.
+if "%CommandLocation%"=="" (
+    echo {ERROR} tclsh.exe is not found. TCL is required and must be in the path.
     set "ERROR_STATUS=1"
 ) else (
-    echo TCLSH_EXE=%CommandLocation%
+    echo {INFO} TCLSH_EXE=%CommandLocation%
+)
+
+if not "%PROJDIR%"=="%PROJDIR: =%" (
+    echo {ERROR} Spaces in project dir are not supported: "%PROJDIR%".
+    set "ERROR_STATUS=1"
 )
 
 if "%ERROR_STATUS%"=="0" (
-    echo ----- Verified  environment -----
+    echo {OKOK} ----- Verified  environment -----
 ) else (
-    echo ----- Environment is NOT OK -----
+    echo {ERROR} ----- Environment is NOT OK -----
 )
 
 echo ~~~~~ %SECTION% ~~~~~
