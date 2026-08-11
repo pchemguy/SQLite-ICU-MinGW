@@ -72,6 +72,12 @@ x64
 
 ---
 
+### Python
+
+Python is required when building ICU from sources. "pyenv" directory contains Python bootstrapping suite (see [Bootstrapping Python Environments on Windows](https://github.com/pchemguy/Field-Notes/tree/main/03-python-env-windows); the note is a bit outdated; `Anaconda.bat` bootstraps Python environment and `conda_far.bat` launches an activated shell).
+
+---
+
 ### Required tools
 
 #### `cl.exe`
