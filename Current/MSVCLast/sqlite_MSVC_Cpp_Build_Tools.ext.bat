@@ -48,41 +48,45 @@ SetLocal EnableExtensions EnableDelayedExpansion
 
 set "ERROR_STATUS=0"
 
-call :CORE_ENV             || exit /b !ERRORLEVEL!
+call :CORE_ENV                   || exit /b !ERRORLEVEL!
 
 if "%USE_ICU%"=="1" (
-    call :ICU_OPTIONS      || exit /b !ERRORLEVEL!
+    call :ICU_OPTIONS            || exit /b !ERRORLEVEL!
 )                          
-call :ZLIB_OPTIONS         || exit /b !ERRORLEVEL!
-call :TCL_OPTIONS          || exit /b !ERRORLEVEL!
-call :BUILD_OPTIONS        || exit /b !ERRORLEVEL!
+call :ZLIB_OPTIONS               || exit /b !ERRORLEVEL!
+call :TCL_OPTIONS                || exit /b !ERRORLEVEL!
+call :BUILD_OPTIONS              || exit /b !ERRORLEVEL!
 
-call :CHECK_PREREQUISITES  || exit /b !ERRORLEVEL!
+call :CHECK_PREREQUISITES        || exit /b !ERRORLEVEL!
 
-call :MAKE_DEBUG %*        || exit /b !ERRORLEVEL!
+call :MAKE_DEBUG %*              || exit /b !ERRORLEVEL!
 
-call :SQLITE_DOWNLOAD      || exit /b !ERRORLEVEL!
-call :SQLITE_EXTRACT       || exit /b !ERRORLEVEL!
+call :SQLITE_DOWNLOAD            || exit /b !ERRORLEVEL!
+call :SQLITE_EXTRACT             || exit /b !ERRORLEVEL!
 
 if "%USE_ZLIB%"=="1" (     
-    call :ZLIB_DOWNLOAD    || exit /b !ERRORLEVEL!
-    call :ZLIB_EXTRACT     || exit /b !ERRORLEVEL!
-    call :ZLIB_BUILD       || exit /b !ERRORLEVEL!
+    call :ZLIB_DOWNLOAD          || exit /b !ERRORLEVEL!
+    call :ZLIB_EXTRACT           || exit /b !ERRORLEVEL!
+    call :ZLIB_BUILD             || exit /b !ERRORLEVEL!
 )                          
 
 if "%USE_ICU%"=="1" (      
-    call :ICU_DOWNLOAD     || exit /b !ERRORLEVEL!
-    call :ICU_EXTRACT      || exit /b !ERRORLEVEL!
-    call :ICU_BUILD        || exit /b !ERRORLEVEL!
+    if "%USE_ICU_CONDA%"=="1" (
+        call :ICU_CONDA          || exit /b !ERRORLEVEL!
+    ) else (
+        call :ICU_DOWNLOAD       || exit /b !ERRORLEVEL!
+        call :ICU_EXTRACT        || exit /b !ERRORLEVEL!
+        call :ICU_BUILD          || exit /b !ERRORLEVEL!
+    )
 )                          
 
-call :SQLITE_BUILD_INIT    || exit /b !ERRORLEVEL!
+call :SQLITE_BUILD_INIT          || exit /b !ERRORLEVEL!
 
 if "%SQLITE_EXTRA%"=="1" (
-    call :EXTRA_SRC_STOCK  || exit /b !ERRORLEVEL!
+    call :EXTRA_SRC_STOCK        || exit /b !ERRORLEVEL!
 )
 
-call :SQLITE_BUILD %*      || exit /b !ERRORLEVEL!
+call :SQLITE_BUILD %*            || exit /b !ERRORLEVEL!
 call :COLLECT_BINARIES
 
 EndLocal
@@ -273,11 +277,13 @@ set "PROJDIR=%CD%"
 echo {INFO} PROJDIR: %PROJDIR%.
 
 set "OPT_XTRA="
-if not defined USE_ICU      (set "USE_ICU=1")
-if not defined USE_ZLIB     (set "USE_ZLIB=1")
-if not defined SQLITE_EXTRA (set "SQLITE_EXTRA=1")
+if not defined USE_ICU_CONDA (set "USE_ICU_CONDA=1")
+if not defined USE_ICU       (set "USE_ICU=1")
+if not "%USE_ICU%"=="1"      (set "USE_ICU_CONDA=0")
+if not defined USE_ZLIB      (set "USE_ZLIB=1")
+if not defined SQLITE_EXTRA  (set "SQLITE_EXTRA=1")
 
-set "MSG=USE_ICU:      %USE_ICU% - ICU is"
+set "MSG=USE_ICU:       %USE_ICU% - ICU is"
 if "%USE_ICU%"=="0" (
     set "MSG=%MSG% OFF."
 ) else (
@@ -285,7 +291,15 @@ if "%USE_ICU%"=="0" (
 )
 echo %MSG%
 
-set "MSG=USE_ZLIB:     %USE_ZLIB% - ZLIB is"
+set "MSG=USE_ICU_CONDA: %USE_ICU_CONDA% - Conda ICU is"
+if "%USE_ICU_CONDA%"=="0" (
+    set "MSG=%MSG% OFF."
+) else (
+    set "MSG=%MSG% ON."
+)
+echo %MSG%
+
+set "MSG=USE_ZLIB:      %USE_ZLIB% - ZLIB is"
 if "%USE_ZLIB%"=="0" (
     set "MSG=%MSG% OFF."
 ) else (
@@ -293,7 +307,7 @@ if "%USE_ZLIB%"=="0" (
 )
 echo %MSG%
 
-set "MSG=SQLITE_EXTRA: %SQLITE_EXTRA% - Misc SQLite Extensions Extra is"
+set "MSG=SQLITE_EXTRA:  %SQLITE_EXTRA% - Misc SQLite Extensions Extra is"
 if "%SQLITE_EXTRA%"=="0" (
     set "MSG=%MSG% OFF."
 ) else (
@@ -454,27 +468,6 @@ exit /b 0
 
 
 :: ============================================================================
-:MAKE_DEBUG
-
-setlocal
-set "SECTION=MAKE_DEBUG"
-
-set "TARGET="
-if "%~1"=="env"      (set "TARGET=%~1")
-if "%~1"=="tcl-test" (set "TARGET=%~1")
-if "%~1"=="tcl-env"  (set "TARGET=%~1")
-
-if defined TARGET (
-    nmake "TOP=%SQLITEDIR%" /f "%SQLITEDIR%\Makefile.msc" %TARGET%
-    exit /b 100
-)
-
-echo ~~~~~ %SECTION% ~~~~~
-echo:
-endlocal && exit /b 0
-
-
-:: ============================================================================
 :CHECK_PREREQUISITES
 
 setlocal
@@ -550,6 +543,27 @@ if "%ERROR_STATUS%"=="0" (
 echo ~~~~~ %SECTION% ~~~~~
 echo:
 endlocal && set "ERROR_STATUS=%ERROR_STATUS%" && exit /b %ERROR_STATUS%
+
+
+:: ============================================================================
+:MAKE_DEBUG
+
+setlocal
+set "SECTION=MAKE_DEBUG"
+
+set "TARGET="
+if "%~1"=="env"      (set "TARGET=%~1")
+if "%~1"=="tcl-test" (set "TARGET=%~1")
+if "%~1"=="tcl-env"  (set "TARGET=%~1")
+
+if defined TARGET (
+    nmake "TOP=%SQLITEDIR%" /f "%SQLITEDIR%\Makefile.msc" %TARGET%
+    exit /b 100
+)
+
+echo ~~~~~ %SECTION% ~~~~~
+echo:
+endlocal && exit /b 0
 
 
 :: ============================================================================
@@ -644,6 +658,40 @@ if not exist "%ZLIBDIR%\zlib1.dll" (
 ) else (
     echo {INFO} ===== Using previously built ZLIB =====
 )
+
+echo ~~~~~ %SECTION% ~~~~~
+echo:
+endlocal && set "ERROR_STATUS=%ERROR_STATUS%" && exit /b %ERROR_STATUS%
+
+
+
+:ICU_CONDA
+:: ============================================================================
+setlocal
+set "SECTION=ICU_CONDA"
+
+set "ERROR_STATUS=0"
+set "PREREQ=%CONDA_PREFIX%\python.exe"
+if not exist "%PREREQ%" (
+    set "ERROR_STATUS=1"
+    echo {ERROR} Conda ICU is selected, but "%PREREQ%" does not exist.
+    goto :ICU_CONDA_EXIT
+)
+set "PREREQ=%CONDA_PREFIX%\Library\bin\icuinfo.exe"
+if not exist "%PREREQ%" (
+    set "ERROR_STATUS=1"
+    echo {ERROR} Conda ICU is selected, but "%PREREQ%" does not exist.
+    goto :ICU_CONDA_EXIT
+)
+
+call :MKDIR__DIR "%ICUINCDIR%" || exit /b !ERRORLEVEL!
+call :MKDIR__DIR "%ICULIBDIR%" || exit /b !ERRORLEVEL!
+call :MKDIR__DIR "%ICUBINDIR%" || exit /b !ERRORLEVEL!
+
+copy /Y "%CONDA_PREFIX%\Library\bin\icu*.dll" "%ICULIBDIR%" || exit /b !ERRORLEVEL!
+del /Q "%ICULIBDIR%\icu??.dll"
+
+:ICU_CONDA_EXIT
 
 echo ~~~~~ %SECTION% ~~~~~
 echo:
