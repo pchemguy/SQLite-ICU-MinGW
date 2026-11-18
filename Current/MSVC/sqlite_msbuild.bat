@@ -244,9 +244,9 @@ if not exist "%FLAG%" (
 echo ~~~~~ %SECTION% ~~~~~
 echo:
 endlocal && set "ERROR_STATUS=%ERROR_STATUS%" && exit /b %ERROR_STATUS%
+
+
 :: ============================================================================
-
-
 :CORE_ENV
 
 set "SECTION=CORE_ENV"
@@ -607,8 +607,9 @@ echo:
 endlocal && set "ERROR_STATUS=%ERROR_STATUS%" && exit /b %ERROR_STATUS%
 
 
-:ICU_CONDA
 :: ============================================================================
+:ICU_CONDA
+
 setlocal
 set "SECTION=ICU_CONDA"
 
