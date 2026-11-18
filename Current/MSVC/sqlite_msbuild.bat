@@ -1,16 +1,15 @@
 @echo off
 :: =============================================================================
 :: SCRIPT
-::   sqlite_MSVC_Cpp_Build_Tools.ext.bat
+::   sqlite_msbuild.bat
 ::
 :: PURPOSE
 ::   Builds and packages a customized SQLite distribution on Windows using
 ::   MSVC and SQLite's Makefile.msc.
 ::
 ::   The workflow manages SQLite and optional dependency downloads, x86/x64
-::   builds, ZLIB integration, ICU integration using Conda by default or the
-::   retained source-build path, stock SQLite ext/misc modules, DLL export/
-::   import-library generation, and final artifact collection.
+::   builds, ZLIB integration, ICU integration, stock SQLite ext/misc modules,
+::   DLL export/import-library generation, and final artifact collection.
 ::
 ::   Conda ICU is staged into the same compatibility-tree include, library,
 ::   and binary directories used by source-built ICU, so the downstream SQLite
@@ -27,17 +26,13 @@
 ::   Build behavior is controlled primarily by:
 ::
 ::     USE_ICU
-::     USE_ICU_CONDA
 ::     USE_ZLIB
 ::     SQLITE_EXTRA
 ::
 ::   Run from an initialized MSVC x86 or x64 developer command prompt.
 ::
 :: DOCUMENTATION
-::   See sqlite_MSVC_Cpp_Build_Tools.ext.md for the complete build-system
-::   documentation, including prerequisites, configuration, directory layout,
-::   build stages, extension integration, test-build guidance, outputs, caching,
-::   cleaning, architecture handling, and reproducibility notes.
+::   See sqlite_msbuild.md for the complete build-system documentation. 
 :: =============================================================================
 
 :: ============================= BEGIN DISPATCHER =============================
