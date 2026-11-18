@@ -399,7 +399,7 @@ set "SESSION=1"
 set "RBU=1"
 set "API_ARMOR=1"
 set "SYMBOLS=0"
-set "WITHOUT_JIMSH=1"
+rem set "WITHOUT_JIMSH=1"
 set "EXTRA_SRC="
 
 set OPT_XTRA=%OPT_XTRA% ^
