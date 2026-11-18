@@ -49,42 +49,42 @@ SetLocal EnableExtensions EnableDelayedExpansion
 
 set "ERROR_STATUS=0"
 
-call :CORE_ENV                   || exit /b !ERRORLEVEL!
+call :CORE_ENV              || exit /b !ERRORLEVEL!
 
 if "%USE_ICU%"=="1" (
-    call :ICU_OPTIONS            || exit /b !ERRORLEVEL!
+    call :ICU_OPTIONS       || exit /b !ERRORLEVEL!
 )                          
 
 if "%USE_ZLIB%"=="1" (     
-    call :ZLIB_OPTIONS           || exit /b !ERRORLEVEL!
+    call :ZLIB_OPTIONS      || exit /b !ERRORLEVEL!
 )                          
 
-call :BUILD_OPTIONS              || exit /b !ERRORLEVEL!
+call :BUILD_OPTIONS         || exit /b !ERRORLEVEL!
 
-call :CHECK_PREREQUISITES        || exit /b !ERRORLEVEL!
+call :CHECK_PREREQUISITES   || exit /b !ERRORLEVEL!
 
-call :MAKE_DEBUG %*              || exit /b !ERRORLEVEL!
+call :MAKE_DEBUG %*         || exit /b !ERRORLEVEL!
 
-call :SQLITE_DOWNLOAD            || exit /b !ERRORLEVEL!
-call :SQLITE_EXTRACT             || exit /b !ERRORLEVEL!
+call :SQLITE_DOWNLOAD       || exit /b !ERRORLEVEL!
+call :SQLITE_EXTRACT        || exit /b !ERRORLEVEL!
 
 if "%USE_ZLIB%"=="1" (     
-    call :ZLIB_DOWNLOAD          || exit /b !ERRORLEVEL!
-    call :ZLIB_EXTRACT           || exit /b !ERRORLEVEL!
-    call :ZLIB_BUILD             || exit /b !ERRORLEVEL!
+    call :ZLIB_DOWNLOAD     || exit /b !ERRORLEVEL!
+    call :ZLIB_EXTRACT      || exit /b !ERRORLEVEL!
+    call :ZLIB_BUILD        || exit /b !ERRORLEVEL!
 )                          
 
 if "%USE_ICU%"=="1" (      
-    call :ICU_CONDA              || exit /b !ERRORLEVEL!
+    call :ICU_CONDA         || exit /b !ERRORLEVEL!
 )                          
 
-call :SQLITE_BUILD_INIT          || exit /b !ERRORLEVEL!
+call :SQLITE_BUILD_INIT     || exit /b !ERRORLEVEL!
 
 if "%SQLITE_EXTRA%"=="1" (
-    call :EXTRA_SRC_STOCK        || exit /b !ERRORLEVEL!
+    call :EXTRA_SRC_STOCK   || exit /b !ERRORLEVEL!
 )
 
-call :SQLITE_BUILD %*            || exit /b !ERRORLEVEL!
+call :SQLITE_BUILD %*       || exit /b !ERRORLEVEL!
 call :COLLECT_BINARIES
 
 EndLocal
