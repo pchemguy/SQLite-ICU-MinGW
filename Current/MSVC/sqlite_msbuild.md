@@ -6,7 +6,7 @@ url: https://chatgpt.com/c/6a786079-f408-83eb-87b1-e0d35b2804a5
 
 ## Overview
 
-`sqlite_MSVC_Cpp_Build_Tools.ext.bat` downloads, prepares, builds, and packages a customized SQLite distribution on Windows using the Microsoft Visual C++ toolchain and SQLite's `Makefile.msc` build system.
+`sqlite_msbuild.bat` downloads, prepares, builds, and packages a customized SQLite distribution on Windows using the Microsoft Visual C++ toolchain and SQLite's `Makefile.msc` build system.
 
 The build system supports:
 
@@ -206,7 +206,7 @@ and prints the detected Tcl version.
 From an initialized MSVC developer command prompt:
 
 ```cmd
-sqlite_MSVC_Cpp_Build_Tools.ext.bat [NMAKE_TARGET_OR_OPTION ...]
+sqlite_msbuild.bat [NMAKE_TARGET_OR_OPTION ...]
 ```
 
 Arguments that are not recognized as special diagnostic targets are forwarded to the final SQLite `nmake` invocation.
@@ -214,7 +214,7 @@ Arguments that are not recognized as special diagnostic targets are forwarded to
 ### Default build
 
 ```cmd
-sqlite_MSVC_Cpp_Build_Tools.ext.bat
+sqlite_msbuild.bat
 ```
 
 Runs the configured default SQLite build.
@@ -222,7 +222,7 @@ Runs the configured default SQLite build.
 ### Specific SQLite target
 
 ```cmd
-sqlite_MSVC_Cpp_Build_Tools.ext.bat sqlite3.dll
+sqlite_msbuild.bat sqlite3.dll
 ```
 
 Requests the named `Makefile.msc` target.
@@ -230,7 +230,7 @@ Requests the named `Makefile.msc` target.
 ### Clean target
 
 ```cmd
-sqlite_MSVC_Cpp_Build_Tools.ext.bat clean
+sqlite_msbuild.bat clean
 ```
 
 Forwards `clean` to SQLite's `Makefile.msc`.
@@ -250,7 +250,7 @@ Example:
 ```cmd
 set USE_ICU=0
 set SQLITE_EXTRA=0
-sqlite_MSVC_Cpp_Build_Tools.ext.bat
+sqlite_msbuild.bat
 ```
 
 ---
@@ -414,7 +414,7 @@ The expected project source layout is approximately:
 │  ├─ patch_sqlite_misc_autoext.tcl
 │  └─ bundle_extra_src.tcl
 │
-├─ sqlite_MSVC_Cpp_Build_Tools.ext.bat
+├─ sqlite_msbuild.bat
 │
 └─ out\
 ```
@@ -1095,7 +1095,7 @@ nmake /nologo ^
     /f "%SQLITE_MAKEFILE%" %*
 ```
 
-Any ordinary arguments passed to `sqlite_MSVC_Cpp_Build_Tools.ext.bat` therefore reach this invocation.
+Any ordinary arguments passed to `sqlite_msbuild.bat` therefore reach this invocation.
 
 ---
 
@@ -1174,7 +1174,7 @@ tcl-test
 For example:
 
 ```cmd
-sqlite_MSVC_Cpp_Build_Tools.ext.bat env
+sqlite_msbuild.bat env
 ```
 
 The selected target is invoked directly against SQLite's `Makefile.msc`.
@@ -1244,7 +1244,7 @@ To force an operation to rerun, remove its relevant archive, extracted tree, bui
 Running:
 
 ```cmd
-sqlite_MSVC_Cpp_Build_Tools.ext.bat clean
+sqlite_msbuild.bat clean
 ```
 
 only forwards `clean` to SQLite's `Makefile.msc`.
@@ -1502,7 +1502,7 @@ so the import library follows the active MSVC target architecture.
 ### Full default build
 
 ```cmd
-sqlite_MSVC_Cpp_Build_Tools.ext.bat
+sqlite_msbuild.bat
 ```
 
 Current defaults enable:
@@ -1526,7 +1526,7 @@ set USE_ICU_CONDA=0
 set USE_ZLIB=0
 set SQLITE_EXTRA=0
 
-sqlite_MSVC_Cpp_Build_Tools.ext.bat
+sqlite_msbuild.bat
 ```
 
 The base `OPT_XTRA` SQLite compile-time configuration remains enabled.
@@ -1552,7 +1552,7 @@ The base `OPT_XTRA` SQLite compile-time configuration remains enabled.
 
 ## Summary
 
-`sqlite_MSVC_Cpp_Build_Tools.ext.bat` is the project's Windows/MSVC SQLite distribution builder.
+`sqlite_msbuild.bat` is the project's Windows/MSVC SQLite distribution builder.
 
 It combines SQLite's native `Makefile.msc` workflow with:
 
