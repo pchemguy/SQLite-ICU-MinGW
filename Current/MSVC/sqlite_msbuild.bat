@@ -60,7 +60,6 @@ if "%USE_ICU%"=="1" (
     call :ICU_OPTIONS            || exit /b !ERRORLEVEL!
 )                          
 call :ZLIB_OPTIONS               || exit /b !ERRORLEVEL!
-call :TCL_OPTIONS                || exit /b !ERRORLEVEL!
 call :BUILD_OPTIONS              || exit /b !ERRORLEVEL!
 
 call :CHECK_PREREQUISITES        || exit /b !ERRORLEVEL!
@@ -347,6 +346,8 @@ call :MKDIR__DIR "%LIBDIR_STATIC%" || exit /b !ERRORLEVEL!
 set "BINDIR=%OUT%\bin"
 call :MKDIR__DIR "%BINDIR%" || exit /b !ERRORLEVEL!
 
+set "TCLSH_CMD=%BUILDDIR%\jimsh0.exe"
+
 echo ~~~~~ %SECTION% ~~~~~
 echo:
 exit /b 0
@@ -382,61 +383,6 @@ echo {INFO} ICUDIR="%ICUDIR%"
 echo {INFO} ICUINCDIR="%ICUINCDIR%"
 echo {INFO} ICULIBDIR="%ICULIBDIR%"
 echo {INFO} ICUBINDIR="%ICUBINDIR%"
-
-echo ~~~~~ %SECTION% ~~~~~
-echo:
-exit /b 0
-
-
-:: ============================================================================
-:TCL_OPTIONS
-
-set "SECTION=TCL_OPTIONS"
-
-set "TCLBIN="
-for /f "usebackq delims=" %%P in (`where tclsh.exe 2^>nul`) do (
-    set "TCLBIN=%%~P"
-)
-if exist "%TCLBIN%" (
-    set "TCL_HOME=%TCLBIN:\bin\tclsh.exe=%"
-    echo Using TCL on Path.
-    goto :TCL_FOUND
-) else (set "TCLBIN=")
-if exist "%TCL_HOME%\bin\tclsh.exe" (
-    echo Using TCL on Path.
-    goto :TCL_FOUND
-)
-
-if exist "%systemDrive%\dev\TCL\bin\tclsh.exe" (
-    set "TCL_HOME=%systemDrive%\dev\TCL"
-) else if exist "%ProgramFiles%\TCL\bin\tclsh.exe" (
-    set "TCL_HOME=%ProgramFiles%\TCL"
-) else if exist "C:\dev\TCL\bin\tclsh.exe" (
-    set "TCL_HOME=C:\dev\TCL"
-) else if exist "G:\dev\TCL\bin\tclsh.exe" (
-    set "TCL_HOME=G:\dev\TCL"
-) else if exist "H:\dev\TCL\bin\tclsh.exe" (
-    set "TCL_HOME=H:\dev\TCL"
-)
-
-if not exist "%TCL_HOME%\bin\tclsh.exe" (
-    echo TCL not found.
-    set "ERROR_STATUS=1"
-    exit /b !ERROR_STATUS!
-)
-
-:TCL_FOUND
-
-echo TCL found. TCL_HOME: "%TCL_HOME%"
-if not defined TCLBIN (
-    set "Path=%TCL_HOME%\bin;%Path%"
-    echo Added TCL to PATH.
-)
-set "TCLSH_CMD=%TCL_HOME%\bin\tclsh.exe"
-echo TCLSH_CMD = __%TCLSH_CMD%__
-echo puts "TCL version: [info patchlevel]" | "%TCLSH_CMD%"
-set "TCLSH_CMD="%TCLSH_CMD%""
-set "TCLDIR=%TCL_HOME%"
 
 echo ~~~~~ %SECTION% ~~~~~
 echo:
