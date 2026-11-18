@@ -2,7 +2,8 @@
 #
 # Every positional argument must be the file name of a .c or .h file located
 # directly in the source directory. Local include names are resolved from
-# that source directory, including names that contain subdirectories.
+# the including file's directory and the source directory, including names
+# that contain subdirectories.
 #
 # The script first scans the complete reachable include graph without changing
 # any file. It rejects missing targets, invalid include paths, and include
@@ -26,13 +27,13 @@ Expand local #include directives in C sources and headers in place.
 
 Each FILE must be a file name only, have a .c or .h extension, and reside
 immediately inside the source directory. Include names are resolved relative
-to the source directory, including include names containing subdirectories.
+to the including file and the source directory, including include names
+containing subdirectories.
 
 Includes of sqlite3.h and sqlite3ext.h are replaced with no-op comments.
 }]
 
 set targets {}
-
 for {set i 0} {$i < [llength $argv]} {incr i} {
   lappend targets [lindex $argv $i]
 }
@@ -42,11 +43,27 @@ if {[llength $targets] == 0} {
   exit 1
 }
 
-set srcdir [file normalize "."]
+# Return a path in the comparison form appropriate for the host platform.
+proc path_compare_form {path} {
+  if {$::tcl_platform(platform) eq "windows"} {
+    set path [string tolower [string map {\\ /} $path]]
+  }
+  return [string trimright $path /]
+}
 
-# 78 stars used for comment formatting.
-set s78 \
-{*****************************************************************************}
+# Jim resolves an existing final link on Unix. Full Tcl resolves links in
+# parent components, so place the link in that position before normalizing.
+proc normalize_existing {path} {
+  if {$::tcl_platform(engine) eq "Tcl" && ![catch {file type $path} ftype] && $ftype eq "link"} {
+    return [file dirname [file normalize "$path/__leaf__"]]
+  }
+  return [file normalize $path]
+}
+
+set srcdir [normalize_existing "."]
+
+# 78 stars used for amalgamator-style comment formatting.
+set s78 [string repeat * 78]
 
 # Return one amalgamator-style section comment.
 proc section_comment {text} {
@@ -63,28 +80,12 @@ proc section_comment {text} {
 # Return true if INCLUDE_NAME names a SQLite public header that must become
 # a no-op instead of being resolved or expanded.
 proc is_sqlite_public_header {includeName} {
-  set includeName [string trim $includeName]
+  set norm [string map {\\ /} [string trim $includeName]]
+  set tail [file tail $norm]
   return [expr {
-    $includeName eq "sqlite3.h" ||
-    $includeName eq "sqlite3ext.h"
+    $tail eq "sqlite3.h" ||
+    $tail eq "sqlite3ext.h"
   }]
-}
-
-# Return a path in the comparison form appropriate for the host platform.
-proc path_compare_form {path} {
-  if {$::tcl_platform(platform) eq "windows"} {
-    set path [string tolower [string map {\\ /} $path]]
-  }
-  return [string trimright $path /]
-}
-
-# Jim resolves an existing final link on Unix. Full Tcl resolves links in
-# parent components, so place the link in that position before normalizing.
-proc normalize_existing {path} {
-  if {$::tcl_platform(engine) eq "Tcl" && [file type $path] eq "link"} {
-    return [file dirname [file normalize "$path/__leaf__"]]
-  }
-  return [file normalize $path]
 }
 
 # Return true if PATH is BASE itself or is below BASE.
@@ -96,6 +97,19 @@ proc path_is_within {base path} {
   }
   set prefix "${base}/"
   return [string equal -length [string length $prefix] $prefix $path]
+}
+
+# Format PATH relative to $srcdir for diagnostics.
+proc rel_path {path} {
+  global srcdir
+  set normBase [path_compare_form $srcdir]
+  set normPath [path_compare_form $path]
+  set prefix "${normBase}/"
+  if {[string equal -length [string length $prefix] $prefix $normPath]} {
+    set cleanPath [string map {\\ /} $path]
+    return [string range $cleanPath [string length $prefix] end]
+  }
+  return [file tail $path]
 }
 
 # Validate one top-level target and return its normalized absolute path.
@@ -120,9 +134,49 @@ proc resolve_target {name} {
   return $path
 }
 
-# Resolve an include name relative to the source base directory.
-# Return an empty string when it does not name an existing local regular file.
-proc resolve_include {includeName includingFile lineNumber} {
+# Resolve INCLUDE_NAME starting at BASE_DIR while enforcing that no step
+# escapes $srcdir. Returns [list status resolvedPath] where status is one of:
+#   "found"   - existing regular file inside $srcdir
+#   "missing" - stays within $srcdir, but file does not exist
+#   "escape"  - path traversal or symlink escapes $srcdir
+proc resolve_from_base {baseDir includeName} {
+  global srcdir
+
+  set candidate $baseDir
+  foreach part [split $includeName /] {
+    if {$part eq "" || $part eq "."} { continue }
+    if {$part eq ".."} {
+      if {[path_compare_form $candidate] eq [path_compare_form $srcdir]} {
+        return [list "escape" ""]
+      }
+      set candidate [file dirname $candidate]
+      if {![path_is_within $srcdir $candidate]} {
+        return [list "escape" ""]
+      }
+    } else {
+      set candidate "[string trimright $candidate /]/$part"
+      if {[file exists $candidate]} {
+        set candidate [normalize_existing $candidate]
+        if {![path_is_within $srcdir $candidate]} {
+          return [list "escape" ""]
+        }
+      }
+    }
+  }
+
+  if {[file isfile $candidate]} {
+    set candidate [normalize_existing $candidate]
+    if {![path_is_within $srcdir $candidate]} {
+      return [list "escape" ""]
+    }
+    return [list "found" $candidate]
+  }
+  return [list "missing" ""]
+}
+
+# Resolve an include name relative to the including file's directory and the
+# source base directory. Return "" when it does not name a local regular file.
+proc resolve_include {includeName includingFile lineNumber delim} {
   global srcdir
 
   set includeName [string map {\\ /} $includeName]
@@ -130,29 +184,28 @@ proc resolve_include {includeName includingFile lineNumber} {
     error "$includingFile:$lineNumber: absolute include path is not allowed: $includeName"
   }
 
-  # Jim on Unix can normalize only existing paths. Track missing components
-  # lexically so external headers pass through and ".." is still checked.
-  set candidate $srcdir
-  foreach part [split $includeName /] {
-    if {$part eq "" || $part eq "."} { continue }
-    if {$part eq ".."} {
-      if {[path_compare_form $candidate] eq [path_compare_form $srcdir]} {
-        error "$includingFile:$lineNumber: include escapes source directory: $includeName"
-      }
-      set candidate [file dirname $candidate]
-    } else {
-      set candidate "[string trimright $candidate /]/$part"
-      if {[file exists $candidate]} {
-        set candidate [normalize_existing $candidate]
-        if {![path_is_within $srcdir $candidate]} {
-          error "$includingFile:$lineNumber: include escapes source directory: $includeName"
-        }
-      }
+  set incDir [file dirname $includingFile]
+  if {[path_compare_form $incDir] eq [path_compare_form $srcdir]} {
+    set bases [list $srcdir]
+  } elseif {$delim eq "<"} {
+    set bases [list $srcdir $incDir]
+  } else {
+    set bases [list $incDir $srcdir]
+  }
+
+  set allEscape 1
+  foreach base $bases {
+    lassign [resolve_from_base $base $includeName] status resolved
+    if {$status eq "found"} {
+      return $resolved
+    }
+    if {$status ne "escape"} {
+      set allEscape 0
     }
   }
 
-  if {[file isfile $candidate]} {
-    return $candidate
+  if {$allEscape} {
+    error "$includingFile:$lineNumber: include escapes source directory: $includeName"
   }
   return ""
 }
@@ -195,34 +248,127 @@ proc logical_lines {data} {
   return $lines
 }
 
-# Scan one file and cache all local include edges found in it.
+# Strip comments from a single logical line while updating block-comment state.
+# Also records any trailing unclosed block-comment suffix ("/* ...") that starts
+# on this line so line replacements do not corrupt multi-line comments.
+proc strip_line_comments {line inBlockVar trailingCommentVar} {
+  upvar 1 $inBlockVar inBlock
+  upvar 1 $trailingCommentVar trailingComment
+  set trailingComment ""
+
+  if {!$inBlock && [string first "/*" $line] < 0 && [string first "//" $line] < 0} {
+    return $line
+  }
+  if {$inBlock && [string first "*/" $line] < 0} {
+    return ""
+  }
+
+  set out ""
+  set len [string length $line]
+  set i 0
+  set inQuote 0
+
+  while {$i < $len} {
+    if {$inBlock} {
+      set closeIdx [string first "*/" $line $i]
+      if {$closeIdx < 0} {
+        break
+      }
+      set inBlock 0
+      append out " "
+      set i [expr {$closeIdx + 2}]
+      continue
+    }
+
+    set ch [string index $line $i]
+    if {$inQuote} {
+      append out $ch
+      if {$ch eq "\\" && ($i + 1) < $len} {
+        incr i
+        append out [string index $line $i]
+      } elseif {$ch eq "\""} {
+        set inQuote 0
+      }
+      incr i
+      continue
+    }
+
+    if {$ch eq "\""} {
+      set inQuote 1
+      append out $ch
+      incr i
+      continue
+    }
+
+    if {$ch eq "/" && ($i + 1) < $len} {
+      set next [string index $line [expr {$i + 1}]]
+      if {$next eq "/"} {
+        break
+      }
+      if {$next eq "*"} {
+        set closeIdx [string first "*/" $line [expr {$i + 2}]]
+        if {$closeIdx < 0} {
+          set inBlock 1
+          set trailingComment [string range $line $i end]
+          break
+        }
+        append out " "
+        set i [expr {$closeIdx + 2}]
+        continue
+      }
+    }
+
+    append out $ch
+    incr i
+  }
+
+  return $out
+}
+
+# Scan one file and cache its raw bytes, logical lines, and include edges.
 proc scan_file {filename} {
-  global scanned includes
+  global scanned includes noopIncludes rawContent fileLines
 
   if {[info exists scanned($filename)]} {
     return
   }
 
+  set raw [read_binary_file $filename]
+  set rawContent($filename) $raw
+  set lines [logical_lines $raw]
+  set fileLines($filename) $lines
+
   set edges {}
+  set noops {}
   set lineNumber 0
-  foreach line [logical_lines [read_binary_file $filename]] {
+  set inBlock 0
+
+  foreach line $lines {
     incr lineNumber
-    if {[regexp {^\s*#\s*include\s*["<]([^">]+)[">]} \
-            $line all includeName]} {
+    set stripped [strip_line_comments $line inBlock trailingComment]
+
+    if {[regexp {^[ \t]*#[ \t]*include[ \t]*(["<])([^"<>]+)([">])} \
+            $stripped all openDelim includeName closeDelim]} {
+      if {($openDelim eq "\"" && $closeDelim ne "\"") ||
+          ($openDelim eq "<" && $closeDelim ne ">")} {
+        continue
+      }
       set includeName [string trim $includeName]
 
       if {[is_sqlite_public_header $includeName]} {
+        lappend noops [list $lineNumber $trailingComment]
         continue
       }
 
-      set included [resolve_include $includeName $filename $lineNumber]
+      set included [resolve_include $includeName $filename $lineNumber $openDelim]
       if {$included ne ""} {
-        lappend edges [list $lineNumber $includeName $included]
+        lappend edges [list $lineNumber $includeName $included $trailingComment]
       }
     }
   }
 
   set includes($filename) $edges
+  set noopIncludes($filename) $noops
   set scanned($filename) 1
 
   foreach edge $edges {
@@ -243,7 +389,7 @@ proc visit_file {filename} {
       set cycle [concat [lrange $stack $first end] [list $filename]]
       set names {}
       foreach path $cycle {
-        lappend names [file tail $path]
+        lappend names [rel_path $path]
       }
       error "local include cycle detected: [join $names { -> }]"
     }
@@ -260,16 +406,26 @@ proc visit_file {filename} {
 }
 
 # Build replacement data for one already scanned file.
+# Because Phase 3 visits files in topological dependency-first order,
+# $fileLines($included) already holds the fully expanded lines of each child.
 proc expanded_file_data {filename} {
-  global includes
+  global includes noopIncludes rawContent fileLines
 
-  set original [read_binary_file $filename]
+  set original $rawContent($filename)
+  if {[llength $includes($filename)] == 0 && [llength $noopIncludes($filename)] == 0} {
+    return $original
+  }
+
   lassign [newline_info $original] eol hasFinal
-  set lines [logical_lines $original]
+  set lines $fileLines($filename)
   set edgeByLine {}
+  set noopByLine {}
 
   foreach edge $includes($filename) {
     dict set edgeByLine [lindex $edge 0] $edge
+  }
+  foreach noop $noopIncludes($filename) {
+    dict set noopByLine [lindex $noop 0] [lindex $noop 1]
   }
 
   set outputLines {}
@@ -278,11 +434,11 @@ proc expanded_file_data {filename} {
   foreach line $lines {
     incr lineNumber
 
-    if {[regexp {^\s*#\s*include\s*["<]([^">]+)[">]} \
-            $line all includeName] &&
-        [is_sqlite_public_header $includeName]} {
+    if {[dict exists $noopByLine $lineNumber]} {
+      set trailingComment [dict get $noopByLine $lineNumber]
+      set suffix [expr {$trailingComment ne "" ? " $trailingComment" : ""}]
       lappend outputLines \
-          "/* bundle_extra_src: sqlite public header already supplied */"
+          "/* bundle_extra_src: sqlite public header already supplied */$suffix"
       continue
     }
 
@@ -291,16 +447,25 @@ proc expanded_file_data {filename} {
       continue
     }
 
-    lassign [dict get $edgeByLine $lineNumber] ignored includeName included
-    set includedData [read_binary_file $included]
-    set includedLines [logical_lines $includedData]
+    lassign [dict get $edgeByLine $lineNumber] ignored includeName included trailingComment
+    set suffix [expr {$trailingComment ne "" ? " $trailingComment" : ""}]
+    set includedLines $fileLines($included)
 
     lappend outputLines [section_comment "Begin file $includeName"]
     foreach includedLine $includedLines {
-      lappend outputLines $includedLine
+      if {[regexp {^[ \t]*#[ \t]*pragma[ \t]+once[ \t]*$} $includedLine]} {
+        lappend outputLines "/* bundle_extra_src: #pragma once elided */"
+      } else {
+        lappend outputLines $includedLine
+      }
     }
-    lappend outputLines [section_comment "End of $includeName"]
+    if {[llength $includedLines] > 0 && [string index [lindex $includedLines end] end] eq "\\"} {
+      lappend outputLines ""
+    }
+    lappend outputLines "[section_comment "End of $includeName"]$suffix"
   }
+
+  set fileLines($filename) $outputLines
 
   set result [join $outputLines $eol]
   if {$hasFinal && [llength $outputLines] > 0} {
@@ -329,7 +494,9 @@ proc install_file {tmpPath filename} {
 
 # Write and close the staged file before replacing the original.
 proc rewrite_file {filename} {
-  set original [read_binary_file $filename]
+  global rawContent
+
+  set original $rawContent($filename)
   set expanded [expanded_file_data $filename]
   if {$expanded eq $original} {
     return 0
@@ -351,6 +518,7 @@ proc rewrite_file {filename} {
       close $tmpChannel
     }
     install_file $tmpPath $filename
+    set rawContent($filename) $expanded
   } on error {message options} {
     catch {file delete $tmpPath}
     return {*}$options $message
@@ -361,7 +529,10 @@ proc rewrite_file {filename} {
 
 array set scanned {}
 array set includes {}
+array set noopIncludes {}
 array set state {}
+array set rawContent {}
+array set fileLines {}
 set roots {}
 set order {}
 set stack {}
@@ -387,7 +558,7 @@ set changed 0
 foreach filename $order {
   if {[rewrite_file $filename]} {
     incr changed
-    puts "patched [file tail $filename]"
+    puts "patched [rel_path $filename]"
   }
 }
 
