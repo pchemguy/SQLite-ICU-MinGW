@@ -36,6 +36,18 @@
 :: =============================================================================
 
 :: ============================= BEGIN DISPATCHER =============================
+
+:: Probe for subroutine call. If %~1 begins with ":", assume that
+:: this is a subroutine call to %~1 label. Dispatch it via `call %*`.
+
+set "LABEL_ARG=%~1_"
+if "LABEL_ARG:~0,1"==":" (
+    set "LABEL_ARG="
+    call %*
+    exit /b %ERRORLEVEL%
+)
+set "LABEL_ARG="
+
 call :MAIN %*
 
 exit /b %ERRORLEVEL%
