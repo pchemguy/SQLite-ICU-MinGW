@@ -1,5 +1,3 @@
-#!/usr/bin/tclsh
-#
 # bundle_extra_src.tcl -- Expand local C #include directives in place.
 #
 # Every positional argument must be the file name of a .c or .h file located
@@ -17,12 +15,12 @@
 # in the source directory.
 #
 # Usage:
-#   tclsh bundle_extra_src.tcl file.c ?file.h ...?
+#   jimsh0 bundle_extra_src.tcl file.c ?file.h ...?
 #
 # https://chatgpt.com/c/6a62ecf5-5bb8-83eb-ba7a-7ce302cf962c
 
 set help [string trim {
-Usage: tclsh bundle_extra_src.tcl FILE...
+Usage: jimsh0 bundle_extra_src.tcl FILE...
 
 Expand local #include directives in C sources and headers in place.
 
@@ -74,11 +72,19 @@ proc is_sqlite_public_header {includeName} {
 
 # Return a path in the comparison form appropriate for the host platform.
 proc path_compare_form {path} {
-  set path [string map {\\ /} [file normalize $path]]
   if {$::tcl_platform(platform) eq "windows"} {
-    set path [string tolower $path]
+    set path [string tolower [string map {\\ /} $path]]
   }
   return [string trimright $path /]
+}
+
+# Jim resolves an existing final link on Unix. Full Tcl resolves links in
+# parent components, so place the link in that position before normalizing.
+proc normalize_existing {path} {
+  if {$::tcl_platform(engine) eq "Tcl" && [file type $path] eq "link"} {
+    return [file dirname [file normalize "$path/__leaf__"]]
+  }
+  return [file normalize $path]
 }
 
 # Return true if PATH is BASE itself or is below BASE.
@@ -96,16 +102,20 @@ proc path_is_within {base path} {
 proc resolve_target {name} {
   global srcdir
 
-  if {[file tail $name] ne $name} {
+  if {[regexp {[/\\]|^[~]|^[A-Za-z]:} $name]} {
     error "target must be a file name only, without a directory: $name"
   }
   if {[lsearch -exact {.c .h} [string tolower [file extension $name]]] < 0} {
     error "target must have a .c or .h extension: $name"
   }
 
-  set path [file normalize [file join $srcdir $name]]
+  set path [file join $srcdir $name]
   if {![file isfile $path]} {
     error "target does not exist or is not a regular file: $path"
+  }
+  set path [normalize_existing $path]
+  if {![path_is_within $srcdir $path]} {
+    error "target escapes source directory: $name"
   }
   return $path
 }
@@ -116,14 +126,29 @@ proc resolve_include {includeName includingFile lineNumber} {
   global srcdir
 
   set includeName [string map {\\ /} $includeName]
-  if {[file pathtype $includeName] ne "relative"} {
+  if {[regexp {^[/~]|^[A-Za-z]:} $includeName]} {
     error "$includingFile:$lineNumber: absolute include path is not allowed: $includeName"
   }
 
-  set parts [split $includeName /]
-  set candidate [file normalize [file join $srcdir {*}$parts]]
-  if {![path_is_within $srcdir $candidate]} {
-    error "$includingFile:$lineNumber: include escapes source directory: $includeName"
+  # Jim on Unix can normalize only existing paths. Track missing components
+  # lexically so external headers pass through and ".." is still checked.
+  set candidate $srcdir
+  foreach part [split $includeName /] {
+    if {$part eq "" || $part eq "."} { continue }
+    if {$part eq ".."} {
+      if {[path_compare_form $candidate] eq [path_compare_form $srcdir]} {
+        error "$includingFile:$lineNumber: include escapes source directory: $includeName"
+      }
+      set candidate [file dirname $candidate]
+    } else {
+      set candidate "[string trimright $candidate /]/$part"
+      if {[file exists $candidate]} {
+        set candidate [normalize_existing $candidate]
+        if {![path_is_within $srcdir $candidate]} {
+          error "$includingFile:$lineNumber: include escapes source directory: $includeName"
+        }
+      }
+    }
   }
 
   if {[file isfile $candidate]} {
@@ -284,7 +309,25 @@ proc expanded_file_data {filename} {
   return $result
 }
 
-# Atomically replace one file when its expanded content differs.
+# Jim's forced rename on Windows removes the destination before renaming.
+# Retain the original in the same directory until the new name is installed.
+proc install_file {tmpPath filename} {
+  if {$::tcl_platform(platform) ne "windows" || $::tcl_platform(engine) ne "Jim"} {
+    file rename -force $tmpPath $filename
+    return
+  }
+  set backup "$tmpPath.orig"
+  file rename $filename $backup
+  if {[catch {file rename $tmpPath $filename} message]} {
+    if {[catch {file rename $backup $filename} restoreError]} {
+      error "$message (original retained at $backup; restore failed: $restoreError)"
+    }
+    error $message
+  }
+  file delete $backup
+}
+
+# Write and close the staged file before replacing the original.
 proc rewrite_file {filename} {
   set original [read_binary_file $filename]
   set expanded [expanded_file_data $filename]
@@ -292,23 +335,25 @@ proc rewrite_file {filename} {
     return 0
   }
 
-  set dir [file dirname $filename]
-  set tmpChannel [file tempfile tmpPath [file join $dir .bundle_extra_src_]]
-  fconfigure $tmpChannel -translation binary -encoding binary
-
+  # Reserve a sibling file and skip any backup left by an interrupted run.
+  for {set n 0} {1} {incr n} {
+    set tmpPath "${filename}.$n.tmp"
+    if {[file exists "$tmpPath.orig"]} { continue }
+    if {![catch {open $tmpPath {WRONLY CREAT EXCL}} tmpChannel]} { break }
+    if {![file exists $tmpPath]} { error $tmpChannel }
+  }
   try {
-    puts -nonewline $tmpChannel $expanded
-    flush $tmpChannel
-    close $tmpChannel
-    set tmpChannel ""
-
-    file rename -force $tmpPath $filename
-  } on error {message options} {
-    if {$tmpChannel ne ""} {
-      catch {close $tmpChannel}
+    try {
+      fconfigure $tmpChannel -translation binary
+      puts -nonewline $tmpChannel $expanded
+      flush $tmpChannel
+    } finally {
+      close $tmpChannel
     }
-    catch {file delete -force $tmpPath}
-    return -options $options $message
+    install_file $tmpPath $filename
+  } on error {message options} {
+    catch {file delete $tmpPath}
+    return {*}$options $message
   }
 
   return 1
