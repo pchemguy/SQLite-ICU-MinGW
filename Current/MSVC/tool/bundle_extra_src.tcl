@@ -1,37 +1,42 @@
-# bundle_extra_src.tcl -- Expand local C #include directives in place.
+# bundle_extra_src.tcl -- Inline local C headers and sources in SQLite's tsrc tree.
 #
-# Every positional argument must be the file name of a .c or .h file located
-# directly in the source directory. Local include names are resolved from
-# that source directory, including names that contain subdirectories.
+# Run from tsrc with SQLite's jimsh0 or Tcl 8.6. Pass one or more .c or .h
+# filenames directly in that directory. The script itself may live elsewhere.
 #
-# The script first scans the complete reachable include graph without changing
-# any file. It rejects missing targets, invalid include paths, and include
-# cycles. It then rewrites all discovered files in dependency-first order, so
-# an included file is fully expanded before its content is inserted into a
-# parent file.
+#   jimsh0 path/to/bundle_extra_src.tcl FILE...
 #
-# Includes of sqlite3.h and sqlite3ext.h are always replaced with a no-op
-# comment. They are never resolved or traversed, even if matching files exist
-# in the source directory. A literal #pragma once is elided only in an
-# embedded copy. Comments, quoted literals, and backslash-newline splices
-# are recognized when scanning directives.
+# Both #include "name" and #include <name> resolve from the current working
+# directory, even inside a subdirectory header. An existing local regular file
+# is expanded at each include site. Other valid relative includes pass through
+# for the compiler. Only the bare names sqlite3.h and sqlite3ext.h become
+# no-op comments, even when those files exist locally.
 #
-# Usage:
-#   jimsh0 bundle_extra_src.tcl file.c ?file.h ...?
-# Logs each operation to stderr by default. Set BUNDLE_EXTRA_SRC_TRACE=0 for quiet mode.
+# The scan recognizes literal directives across backslash-newline splices and
+# respects C comments and quoted literals. It scans all conditional branches
+# and leaves macro-based includes for the compiler. An embedded copy replaces
+# a literal #pragma once with a comment. The source header retains its pragma.
+#
+# Before writing, the script checks the targets, include paths, and reachable
+# graph for errors, including cycles. It then patches changed files in place,
+# dependencies first, including headers discovered below tsrc. The script
+# preserves bytes outside each replacement, including mixed line endings.
+#
+# stderr traces each scan, expansion, staging, and installation by default.
+# Set BUNDLE_EXTRA_SRC_TRACE=0 to disable tracing. Patched filenames and the
+# final counts of scanned and patched files go to stdout.
 #
 # https://chatgpt.com/c/6a62ecf5-5bb8-83eb-ba7a-7ce302cf962c
 
 set help [string trim {
-Usage: jimsh0 bundle_extra_src.tcl FILE...
+Usage: jimsh0 path/to/bundle_extra_src.tcl FILE...
 
-Expand local #include directives in C sources and headers in place.
+Run from tsrc. Each FILE must be a .c or .h filename in the current directory.
+Quoted and angle-bracket includes resolve from tsrc at every nesting level.
+The script patches changed targets and their local dependencies in place.
+Includes of the bare names sqlite3.h and sqlite3ext.h become no-op comments.
 
-Each FILE must be a file name only, have a .c or .h extension, and reside
-immediately inside the source directory. Include names are resolved relative
-to the source directory, including include names containing subdirectories.
-
-Includes of sqlite3.h and sqlite3ext.h are replaced with no-op comments.
+Tracing goes to stderr by default. Set BUNDLE_EXTRA_SRC_TRACE=0 to disable it.
+Patched filenames and the final counts go to stdout.
 }]
 
 set targets {}
