@@ -59,7 +59,11 @@ call :CORE_ENV                   || exit /b !ERRORLEVEL!
 if "%USE_ICU%"=="1" (
     call :ICU_OPTIONS            || exit /b !ERRORLEVEL!
 )                          
-call :ZLIB_OPTIONS               || exit /b !ERRORLEVEL!
+
+if "%USE_ZLIB%"=="1" (     
+    call :ZLIB_OPTIONS           || exit /b !ERRORLEVEL!
+)                          
+
 call :BUILD_OPTIONS              || exit /b !ERRORLEVEL!
 
 call :CHECK_PREREQUISITES        || exit /b !ERRORLEVEL!
@@ -76,13 +80,7 @@ if "%USE_ZLIB%"=="1" (
 )                          
 
 if "%USE_ICU%"=="1" (      
-    if "%USE_ICU_CONDA%"=="1" (
-        call :ICU_CONDA          || exit /b !ERRORLEVEL!
-    ) else (
-        call :ICU_DOWNLOAD       || exit /b !ERRORLEVEL!
-        call :ICU_EXTRACT        || exit /b !ERRORLEVEL!
-        call :ICU_BUILD          || exit /b !ERRORLEVEL!
-    )
+    call :ICU_CONDA              || exit /b !ERRORLEVEL!
 )                          
 
 call :SQLITE_BUILD_INIT          || exit /b !ERRORLEVEL!
@@ -282,22 +280,13 @@ set "PROJDIR=%CD%"
 echo {INFO} PROJDIR: %PROJDIR%.
 
 set "OPT_XTRA="
-if not defined USE_ICU_CONDA (set "USE_ICU_CONDA=1")
 if not defined USE_ICU       (set "USE_ICU=1")
-if not "%USE_ICU%"=="1"      (set "USE_ICU_CONDA=0")
 if not defined USE_ZLIB      (set "USE_ZLIB=1")
 if not defined SQLITE_EXTRA  (set "SQLITE_EXTRA=1")
+if not "%SQLITE_EXTRA%"=="0" (set "USE_ZLIB=1")
 
 set "MSG=USE_ICU:       %USE_ICU% - ICU is"
 if "%USE_ICU%"=="1" (
-    set "MSG=%MSG% ON."
-) else (
-    set "MSG=%MSG% OFF."
-)
-echo %MSG%
-
-set "MSG=USE_ICU_CONDA: %USE_ICU_CONDA% - Conda ICU is"
-if "%USE_ICU_CONDA%"=="1" (
     set "MSG=%MSG% ON."
 ) else (
     set "MSG=%MSG% OFF."
@@ -658,100 +647,6 @@ if not exist "%ICUBINDIR%\icuinfo.exe" (
 )
 
 :ICU_CONDA_EXIT
-
-echo ~~~~~ %SECTION% ~~~~~
-echo:
-endlocal && set "ERROR_STATUS=%ERROR_STATUS%" && exit /b %ERROR_STATUS%
-
-
-:: ============================================================================
-:ICU_DOWNLOAD
-
-setlocal
-set "SECTION=ICU_DOWNLOAD"
-
-set "DISTRO=%CACHEDIR%\icu4c-X-sources.zip"
-set "URL="
-
-set "ICU_REPO_META=%CACHEDIR%\icu_repo_meta.json"
-if not exist "%ICU_REPO_META%" (
-    curl.exe -s --output "%ICU_REPO_META%" ^
-             https://api.github.com/repos/unicode-org/icu/releases/latest
-)
-set "ERROR_STATUS=%ERRORLEVEL%"
-if "!ERROR_STATUS!"=="0" (
-    echo ----- Downloaded ICU release meta -----
-) else (
-    del /Q "%ICU_REPO_META%"
-    echo {ERROR} Failed to download ICU release meta.
-    goto :ICU_DOWNLOAD_EXIT
-)
-
-set "CLI=findstr /R /C:"browser_download_url.*icu4c-.*-s.*rc.*\.zip" "%ICU_REPO_META%""
-for /f "usebackq tokens=2" %%I in (`%CLI%`) do (
-    set "BUFFER=%%~I"
-    if "!BUFFER:~-3!"=="zip" (set "URL=!BUFFER!")
-    set "BUFFER="
-)
-if defined URL (
-    echo {INFO} ICU release URL: %URL%
-) else (
-    set "ERROR_STATUS=1"
-    echo {ERROR} Failed to locate ICU release URL.
-    goto :ICU_DOWNLOAD_EXIT
-)
-
-call :DOWNLOAD__NAME_PATH_URL ICU "%DISTRO%" "%URL%"
-set "ERROR_STATUS=%ERRORLEVEL%"
-
-:ICU_DOWNLOAD_EXIT
-
-echo ~~~~~ %SECTION% ~~~~~
-echo:
-endlocal && set "ERROR_STATUS=%ERROR_STATUS%" && exit /b %ERROR_STATUS%
-
-
-:: ============================================================================
-:ICU_EXTRACT
-
-setlocal
-set "SECTION=ICU_EXTRACT"
-
-set "FLAG=%ICUDIR%\source\allinone\allinone.sln"
-set "SRC=%CACHEDIR%\icu4c-X-sources.zip"
-set "DST=%THIRDDIR%"
-
-call :EXTRACT__NAME_FLAG_SRC_DST ICU "%FLAG%" "%SRC%" "%DST%"
-set "ERROR_STATUS=%ERRORLEVEL%"
-
-echo ~~~~~ %SECTION% ~~~~~
-echo:
-endlocal && set "ERROR_STATUS=%ERROR_STATUS%" && exit /b %ERROR_STATUS%
-
-
-:: ============================================================================
-:ICU_BUILD
-
-setlocal
-set "SECTION=ICU_BUILD"
-
-if not exist "%ICUBINDIR%\icuinfo.exe" (
-    echo {INFO} ===== Building ICU =====
-    cd /d "%ICUDIR%"
-    msbuild "%ICUDIR%\source\allinone\allinone.sln" ^
-            /m /p:Configuration=Release /p:SkipUWP=true 1>>"%STDOUTLOG%" 2>>"%STDERRLOG%"
-    set "ERROR_STATUS=!ERRORLEVEL!"
-    if "!ERROR_STATUS!"=="0" (
-        echo {INFO} ----- Built ICU -----
-    ) else if exist "%ICUBINDIR%\icuinfo.exe" (
-        echo {INFO} ----- Built ICU -----
-        set "ERROR_STATUS=0"
-    ) else (
-        echo {ERROR} Failed to build ICU. Error Code: !ERROR_STATUS!.
-    )
-) else (
-    echo {INFO} ===== Using previously built ICU =====
-)
 
 echo ~~~~~ %SECTION% ~~~~~
 echo:
