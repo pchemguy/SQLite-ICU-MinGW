@@ -150,67 +150,7 @@ echo {INFO} Created "%TARGETDIR%".
 
 echo ~~~~~ %SECTION% ~~~~~
 echo:
-endlocal && set "ERROR_STATUS=%ERROR_STATUS%" && exit /b %ERROR_STATUS%
-
-
-:: ============================================================================
-:EXTRACT__NAME_FLAG_SRC_DST
-
-:: Extracts archive using Windows Tar.
-::
-:: %~1 - Name.
-:: %~2 - Flag - file or directory. If exists, use previously extracted files.
-:: %~3 - Archive path - MUST exist.
-:: %~4 - Extraction directory path - MUST exist.
-
-setlocal
-set "SECTION=EXTRACT__NAME_FLAG_SRC_DST"
-
-if "%~4"=="" (
-    set "ERROR_STATUS=1"
-    echo {ERROR} Missing required parameters.
-    set "CLI=call :EXTRACT__NAME_FLAG_SRC_DST "%NAME%" "%FLAG%" "%SRC%" "%DST%""
-    echo {INFO}  USAGE: !CLI!
-    goto :EXTRACT_EXIT
-)
-
-set "NAME=%~1"
-set "FLAG=%~2"
-set "SRC=%~3"
-set "DST=%~4"
-set "ERROR_STATUS=0"
-
-if not exist "%SRC%" (
-    set "ERROR_STATUS=1"
-    echo {ERROR} Archive "%SRC%" not found.
-    goto :EXTRACT_EXIT
-)
-
-if not exist "%DST%" (
-    set "ERROR_STATUS=1"
-    echo {ERROR} Directory "%DST%" not found.
-    goto :EXTRACT_EXIT
-)
-
-if not exist "%FLAG%" (
-    echo {INFO} ===== Extracting %NAME% =====
-    cd /d "%DST%"
-    "%TAR%" -xf "%SRC%"
-    set "ERROR_STATUS=!ERRORLEVEL!"
-    if "!ERROR_STATUS!"=="0" (
-        echo {INFO} ----- Extracted %NAME% -----
-    ) else (
-        echo {ERROR} Failed to extract %NAME%. Error Code: !ERROR_STATUS!.
-    )
-) else (
-    echo {INFO} ===== Using previously extracted %NAME% =====
-)
-
-:EXTRACT_EXIT
-
-echo ~~~~~ %SECTION% ~~~~~
-echo:
-endlocal && set "ERROR_STATUS=%ERROR_STATUS%" && exit /b %ERROR_STATUS%
+endlocal && exit /b %ERROR_STATUS%
 
 
 :: ============================================================================
@@ -402,6 +342,7 @@ endlocal && exit /b 0
 
 setlocal
 set "SECTION=SQLITE_DOWNLOAD"
+
 set "NAME=SQLite"
 set "DISTRO=%CACHEDIR%\sqlite.zip"
 set "URL=https://sqlite.org/src/zip/sqlite.zip"
@@ -411,7 +352,7 @@ set "ERROR_STATUS=%ERRORLEVEL%"
 
 echo ~~~~~ %SECTION% ~~~~~
 echo:
-endlocal && set "ERROR_STATUS=%ERROR_STATUS%" && exit /b %ERROR_STATUS%
+endlocal && exit /b %ERROR_STATUS%
 
 
 :: ============================================================================
@@ -420,16 +361,17 @@ endlocal && set "ERROR_STATUS=%ERROR_STATUS%" && exit /b %ERROR_STATUS%
 setlocal
 set "SECTION=SQLITE_EXTRACT"
 
+set "NAME=SQLite"
 set "FLAG=%SQLITE_MAKEFILE%"
 set "SRC=%CACHEDIR%\sqlite.zip"
 set "DST=%OUT%"
 
-call :EXTRACT__NAME_FLAG_SRC_DST SQLite "%FLAG%" "%SRC%" "%DST%"
+call "%~dp0extract_archive.bat" "%NAME%" "%FLAG%" "%SRC%" "%DST%"
 set "ERROR_STATUS=%ERRORLEVEL%"
 
 echo ~~~~~ %SECTION% ~~~~~
 echo:
-endlocal && set "ERROR_STATUS=%ERROR_STATUS%" && exit /b %ERROR_STATUS%
+endlocal && exit /b %ERROR_STATUS%
 
 
 :: ============================================================================
@@ -455,7 +397,7 @@ set "ERROR_STATUS=%ERRORLEVEL%"
 
 echo ~~~~~ %SECTION% ~~~~~
 echo:
-endlocal && set "ERROR_STATUS=%ERROR_STATUS%" && exit /b %ERROR_STATUS%
+endlocal && exit /b %ERROR_STATUS%
 
 
 :: ============================================================================
@@ -464,11 +406,12 @@ endlocal && set "ERROR_STATUS=%ERROR_STATUS%" && exit /b %ERROR_STATUS%
 setlocal
 set "SECTION=ZLIB_EXTRACT"
 
+set "NAME=ZLIB"
 set "FLAG=%ZLIBDIR%\win32\Makefile.msc"
 set "SRC=%CACHEDIR%\zlib.tar.gz"
 set "DST=%THIRDDIR%"
 
-call :EXTRACT__NAME_FLAG_SRC_DST ZLIB "%FLAG%" "%SRC%" "%DST%"
+call "%~dp0extract_archive.bat" "%NAME%" "%FLAG%" "%SRC%" "%DST%"
 set "ERROR_STATUS=%ERRORLEVEL%"
 if "%ERROR_STATUS%"=="0" (
     move /Y "%THIRDDIR%\zlib-*" "%THIRDDIR%\zlib"
@@ -476,7 +419,7 @@ if "%ERROR_STATUS%"=="0" (
 
 echo ~~~~~ %SECTION% ~~~~~
 echo:
-endlocal && set "ERROR_STATUS=%ERROR_STATUS%" && exit /b %ERROR_STATUS%
+endlocal && exit /b %ERROR_STATUS%
 
 
 :: ============================================================================
@@ -501,7 +444,7 @@ if not exist "%ZLIBDIR%\zlib1.dll" (
 
 echo ~~~~~ %SECTION% ~~~~~
 echo:
-endlocal && set "ERROR_STATUS=%ERROR_STATUS%" && exit /b %ERROR_STATUS%
+endlocal && exit /b %ERROR_STATUS%
 
 
 :: ============================================================================
@@ -543,7 +486,7 @@ if not exist "%ICUBINDIR%\icuinfo.exe" (
 
 echo ~~~~~ %SECTION% ~~~~~
 echo:
-endlocal && set "ERROR_STATUS=%ERROR_STATUS%" && exit /b %ERROR_STATUS%
+endlocal && exit /b %ERROR_STATUS%
 
 
 :: ============================================================================
