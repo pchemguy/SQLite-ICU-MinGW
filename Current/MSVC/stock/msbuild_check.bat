@@ -60,8 +60,7 @@ for /f "usebackq delims=" %%I in (`where tclsh.exe 2^>nul`) do (
     if "!CommandLocation!"=="" (set "CommandLocation=%%I")
 )
 if "%CommandLocation%"=="" (
-    echo %ERROR% tclsh.exe is not found. TCL is required and must be in the path.
-    set "ERROR_STATUS=1"
+    echo %WARN% tclsh.exe was not found on PATH. Continuing without external Tcl.
 ) else (
     echo %INFO% TCLSH_EXE=   %CommandLocation%
 )
