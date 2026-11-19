@@ -154,51 +154,6 @@ endlocal && set "ERROR_STATUS=%ERROR_STATUS%" && exit /b %ERROR_STATUS%
 
 
 :: ============================================================================
-:DOWNLOAD__NAME_PATH_URL
-
-:: Downloads component.
-::
-:: %~1 - Name.
-:: %~2 - Full download path.
-:: %~3 - Download URL.
-
-setlocal
-set "SECTION=DOWNLOAD__NAME_PATH_URL"
-
-if "%~3"=="" (
-    set "ERROR_STATUS=1"
-    echo {ERROR} Missing required parameters.
-    echo {INFO}  USAGE: call :DOWNLOAD__NAME_PATH_URL "%NAME%" "%DISTRO%" "%URL%"
-    goto :DOWNLOAD_EXIT
-)
-
-set "NAME=%~1"
-set "TARGET=%~2"
-set "URL=%~3"
-set "ERROR_STATUS=0"
-
-if not exist "%TARGET%" (
-    echo {INFO} ===== Downloading %NAME% =====
-    curl.exe -fL --retry 3 --output "%TARGET%" %URL%
-    set "ERROR_STATUS=!ERRORLEVEL!"
-    if "!ERROR_STATUS!"=="0" (
-        echo {INFO} ----- Downloaded %NAME% -----
-        echo {INFO} "%TARGET%"
-    ) else (
-        echo {ERROR} %NAME% download failed. Error Code: !ERROR_STATUS!.
-    )
-) else (
-    echo {INFO} ===== Using previously downloaded %NAME% =====
-)
-
-:DOWNLOAD_EXIT
-
-echo ~~~~~ %SECTION% ~~~~~
-echo:
-endlocal && set "ERROR_STATUS=%ERROR_STATUS%" && exit /b %ERROR_STATUS%
-
-
-:: ============================================================================
 :EXTRACT__NAME_FLAG_SRC_DST
 
 :: Extracts archive using Windows Tar.
@@ -518,11 +473,11 @@ endlocal && exit /b 0
 
 setlocal
 set "SECTION=SQLITE_DOWNLOAD"
-
+set "NAME=SQLite"
 set "DISTRO=%CACHEDIR%\sqlite.zip"
 set "URL=https://sqlite.org/src/zip/sqlite.zip"
 
-call :DOWNLOAD__NAME_PATH_URL SQLite "%DISTRO%" "%URL%"
+call "%~dp0DownloadFile.bat" "%NAME%" "%DISTRO%" "%URL%"
 set "ERROR_STATUS=%ERRORLEVEL%"
 
 echo ~~~~~ %SECTION% ~~~~~
@@ -554,10 +509,19 @@ endlocal && set "ERROR_STATUS=%ERROR_STATUS%" && exit /b %ERROR_STATUS%
 setlocal
 set "SECTION=ZLIB_DOWNLOAD"
 
+set "NAME=ZLIB"
 set "DISTRO=%CACHEDIR%\zlib.tar.gz"
-set "URL=https://zlib.net/current/zlib.tar.gz"
+rem set "URL=https://zlib.net/current/zlib.tar.gz"
+set "URL_PREFIX=https://github.com/madler/zlib/releases"
 
-call :DOWNLOAD__NAME_PATH_URL ZLIB "%DISTRO%" "%URL%"
+for /f "usebackq" %%U in (
+    `curl.exe -fsSL -o NUL -w "%%{url_effective}" %URL_PREFIX%/latest`
+) do (
+    set "ZLIB_VERSION=%%~nxU"
+)
+set "URL=%URL_PREFIX%/download/%ZLIB_VERSION%/zlib-%ZLIB_VERSION:~1%.tar.gz"
+
+call "%~dp0DownloadFile.bat" "%NAME%" "%DISTRO%" "%URL%"
 set "ERROR_STATUS=%ERRORLEVEL%"
 
 echo ~~~~~ %SECTION% ~~~~~
