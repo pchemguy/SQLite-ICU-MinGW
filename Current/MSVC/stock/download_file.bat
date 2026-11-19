@@ -54,8 +54,6 @@ exit /b 0
 :: ############################################################################
 
 
-:: ============================================================================ DOWNLOAD__NAME_PATH_URL BEGIN
-:: ============================================================================
 :FETCH
 set "PART=%TARGET%.part"
 set "META=%TARGET%.response.log"
@@ -73,16 +71,12 @@ if not "%RC%"=="0" (
     goto :FAILED
 )
 
-:: ============================================================================ CHECKURL__URL_PATH BEGIN
-:: ============================================================================
 :: Only accept a full HTTP response (not, for example, unsolicited 206).
 set "RC=1"
 findstr /b /c:"200 " "%META%" >nul || goto :BAD_RESPONSE
 findstr /i /r /b /c:"200 [ 	]*text/html[; 	]" "%META%" >nul
 if errorlevel 2 goto :BAD_RESPONSE
 if not errorlevel 1 goto :BAD_RESPONSE
-:: ============================================================================
-:: ============================================================================ CHECKURL__URL_PATH END
 
 set "CANDIDATE=%PART%"
 call :CHECK_ARCHIVE
@@ -107,8 +101,6 @@ echo %ERROR% Unexpected HTTP status or media type. See "%META%".
 :FAILED
 if exist "%PART%" if not exist "%PART%\" del /q "%PART%"
 exit /b %RC%
-:: ============================================================================
-:: ============================================================================ DOWNLOAD__NAME_PATH_URL END
 
 
 :CHECK_ARCHIVE
