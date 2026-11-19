@@ -396,8 +396,7 @@ set "FLAG=%SQLITEDIR%\.sqlite-extracted"
 set "SRC=%CACHEDIR%\sqlite.zip"
 set "DST=%OUT%"
 
-set "EXTRACTOR=%~dp0extract_archive.bat"
-call "%%EXTRACTOR%%" "%%NAME%%" "%%FLAG%%" "%%SRC%%" "%%DST%%" || exit /b 1
+call "%~dp0extract_archive.bat" "%NAME%" "%FLAG%" "%SRC%" "%DST%" || exit /b 1
 if exist "%FLAG%\" goto :SQLITE_EXTRACT_INCOMPLETE
 if not exist "%SQLITE_MAKEFILE%" goto :SQLITE_EXTRACT_INCOMPLETE
 if exist "%SQLITE_MAKEFILE%\" goto :SQLITE_EXTRACT_INCOMPLETE
@@ -492,8 +491,7 @@ if exist "%ZLIBDIR%" (
     exit /b 0
 )
 mkdir "%DST%" || goto :ZLIB_EXTRACT_FAILED
-set "EXTRACTOR=%~dp0extract_archive.bat"
-call "%%EXTRACTOR%%" "%%NAME%%" "%%FLAG%%" "%%SRC%%" "%%DST%%" || goto :ZLIB_EXTRACT_FAILED
+call "%~dp0extract_archive.bat" "%NAME%" "%FLAG%" "%SRC%" "%DST%" || goto :ZLIB_EXTRACT_FAILED
 
 set "ROOT="
 for /f "usebackq eol=| delims=" %%D in (`dir /b /a "%DST%"`) do (
