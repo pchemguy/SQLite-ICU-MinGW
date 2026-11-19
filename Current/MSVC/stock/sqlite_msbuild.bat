@@ -398,14 +398,15 @@ set "DST=%OUT%"
 
 set "EXTRACTOR=%~dp0extract_archive.bat"
 call "%%EXTRACTOR%%" "%%NAME%%" "%%FLAG%%" "%%SRC%%" "%%DST%%"
-if errorlevel 1 exit /b %ERRORLEVEL%
+if not "%ERRORLEVEL%"=="0" exit /b %ERRORLEVEL%
 if exist "%FLAG%\" goto :SQLITE_EXTRACT_INCOMPLETE
 if not exist "%SQLITE_MAKEFILE%" goto :SQLITE_EXTRACT_INCOMPLETE
 if exist "%SQLITE_MAKEFILE%\" goto :SQLITE_EXTRACT_INCOMPLETE
-if not exist "%FLAG%" (
-    >"%FLAG%" echo complete
-    if errorlevel 1 exit /b 1
-)
+if exist "%FLAG%" goto :SQLITE_EXTRACT_DONE
+>"%FLAG%" echo complete
+if not "%ERRORLEVEL%"=="0" exit /b 1
+
+:SQLITE_EXTRACT_DONE
 set "ERROR_STATUS=0"
 
 echo:
@@ -430,21 +431,22 @@ set "SECTION=ZLIB_DOWNLOAD"
 set "NAME=ZLIB"
 set "DISTRO=%CACHEDIR%\zlib.tar.gz"
 set "MEMBER=zlib-*/win32/Makefile.msc"
-if exist "%DISTRO%" (
-    "%TAR%" -tf "%DISTRO%" -- "%MEMBER%" >nul
-    if errorlevel 1 (
-        echo %ERROR% Invalid cache entry: "%DISTRO%". Move it aside before retrying.
-        exit /b 1
-    )
-    echo %OKOK% Using previously downloaded ZLIB: "%DISTRO%"
-    exit /b 0
+if not exist "%DISTRO%" goto :ZLIB_DOWNLOAD_LATEST
+"%TAR%" -tf "%DISTRO%" -- "%MEMBER%" >nul
+if not "%ERRORLEVEL%"=="0" (
+    echo %ERROR% Invalid cache entry: "%DISTRO%". Move it aside before retrying.
+    exit /b 1
 )
+echo %OKOK% Using previously downloaded ZLIB: "%DISTRO%"
+exit /b 0
+
+:ZLIB_DOWNLOAD_LATEST
 rem set "URL=https://zlib.net/current/zlib.tar.gz"
 set "URL_PREFIX=https://github.com/madler/zlib/releases"
 
 set "URL_LOG=%CACHEDIR%\zlib-release-url.txt"
 curl.exe -fsSL -o NUL -w "%%{url_effective}\n" -- "%URL_PREFIX%/latest" >"%URL_LOG%"
-if errorlevel 1 (
+if not "%ERRORLEVEL%"=="0" (
     echo %ERROR% Failed to resolve the latest ZLIB release.
     exit /b 1
 )
@@ -505,7 +507,7 @@ dir /b /a:d "%DST%" | findstr /r /x /c:"%VERSION%" | findstr /l /v /c:".." >nul 
 if not exist "%DST%\%ROOT%\win32\Makefile.msc" goto :ZLIB_EXTRACT_BAD_ROOT
 if exist "%DST%\%ROOT%\win32\Makefile.msc\" goto :ZLIB_EXTRACT_BAD_ROOT
 >"%DST%\%ROOT%\.zlib-staged" echo complete
-if errorlevel 1 goto :ZLIB_EXTRACT_FAILED
+if not "%ERRORLEVEL%"=="0" goto :ZLIB_EXTRACT_FAILED
 if exist "%ZLIBDIR%" goto :ZLIB_EXTRACT_INCOMPLETE
 move "%DST%\%ROOT%" "%ZLIBDIR%" || goto :ZLIB_EXTRACT_FAILED
 if not exist "%FLAG%" goto :ZLIB_EXTRACT_INCOMPLETE
@@ -626,7 +628,7 @@ if "%ROOT%"=="%ICUDIR%" (
     goto :ICU_CONDA_EXIT
 )
 >"%STAGE%\.icu-staged" echo complete
-if errorlevel 1 goto :ICU_CONDA_FAILED
+if not "%ERRORLEVEL%"=="0" goto :ICU_CONDA_FAILED
 ren "%STAGE%" "icu" || goto :ICU_CONDA_FAILED
 echo %OKOK% Staged ICU from "%CONDA_PREFIX%" in "%ICUDIR%".
 goto :ICU_CONDA_EXIT
