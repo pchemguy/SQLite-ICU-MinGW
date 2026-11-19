@@ -67,15 +67,14 @@ set "PART=%TARGET%.part"
 set "META=%TARGET%.response.log"
 set "HEADER_LOG=%~dpn2.log"
 if /i "%HEADER_LOG%"=="%TARGET%" set "HEADER_LOG=%TARGET%.headers.log"
-set "ERROR_LOG=%~dpn2_err.log"
 echo %INFO% Downloading "%NAME%" to "%PART%"
 
 :: Write final status and media type from the GET, not a separate HEAD. The
 :: trailing semicolon makes bare and parameterized media types comparable.
-curl.exe -fL --globoff --retry 3 --dump-header "%HEADER_LOG%" --output "%PART%" --write-out "%%{http_code} %%{content_type};\n" -- "%URL%" >"%META%" 2>"%ERROR_LOG%"
+curl.exe -fL --globoff --retry 3 --dump-header "%HEADER_LOG%" --output "%PART%" --write-out "%%{http_code} %%{content_type};\n" -- "%URL%" >"%META%"
 set "RC=%ERRORLEVEL%"
 if not "%RC%"=="0" (
-    echo %ERROR% Download failed with status %RC%. See "%ERROR_LOG%".
+    echo %ERROR% Download failed with status %RC%.
     goto :FAILED
 )
 
