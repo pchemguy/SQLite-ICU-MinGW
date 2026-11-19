@@ -6,8 +6,8 @@
 :: Arguments:
 ::     %1 - Name (logging label).
 ::     %2 - Full download path.
-::     %~3 - Download URL.
-::     %~4 - Optional archive member pattern to validate with Windows tar.
+::     %3 - Download URL.
+::     %4 - Optional archive member pattern to validate with Windows tar.
 ::
 :: Examples:
 ::     set "NAME=SQLite"
