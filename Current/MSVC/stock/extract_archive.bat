@@ -4,7 +4,8 @@
 :: Extracts archive using Windows Tar.
 ::
 :: %~1 - Name.
-:: %~2 - Flag - file or directory. If exists, use previously extracted files.
+:: %~2 - Caller-created flag (file or directory). After checking the archive
+::       and destination, skip extraction if the flag exists.
 :: %~3 - Archive path - MUST exist.
 :: %~4 - Extraction directory path - MUST exist.
 ::
@@ -13,7 +14,7 @@
 :: ============================================================================
 :MAIN
 
-SetLocal EnableExtensions EnableDelayedExpansion
+SetLocal EnableExtensions DisableDelayedExpansion
 
 set "ERROR_STATUS=0"
 
@@ -24,19 +25,16 @@ echo ---------------------------------------------------------------------------
 echo %WARN% Extracting archive.
 echo:
 
-if "%~4"=="" (
-    set "ERROR_STATUS=1"
-    echo %ERROR% Missing required parameters.
-    set "CLI=call extract_archive.bat "NAME" "FLAG" "SRC" "DST""
-    echo %INFO%  USAGE: !CLI!
-    goto :EXTRACT_EXIT
-)
+if "%~1"=="" goto :EXTRACT_USAGE
+if "%~2"=="" goto :EXTRACT_USAGE
+if "%~3"=="" goto :EXTRACT_USAGE
+if "%~4"=="" goto :EXTRACT_USAGE
 
 set "NAME=%~1"
-set "FLAG=%~2"
-set "SRC=%~3"
-set "DST=%~4"
-set "ERROR_STATUS=0"
+set "FLAG=%~f2"
+set "SRC=%~f3"
+set "DST=%~f4"
+if not defined TAR set "TAR=%SystemRoot%\System32\tar.exe"
 
 if not exist "%SRC%" (
     set "ERROR_STATUS=1"
@@ -44,26 +42,37 @@ if not exist "%SRC%" (
     goto :EXTRACT_EXIT
 )
 
-if not exist "%DST%" (
+if exist "%SRC%\" (
+    set "ERROR_STATUS=1"
+    echo %ERROR% Expected an archive file, not a directory: "%SRC%".
+    goto :EXTRACT_EXIT
+)
+
+if not exist "%DST%\." (
     set "ERROR_STATUS=1"
     echo %ERROR% Directory "%DST%" not found.
     goto :EXTRACT_EXIT
 )
 
-if not exist "%FLAG%" (
-    echo %INFO% ===== Extracting %NAME% =====
-    cd /d "%DST%"
-    "%TAR%" -xf "%SRC%"
-    set "ERROR_STATUS=!ERRORLEVEL!"
-    call :COLOR_SCHEME
-    if "!ERROR_STATUS!"=="0" (
-        echo %OKOK% Extracted %NAME%.
-    ) else (
-        echo %ERROR% Failed to extract %NAME%. Error Code: !ERROR_STATUS!.
-    )
-) else (
+if exist "%FLAG%" (
     echo %OKOK% ===== Using previously extracted %NAME% =====
+    goto :EXTRACT_EXIT
 )
+
+echo %INFO% ===== Extracting %NAME% =====
+"%TAR%" -x -f "%SRC%" -C "%DST%"
+set "ERROR_STATUS=%ERRORLEVEL%"
+if "%ERROR_STATUS%"=="0" (
+    echo %OKOK% Extracted %NAME%.
+) else (
+    echo %ERROR% Failed to extract %NAME%. Error Code: %ERROR_STATUS%.
+)
+goto :EXTRACT_EXIT
+
+:EXTRACT_USAGE
+set "ERROR_STATUS=1"
+echo %ERROR% Missing required parameters.
+echo %INFO%  USAGE: call extract_archive.bat "NAME" "FLAG" "SRC" "DST"
 
 :EXTRACT_EXIT
 

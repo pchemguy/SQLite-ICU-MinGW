@@ -11,10 +11,9 @@
 ::   builds, ZLIB integration, ICU integration, stock SQLite ext/misc modules,
 ::   DLL export/import-library generation, and final artifact collection.
 ::
-::   Conda ICU is staged into the same compatibility-tree include, library,
-::   and binary directories used by source-built ICU, so the downstream SQLite
-::   build and packaging logic is provider-independent. The active Conda and
-::   MSVC environments must target the same architecture.
+::   Conda is the only ICU provider. Staging preserves the existing include,
+::   library, and binary paths used by the SQLite build and packaging steps.
+::   The active Conda and MSVC environments must target the same architecture.
 ::
 ::   Principal outputs are written under:
 ::
@@ -56,6 +55,8 @@ call :COLOR_SCHEME
 
 call :CORE_ENV                || exit /b !ERRORLEVEL!
 
+call "%~dp0msbuild_check.bat" || exit /b !ERRORLEVEL!
+
 if "%USE_ICU%"=="1" (
     call :ICU_OPTIONS         || exit /b !ERRORLEVEL!
 )
@@ -65,8 +66,6 @@ if "%USE_ZLIB%"=="1" (
 )
 
 call :BUILD_OPTIONS           || exit /b !ERRORLEVEL!
-
-call "%~dp0msbuild_check.bat" || exit /b !ERRORLEVEL!
 
 call :MAKE_DEBUG %*           || exit /b !ERRORLEVEL!
 
@@ -110,12 +109,12 @@ endlocal && exit /b 0
 :: ============================================================================
 :MKDIR__DIR
 
-:: Creates directory or fails with feedback.
+:: Creates the target directory if the path does not exist.
 ::
 :: %~1 - Full target directory path.
 ::
-:: Attempts creating target directory if not exist.
-:: Fails if creation fails or directory does not exist after creation.
+:: Accepts an existing path without checking its type.
+:: Fails if mkdir fails or the path is still missing.
 
 setlocal
 set "SECTION=MKDIR__DIR"
@@ -365,14 +364,15 @@ endlocal && exit /b 0
 :: ============================================================================
 :SQLITE_DOWNLOAD
 
-setlocal
+setlocal DisableDelayedExpansion
 set "SECTION=SQLITE_DOWNLOAD"
 
 set "NAME=SQLite"
 set "DISTRO=%CACHEDIR%\sqlite.zip"
 set "URL=https://sqlite.org/src/zip/sqlite.zip"
 
-call "%~dp0download_file.bat" "%NAME%" "%DISTRO%" "%URL%"
+set "DOWNLOADER=%~dp0download_file.bat"
+call "%%DOWNLOADER%%" "%%NAME%%" "%%DISTRO%%" "%%URL%%" "sqlite/Makefile.msc"
 set "ERROR_STATUS=%ERRORLEVEL%"
 
 echo:
@@ -387,21 +387,32 @@ endlocal && exit /b %ERROR_STATUS%
 :: ============================================================================
 :SQLITE_EXTRACT
 
-setlocal
+setlocal DisableDelayedExpansion
 set "SECTION=SQLITE_EXTRACT"
 
 set "NAME=SQLite"
-set "FLAG=%SQLITE_MAKEFILE%"
+set "FLAG=%SQLITEDIR%\.sqlite-extracted"
 set "SRC=%CACHEDIR%\sqlite.zip"
 set "DST=%OUT%"
 
-call "%~dp0extract_archive.bat" "%NAME%" "%FLAG%" "%SRC%" "%DST%"
-set "ERROR_STATUS=%ERRORLEVEL%"
+call "%~dp0extract_archive.bat" "%NAME%" "%FLAG%" "%SRC%" "%DST%" || exit /b 1
+if exist "%FLAG%\" goto :SQLITE_EXTRACT_INCOMPLETE
+if not exist "%SQLITE_MAKEFILE%" goto :SQLITE_EXTRACT_INCOMPLETE
+if exist "%SQLITE_MAKEFILE%\" goto :SQLITE_EXTRACT_INCOMPLETE
+if exist "%FLAG%" goto :SQLITE_EXTRACT_DONE
+echo complete >"%FLAG%" || exit /b 1
+
+:SQLITE_EXTRACT_DONE
+set "ERROR_STATUS=0"
 
 echo:
 echo %INFO% ~~~~~ %SECTION% ~~~~~
 echo:
 endlocal && exit /b %ERROR_STATUS%
+
+:SQLITE_EXTRACT_INCOMPLETE
+echo %ERROR% Expected "%SQLITE_MAKEFILE%" after SQLite extraction. Move aside the incomplete tree and retry.
+exit /b 1
 :: ============================================================================
 :: ============================================================================ SQLITE_EXTRACT END
 
@@ -410,22 +421,45 @@ endlocal && exit /b %ERROR_STATUS%
 :: ============================================================================
 :ZLIB_DOWNLOAD
 
-setlocal
+setlocal DisableDelayedExpansion
 set "SECTION=ZLIB_DOWNLOAD"
 
 set "NAME=ZLIB"
 set "DISTRO=%CACHEDIR%\zlib.tar.gz"
+set "MEMBER=zlib-*/win32/Makefile.msc"
+if not exist "%DISTRO%" goto :ZLIB_DOWNLOAD_LATEST
+"%TAR%" -tf "%DISTRO%" -- "%MEMBER%" >nul
+if not "%ERRORLEVEL%"=="0" (
+    echo %ERROR% Invalid cache entry: "%DISTRO%". Move it aside before retrying.
+    exit /b 1
+)
+echo %OKOK% Using previously downloaded ZLIB: "%DISTRO%"
+exit /b 0
+
+:ZLIB_DOWNLOAD_LATEST
 rem set "URL=https://zlib.net/current/zlib.tar.gz"
 set "URL_PREFIX=https://github.com/madler/zlib/releases"
 
-for /f "usebackq" %%U in (
-    `curl.exe -fsSL -o NUL -w "%%{url_effective}" %URL_PREFIX%/latest`
-) do (
-    set "ZLIB_VERSION=%%~nxU"
+set "URL_LOG=%CACHEDIR%\zlib-release-url.txt"
+curl.exe -fsSL -o NUL -w "%%{url_effective}\n" -- "%URL_PREFIX%/latest" >"%URL_LOG%"
+if not "%ERRORLEVEL%"=="0" (
+    echo %ERROR% Failed to resolve the latest ZLIB release.
+    exit /b 1
+)
+:: Accept only dotted numeric versions, such as v1.4 or v1.3.1; reject empty components.
+set "TAG=https://github[.]com/madler/zlib/releases/tag/v[0-9][0-9.]*[.][0-9][0-9]*"
+set "ZLIB_VERSION="
+for /f "usebackq tokens=7 delims=/" %%V in (
+    `findstr /r /x /c:"%TAG%" "%URL_LOG%" ^| findstr /l /v /c:".."`
+) do set "ZLIB_VERSION=%%V"
+if not defined ZLIB_VERSION (
+    echo %ERROR% Unexpected ZLIB release URL. See "%URL_LOG%".
+    exit /b 1
 )
 set "URL=%URL_PREFIX%/download/%ZLIB_VERSION%/zlib-%ZLIB_VERSION:~1%.tar.gz"
 
-call "%~dp0download_file.bat" "%NAME%" "%DISTRO%" "%URL%"
+set "DOWNLOADER=%~dp0download_file.bat"
+call "%%DOWNLOADER%%" "%%NAME%%" "%%DISTRO%%" "%%URL%%" "%%MEMBER%%"
 set "ERROR_STATUS=%ERRORLEVEL%"
 
 echo:
@@ -440,24 +474,55 @@ endlocal && exit /b %ERROR_STATUS%
 :: ============================================================================
 :ZLIB_EXTRACT
 
-setlocal
+setlocal DisableDelayedExpansion
 set "SECTION=ZLIB_EXTRACT"
 
 set "NAME=ZLIB"
-set "FLAG=%ZLIBDIR%\win32\Makefile.msc"
+set "FLAG=%ZLIBDIR%\.zlib-staged"
 set "SRC=%CACHEDIR%\zlib.tar.gz"
-set "DST=%THIRDDIR%"
-
-call "%~dp0extract_archive.bat" "%NAME%" "%FLAG%" "%SRC%" "%DST%"
-set "ERROR_STATUS=%ERRORLEVEL%"
-if "%ERROR_STATUS%"=="0" (
-    move /Y "%THIRDDIR%\zlib-*" "%THIRDDIR%\zlib"
+set "DST=%ZLIBDIR%.stage"
+if exist "%ZLIBDIR%" (
+    if not exist "%FLAG%" goto :ZLIB_EXTRACT_INCOMPLETE
+    if exist "%FLAG%\" goto :ZLIB_EXTRACT_INCOMPLETE
+    if not exist "%ZLIBDIR%\win32\Makefile.msc" goto :ZLIB_EXTRACT_INCOMPLETE
+    if exist "%ZLIBDIR%\win32\Makefile.msc\" goto :ZLIB_EXTRACT_INCOMPLETE
+    echo %OKOK% ===== Using previously extracted ZLIB =====
+    exit /b 0
 )
+mkdir "%DST%" || goto :ZLIB_EXTRACT_FAILED
+call "%~dp0extract_archive.bat" "%NAME%" "%FLAG%" "%SRC%" "%DST%" || goto :ZLIB_EXTRACT_FAILED
+
+set "ROOT="
+for /f "usebackq eol=| delims=" %%D in (`dir /b /a "%DST%"`) do (
+    if defined ROOT goto :ZLIB_EXTRACT_BAD_ROOT
+    set "ROOT=%%D"
+)
+set "VERSION=zlib-[0-9][0-9.]*[.][0-9][0-9]*"
+dir /b /a:d "%DST%" | findstr /r /x /c:"%VERSION%" | findstr /l /v /c:".." >nul || goto :ZLIB_EXTRACT_BAD_ROOT
+if not exist "%DST%\%ROOT%\win32\Makefile.msc" goto :ZLIB_EXTRACT_BAD_ROOT
+if exist "%DST%\%ROOT%\win32\Makefile.msc\" goto :ZLIB_EXTRACT_BAD_ROOT
+echo complete >"%DST%\%ROOT%\.zlib-staged" || goto :ZLIB_EXTRACT_FAILED
+if exist "%ZLIBDIR%" goto :ZLIB_EXTRACT_INCOMPLETE
+move "%DST%\%ROOT%" "%ZLIBDIR%" || goto :ZLIB_EXTRACT_FAILED
+if not exist "%FLAG%" goto :ZLIB_EXTRACT_INCOMPLETE
+if not exist "%ZLIBDIR%\win32\Makefile.msc" goto :ZLIB_EXTRACT_INCOMPLETE
+rd "%DST%" || goto :ZLIB_EXTRACT_FAILED
+echo %OKOK% Staged "%ROOT%" in "%ZLIBDIR%".
 
 echo:
 echo %INFO% ~~~~~ %SECTION% ~~~~~
 echo:
-endlocal && exit /b %ERROR_STATUS%
+endlocal && exit /b 0
+
+:ZLIB_EXTRACT_BAD_ROOT
+echo %ERROR% Expected one versioned zlib directory containing win32\Makefile.msc.
+:ZLIB_EXTRACT_FAILED
+echo %ERROR% Could not stage ZLIB. Inspect "%DST%" and move it aside before retrying.
+exit /b 1
+
+:ZLIB_EXTRACT_INCOMPLETE
+echo %ERROR% Incomplete ZLIB tree at "%ZLIBDIR%". Move it aside before retrying.
+exit /b 1
 :: ============================================================================
 :: ============================================================================ ZLIB_EXTRACT END
 
@@ -496,10 +561,18 @@ endlocal && exit /b %ERROR_STATUS%
 :: ============================================================================
 :ICU_CONDA
 
-setlocal
+setlocal DisableDelayedExpansion
 set "SECTION=ICU_CONDA"
 
 set "ERROR_STATUS=0"
+set "STAGE=%ICUDIR%.stage"
+set "ROOT=%STAGE%"
+if exist "%ICUDIR%" (
+    if not exist "%ICUDIR%\.icu-staged" goto :ICU_CONDA_INCOMPLETE
+    if exist "%ICUDIR%\.icu-staged\" goto :ICU_CONDA_INCOMPLETE
+    set "ROOT=%ICUDIR%"
+    goto :ICU_CONDA_VALIDATE
+)
 set "PREREQ=%CONDA_PREFIX%\python.exe"
 if not exist "%PREREQ%" (
     set "ERROR_STATUS=1"
@@ -513,20 +586,60 @@ if not exist "%PREREQ%" (
     goto :ICU_CONDA_EXIT
 )
 
-if not exist "%ICUINCDIR%\unicode\utypes.h" (
-    call :MKDIR__DIR "%ICUINCDIR%" || exit /b !ERRORLEVEL!
-    xcopy /B /E /H /I /Y "%CONDA_PREFIX%\Library\include\unicode" "%ICUINCDIR%\unicode" || exit /b !ERRORLEVEL!
+mkdir "%STAGE%" || goto :ICU_CONDA_FAILED
+mkdir "%STAGE%\lib%ARCH%" || goto :ICU_CONDA_FAILED
+mkdir "%STAGE%\bin%ARCH%" || goto :ICU_CONDA_FAILED
+xcopy /E /H /I /Y "%CONDA_PREFIX%\Library\include\unicode" "%STAGE%\include\unicode" || goto :ICU_CONDA_FAILED
+copy /Y "%CONDA_PREFIX%\Library\lib\icu??.lib" "%STAGE%\lib%ARCH%\" || goto :ICU_CONDA_FAILED
+copy /Y "%CONDA_PREFIX%\Library\bin\icu*.dll" "%STAGE%\bin%ARCH%\" || goto :ICU_CONDA_FAILED
+copy /Y "%CONDA_PREFIX%\Library\bin\icuinfo.exe" "%STAGE%\bin%ARCH%\" || goto :ICU_CONDA_FAILED
+for %%F in ("%STAGE%\bin%ARCH%\icu??.dll" "%STAGE%\bin%ARCH%\icutest*.dll") do (
+    del /q "%%~fF"
+    if exist "%%~fF" goto :ICU_CONDA_FAILED
 )
-if not exist "%ICULIBDIR%\icudt.lib" (
-    call :MKDIR__DIR "%ICULIBDIR%" || exit /b !ERRORLEVEL!
-    copy /Y "%CONDA_PREFIX%\Library\lib\icu??.lib" "%ICULIBDIR%" || exit /b !ERRORLEVEL!
+
+:ICU_CONDA_VALIDATE
+set "COMMON="
+for /f "usebackq delims=" %%F in (`dir /b /a:-d "%ROOT%\bin%ARCH%\icuuc*.dll" 2^>nul ^| findstr /i /r /x "icuuc[0-9][0-9]*\.dll"`) do (
+    if defined COMMON goto :ICU_CONDA_BAD_VERSION
+    set "COMMON=%%F"
 )
-if not exist "%ICUBINDIR%\icuinfo.exe" (
-    call :MKDIR__DIR "%ICUBINDIR%" || exit /b !ERRORLEVEL!
-    copy /Y "%CONDA_PREFIX%\Library\bin\icu*.dll" "%ICUBINDIR%" || exit /b !ERRORLEVEL!
-    copy /Y "%CONDA_PREFIX%\Library\bin\icuinfo.exe" "%ICUBINDIR%" || exit /b !ERRORLEVEL!
-    del /Q "%ICUBINDIR%\icu??.dll" "%ICUBINDIR%\icutest*.dll"
+if not defined COMMON goto :ICU_CONDA_BAD_VERSION
+:: All runtime components must have the same version suffix as the common DLL.
+set "SUFFIX=%COMMON:~5%"
+for %%F in ("%ROOT%\include\unicode\utypes.h" "%ROOT%\include\unicode\ucol.h"
+            "%ROOT%\include\unicode\uregex.h" "%ROOT%\include\unicode\ustring.h"
+            "%ROOT%\lib%ARCH%\icudt.lib" "%ROOT%\lib%ARCH%\icuuc.lib" "%ROOT%\lib%ARCH%\icuin.lib"
+            "%ROOT%\bin%ARCH%\icuinfo.exe" "%ROOT%\bin%ARCH%\%COMMON%"
+            "%ROOT%\bin%ARCH%\icuin%SUFFIX%" "%ROOT%\bin%ARCH%\icudt%SUFFIX%") do (
+    set "REQUIRED=%%~fF"
+    if not exist "%%~fF" goto :ICU_CONDA_BAD_FILE
+    if exist "%%~fF\" goto :ICU_CONDA_BAD_FILE
+    if "%%~zF"=="0" goto :ICU_CONDA_BAD_FILE
 )
+if "%ROOT%"=="%ICUDIR%" (
+    echo %OKOK% Using previously staged ICU: "%ICUDIR%\bin%ARCH%\%COMMON%".
+    goto :ICU_CONDA_EXIT
+)
+echo complete >"%STAGE%\.icu-staged" || goto :ICU_CONDA_FAILED
+ren "%STAGE%" "icu" || goto :ICU_CONDA_FAILED
+echo %OKOK% Staged ICU from "%CONDA_PREFIX%" in "%ICUDIR%".
+goto :ICU_CONDA_EXIT
+
+:ICU_CONDA_BAD_VERSION
+echo %ERROR% Expected one versioned ICU common DLL in "%ROOT%\bin%ARCH%".
+goto :ICU_CONDA_INVALID
+:ICU_CONDA_BAD_FILE
+echo %ERROR% Missing or invalid ICU file: "%REQUIRED%".
+:ICU_CONDA_INVALID
+if "%ROOT%"=="%ICUDIR%" goto :ICU_CONDA_INCOMPLETE
+:ICU_CONDA_FAILED
+echo %ERROR% Could not stage ICU. Inspect "%STAGE%" and move it aside before retrying.
+exit /b 1
+
+:ICU_CONDA_INCOMPLETE
+echo %ERROR% Incomplete ICU tree at "%ICUDIR%". Move it aside before retrying.
+exit /b 1
 
 :ICU_CONDA_EXIT
 

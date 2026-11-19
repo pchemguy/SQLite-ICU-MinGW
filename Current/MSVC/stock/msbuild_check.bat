@@ -1,7 +1,7 @@
 @echo off
 
 ::
-:: Checks MSBuild environment.
+:: Checks the MSVC/NMake environment and, when USE_ICU=1, the Conda ICU DLL architecture.
 ::
 
 :: ============================================================================ MAIN BEGIN
@@ -27,10 +27,18 @@ if "%VisualStudioVersion%"=="" (
 )
 
 if "%VCINSTALLDIR%"=="" (
-    echo %ERROR% %%VSINSTALLDIR%% is not set. Run this script from an MSVC shell.
+    echo %ERROR% %%VCINSTALLDIR%% is not set. Run this script from an MSVC shell.
     set "ERROR_STATUS=1"
 ) else (
     echo %INFO% VCINSTALLDIR=%VCINSTALLDIR%
+)
+
+set "EXPECTED_MACHINE="
+if /i "%VSCMD_ARG_TGT_ARCH%"=="x86" set "EXPECTED_MACHINE=14C"
+if /i "%VSCMD_ARG_TGT_ARCH%"=="x64" set "EXPECTED_MACHINE=8664"
+if not defined EXPECTED_MACHINE (
+    echo %ERROR% VSCMD_ARG_TGT_ARCH must be x86 or x64; got "!VSCMD_ARG_TGT_ARCH!".
+    set "ERROR_STATUS=1"
 )
 
 set "CommandLocation="
@@ -55,15 +63,30 @@ if "%CommandLocation%"=="" (
     echo %INFO% NMAKE_EXE=   %CommandLocation%
 )
 
+for %%T in (dumpbin.exe lib.exe curl.exe) do (
+    where /q %%T
+    if errorlevel 1 (
+        echo %ERROR% %%T is not found on PATH.
+        set "ERROR_STATUS=1"
+    )
+)
+if not exist "%windir%\System32\tar.exe" (
+    echo %ERROR% Windows tar is not found at "%windir%\System32\tar.exe".
+    set "ERROR_STATUS=1"
+)
+
 set "CommandLocation="
 for /f "usebackq delims=" %%I in (`where tclsh.exe 2^>nul`) do (
     if "!CommandLocation!"=="" (set "CommandLocation=%%I")
 )
 if "%CommandLocation%"=="" (
-    echo %ERROR% tclsh.exe is not found. TCL is required and must be in the path.
-    set "ERROR_STATUS=1"
+    echo %WARN% tclsh.exe was not found on PATH. Continuing without external Tcl.
 ) else (
     echo %INFO% TCLSH_EXE=   %CommandLocation%
+)
+
+if "%USE_ICU%"=="1" if "%ERROR_STATUS%"=="0" (
+    call :CHECK_ICU_MACHINE || set "ERROR_STATUS=1"
 )
 
 echo:
@@ -86,6 +109,37 @@ endlocal && exit /b %ERROR_STATUS%
 :: ############################################################################
 :: ############################################################################
 :: ############################################################################
+
+
+:: ============================================================================ CHECK_ICU_MACHINE BEGIN
+:: ============================================================================
+:CHECK_ICU_MACHINE
+
+if not defined CONDA_PREFIX (
+    echo %ERROR% USE_ICU=1 requires an active Conda environment.
+    exit /b 1
+)
+set "ICU_BIN=!CONDA_PREFIX!\Library\bin"
+set "FOUND_ICU="
+for /f "usebackq delims=" %%F in (`dir /b /a:-d "!ICU_BIN!\icuuc*.dll" 2^>nul ^| findstr /i /r /x "icuuc[0-9][0-9]*\.dll"`) do (
+    set "FOUND_ICU=1"
+    set "MACHINE=unknown"
+    for /f "usebackq tokens=1,2" %%M in (`dumpbin.exe /nologo /headers "!ICU_BIN!\%%F" ^|^| echo unreadable machine`) do (
+        if /i "%%N"=="machine" set "MACHINE=%%M"
+    )
+    if /i not "!MACHINE!"=="%EXPECTED_MACHINE%" (
+        echo %ERROR% "!ICU_BIN!\%%F": expected %VSCMD_ARG_TGT_ARCH% [%EXPECTED_MACHINE%], observed !MACHINE!.
+        exit /b 1
+    )
+    echo %OKOK% "!ICU_BIN!\%%F": PE machine !MACHINE! matches target %VSCMD_ARG_TGT_ARCH%.
+)
+if not defined FOUND_ICU (
+    echo %ERROR% No versioned ICU common DLL found in "!ICU_BIN!".
+    exit /b 1
+)
+exit /b 0
+:: ============================================================================
+:: ============================================================================ CHECK_ICU_MACHINE END
 
 
 :: ============================================================================ COLOR_SCHEME BEGIN

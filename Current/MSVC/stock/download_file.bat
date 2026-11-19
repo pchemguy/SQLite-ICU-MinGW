@@ -1,45 +1,55 @@
 @echo off
 
 ::
-:: Downloads file via cURL.
+:: Downloads file via cURL. A completed cache entry is reused offline.
 ::
 :: Arguments:
 ::     %1 - Name (logging label).
 ::     %2 - Full download path.
-::     %~3 - Download URL.
+::     %3 - Download URL.
+::     %4 - Optional archive member pattern to validate with Windows tar.
 ::
 :: Examples:
 ::     set "NAME=SQLite"
 ::     set "DISTRO=%~dp0sqlite.zip"
 ::     set "URL=https://sqlite.org/src/zip/sqlite.zip"
 ::     
-::     call "%~dp0DownloadFile.bat" "%NAME%" "%DISTRO%" "%URL%"
+::     call "%~dp0download_file.bat" "%NAME%" "%DISTRO%" "%URL%" "sqlite/Makefile.msc"
 
 
 :: ============================================================================ MAIN BEGIN
 :: ============================================================================
 :MAIN
 
-SetLocal EnableExtensions EnableDelayedExpansion
-
-set "ERROR_STATUS=0"
-
+setlocal EnableExtensions DisableDelayedExpansion
 call :COLOR_SCHEME
 
-echo:
-echo --------------------------------------------------------------------------------
-echo %WARN% Processing %~1 download.
-echo:
+set "NAME=%~1"
+set "TARGET=%~f2"
+set "URL=%~3"
+set "MEMBER=%~4"
+if not defined NAME goto :USAGE
+if "%~2"=="" goto :USAGE
+if not defined URL goto :USAGE
+if exist "%TARGET%\" (
+    echo %ERROR% Expected a file, not a directory: "%TARGET%"
+    exit /b 1
+)
 
-call :CHECKURL__URL_PATH %* || exit /b !ERRORLEVEL!
-call :DOWNLOAD__NAME_PATH_URL %* || exit /b !ERRORLEVEL!
+if not defined TAR set "TAR=%SystemRoot%\System32\tar.exe"
+if not exist "%TARGET%" goto :FETCH
+if defined MEMBER (
+    "%TAR%" -tf "%TARGET%" -- "%MEMBER%" >nul || (
+        echo %ERROR% Invalid cache entry: "%TARGET%". Move it aside before retrying.
+        exit /b 1
+    )
+)
+echo %OKOK% Using previously downloaded "%NAME%": "%TARGET%"
+exit /b 0
 
-echo:
-echo %WARN% Completed %~1 processing.
-echo --------------------------------------------------------------------------------
-echo:
-
-endlocal && exit /b %ERROR_STATUS%
+:USAGE
+echo %ERROR% Usage: "%~nx0" "NAME" "TARGET" "URL" [ARCHIVE_MEMBER]
+exit /b 1
 :: ============================================================================
 :: ============================================================================ MAIN END
 
@@ -49,101 +59,57 @@ endlocal && exit /b %ERROR_STATUS%
 :: ############################################################################
 
 
-:: ============================================================================ DOWNLOAD__NAME_PATH_URL BEGIN
+:: ============================================================================ FETCH BEGIN
 :: ============================================================================
-:DOWNLOAD__NAME_PATH_URL
+:FETCH
 
-setlocal EnableDelayedExpansion
-set "SECTION=DOWNLOAD__NAME_PATH_URL"
-echo:
-echo %WARN% ~~~~~ %SECTION% BEGIN ~~~~~
-echo:
-set "ERROR_STATUS=0"
+set "PART=%TARGET%.part"
+set "META=%TARGET%.response.log"
+set "HEADER_LOG=%~dpn2.log"
+if /i "%HEADER_LOG%"=="%TARGET%" set "HEADER_LOG=%TARGET%.headers.log"
+echo %INFO% Downloading "%NAME%" to "%PART%"
 
-if "%~3"=="" (
-    set "ERROR_STATUS=1"
-    echo %ERROR% Missing required parameters.
-    echo %INFO%  USAGE: call %~nx0 "NAME" "PATH" "URL"
-    goto :DOWNLOAD_EXIT
+:: Write final status and media type from the GET, not a separate HEAD. The
+:: trailing semicolon makes bare and parameterized media types comparable.
+curl.exe -fL --globoff --retry 3 --dump-header "%HEADER_LOG%" --output "%PART%" --write-out "%%{http_code} %%{content_type};\n" -- "%URL%" >"%META%"
+set "RC=%ERRORLEVEL%"
+if not "%RC%"=="0" (
+    echo %ERROR% Download failed with status %RC%.
+    goto :FAILED
 )
 
-set "NAME=%~1"
-set "TARGET=%~2"
-set "URL=%~3"
+:: Only accept a full HTTP response (not, for example, unsolicited 206).
+set "RC=1"
+findstr /b /c:"200 " "%META%" >nul || goto :BAD_RESPONSE
+findstr /i /r /b /c:"200 [ 	]*text/html[; 	]" "%META%" >nul
+if errorlevel 2 goto :BAD_RESPONSE
+if not errorlevel 1 goto :BAD_RESPONSE
 
-if exist "%TARGET%" (
-    echo %OKOK% Using previously downloaded %NAME%
-    goto :DOWNLOAD_EXIT
+if defined MEMBER (
+    "%TAR%" -tf "%PART%" -- "%MEMBER%" >nul || (
+        echo %ERROR% Invalid downloaded archive for "%NAME%".
+        goto :FAILED
+    )
 )
 
-echo %INFO% ===== Downloading %NAME% =====
-curl.exe -fL --retry 3 --output "%TARGET%" %URL%
-set "ERROR_STATUS=!ERRORLEVEL!"
-if "!ERROR_STATUS!"=="0" (
-    echo %OKOK% Downloaded %NAME%
-    echo %OKOK% "%TARGET%"
-) else (
-    echo %ERROR% %NAME% download failed. Error Code: !ERROR_STATUS!.
+:: REN stays in the same directory and does not overwrite an existing target.
+ren "%PART%" "%~nx2"
+set "RC=%ERRORLEVEL%"
+if not "%RC%"=="0" (
+    echo %ERROR% Could not publish "%TARGET%".
+    goto :FAILED
 )
+echo %OKOK% Downloaded "%NAME%": "%TARGET%"
+exit /b 0
 
-:DOWNLOAD_EXIT
+:BAD_RESPONSE
+echo %ERROR% Unexpected HTTP status or media type. See "%META%".
 
-echo:
-echo %WARN% ~~~~~ %SECTION% END ~~~~~
-echo:
-endlocal && set "ERROR_STATUS=%ERROR_STATUS%" && exit /b %ERROR_STATUS%
+:FAILED
+if exist "%PART%" if not exist "%PART%\" del /q "%PART%"
+exit /b %RC%
 :: ============================================================================
-:: ============================================================================ DOWNLOAD__NAME_PATH_URL END
-
-
-:: ============================================================================ CHECKURL__URL_PATH BEGIN
-:: ============================================================================
-:CHECKURL__URL_PATH
-
-setlocal EnableDelayedExpansion
-set "SECTION=CHECKURL__URL_PATH"
-echo:
-echo %WARN% ~~~~~ %SECTION% BEGIN ~~~~~
-echo:
-set "ERROR_STATUS=0"
-
-set "URL=%~3"
-set "TARGET=%~dpn2"
-
-curl -fIL --retry 3 -o "%TARGET%.log" %URL% 2>"%TARGET%_err.log"
-set "ERROR_STATUS=%ERRORLEVEL%"
-if not "%ERROR_STATUS%"=="0" (
-    echo %ERROR% URL fetching error #%ERROR_STATUS%
-    goto :CHECKURL__URL_PATH_EXIT
-)
-
-for /f "Usebackq tokens=1,2 delims= " %%G in (%TARGET%.log) do (
-  if /I "%%G"=="HTTP/1.1"        (set "RES_CODE=%%H")
-  if /I "%%G"=="Content-Length:" (set "RES_LEN=%%H")
-  if /I "%%G"=="Content-Type:"   (set "RES_TYPE=%%H")
-)
-
-echo %INFO% URL Meta
-echo %INFO% --------
-echo %INFO% RES_CODE: _%RES_CODE%_
-echo %INFO% RES_LEN:  _%RES_LEN%_
-echo %INFO% RES_TYPE: _%RES_TYPE%_
-echo:
-
-if "%RES_TYPE%"=="text/html" (
-    set "ERROR_STATUS=1"
-    echo %ERROR% Provided URL returns text/html content.
-    goto :CHECKURL__URL_PATH_EXIT
-)
-
-:CHECKURL__URL_PATH_EXIT
-
-echo:
-echo %WARN% ~~~~~ %SECTION% END ~~~~~
-echo:
-endlocal && set "ERROR_STATUS=%ERROR_STATUS%" && exit /b %ERROR_STATUS%
-:: ============================================================================
-:: ============================================================================ CHECKURL__URL_PATH END
+:: ============================================================================ FETCH END
 
 
 :: ============================================================================ COLOR_SCHEME BEGIN
