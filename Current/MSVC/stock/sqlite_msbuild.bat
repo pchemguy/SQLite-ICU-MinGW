@@ -56,6 +56,8 @@ call :COLOR_SCHEME
 
 call :CORE_ENV                || exit /b !ERRORLEVEL!
 
+call "%~dp0msbuild_check.bat" || exit /b !ERRORLEVEL!
+
 if "%USE_ICU%"=="1" (
     call :ICU_OPTIONS         || exit /b !ERRORLEVEL!
 )
@@ -65,8 +67,6 @@ if "%USE_ZLIB%"=="1" (
 )
 
 call :BUILD_OPTIONS           || exit /b !ERRORLEVEL!
-
-call "%~dp0msbuild_check.bat" || exit /b !ERRORLEVEL!
 
 call :MAKE_DEBUG %*           || exit /b !ERRORLEVEL!
 
