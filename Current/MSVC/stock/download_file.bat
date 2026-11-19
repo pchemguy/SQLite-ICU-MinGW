@@ -14,7 +14,7 @@
 ::     set "DISTRO=%~dp0sqlite.zip"
 ::     set "URL=https://sqlite.org/src/zip/sqlite.zip"
 ::     
-::     call "%~dp0download_file.bat" "%NAME%" "%DISTRO%" "%URL%"
+::     call "%~dp0download_file.bat" "%NAME%" "%DISTRO%" "%URL%" "sqlite/Makefile.msc"
 
 
 :: ============================================================================ MAIN BEGIN

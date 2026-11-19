@@ -11,10 +11,9 @@
 ::   builds, ZLIB integration, ICU integration, stock SQLite ext/misc modules,
 ::   DLL export/import-library generation, and final artifact collection.
 ::
-::   Conda ICU is staged into the same compatibility-tree include, library,
-::   and binary directories used by source-built ICU, so the downstream SQLite
-::   build and packaging logic is provider-independent. The active Conda and
-::   MSVC environments must target the same architecture.
+::   Conda is the only ICU provider. Staging preserves the existing include,
+::   library, and binary paths used by the SQLite build and packaging steps.
+::   The active Conda and MSVC environments must target the same architecture.
 ::
 ::   Principal outputs are written under:
 ::
@@ -110,12 +109,12 @@ endlocal && exit /b 0
 :: ============================================================================
 :MKDIR__DIR
 
-:: Creates directory or fails with feedback.
+:: Creates the target directory if the path does not exist.
 ::
 :: %~1 - Full target directory path.
 ::
-:: Attempts creating target directory if not exist.
-:: Fails if creation fails or directory does not exist after creation.
+:: Accepts an existing path without checking its type.
+:: Fails if mkdir fails or the path is still missing.
 
 setlocal
 set "SECTION=MKDIR__DIR"

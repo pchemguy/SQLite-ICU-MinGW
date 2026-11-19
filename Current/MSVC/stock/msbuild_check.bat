@@ -1,7 +1,7 @@
 @echo off
 
 ::
-:: Checks MSBuild environment.
+:: Checks the MSVC/NMake environment and, when USE_ICU=1, the Conda ICU DLL architecture.
 ::
 
 :: ============================================================================ MAIN BEGIN
