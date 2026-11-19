@@ -38,11 +38,11 @@ if exist "%TARGET%\" (
 
 if not defined TAR set "TAR=%SystemRoot%\System32\tar.exe"
 if not exist "%TARGET%" goto :FETCH
-set "CANDIDATE=%TARGET%"
-call :CHECK_ARCHIVE
-if errorlevel 1 (
-    echo %ERROR% Invalid cache entry: "%TARGET%". Move it aside before retrying.
-    exit /b 1
+if defined MEMBER (
+    "%TAR%" -tf "%TARGET%" -- "%MEMBER%" >nul || (
+        echo %ERROR% Invalid cache entry: "%TARGET%". Move it aside before retrying.
+        exit /b 1
+    )
 )
 echo %OKOK% Using previously downloaded "%NAME%": "%TARGET%"
 exit /b 0
@@ -86,11 +86,11 @@ findstr /i /r /b /c:"200 [ 	]*text/html[; 	]" "%META%" >nul
 if errorlevel 2 goto :BAD_RESPONSE
 if not errorlevel 1 goto :BAD_RESPONSE
 
-set "CANDIDATE=%PART%"
-call :CHECK_ARCHIVE
-if errorlevel 1 (
-    echo %ERROR% Invalid downloaded archive for "%NAME%".
-    goto :FAILED
+if defined MEMBER (
+    "%TAR%" -tf "%PART%" -- "%MEMBER%" >nul || (
+        echo %ERROR% Invalid downloaded archive for "%NAME%".
+        goto :FAILED
+    )
 )
 
 :: REN stays in the same directory and does not overwrite an existing target.
@@ -111,17 +111,6 @@ if exist "%PART%" if not exist "%PART%\" del /q "%PART%"
 exit /b %RC%
 :: ============================================================================
 :: ============================================================================ FETCH END
-
-
-:: ============================================================================ CHECK_ARCHIVE BEGIN
-:: ============================================================================
-:CHECK_ARCHIVE
-
-if not defined MEMBER exit /b 0
-"%TAR%" -tf "%CANDIDATE%" -- "%MEMBER%" >nul
-exit /b %ERRORLEVEL%
-:: ============================================================================
-:: ============================================================================ CHECK_ARCHIVE END
 
 
 :: ============================================================================ COLOR_SCHEME BEGIN
