@@ -451,13 +451,6 @@ if "%VisualStudioVersion%"=="" (
     echo {INFO} VisualStudioVersion=%VisualStudioVersion%
 )
 
-if "%VSINSTALLDIR%"=="" (
-    echo {ERROR} %%VSINSTALLDIR%% is not set. Run this script from an MSVC shell.
-    set "ERROR_STATUS=1"
-) else (
-    echo {INFO} VSINSTALLDIR="%VSINSTALLDIR%"
-)
-
 if "%VCINSTALLDIR%"=="" (
     echo {ERROR} %%VSINSTALLDIR%% is not set. Run this script from an MSVC shell.
     set "ERROR_STATUS=1"
@@ -478,7 +471,7 @@ if "%CommandLocation%"=="" (
 
 set "CommandLocation="
 for /f "usebackq delims=" %%I in (`where nmake.exe 2^>nul`) do (
-    if "!CommandLocation!"=="" (set "CommandLocation=%%~i")
+    if "!CommandLocation!"=="" (set "CommandLocation=%%~I")
 )
 if "%CommandLocation%"=="" (
     echo {ERROR} nmake.exe is not found. Run this script from an MSVC shell.
