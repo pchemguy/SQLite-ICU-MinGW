@@ -36,18 +36,6 @@
 :: =============================================================================
 
 :: ============================= BEGIN DISPATCHER =============================
-
-:: Probe for subroutine call. If %~1 begins with ":", assume that
-:: this is a subroutine call to %~1 label. Dispatch it via `call %*`.
-
-set "LABEL_ARG=%~1_"
-if "LABEL_ARG:~0,1"==":" (
-    set "LABEL_ARG="
-    call %*
-    exit /b %ERRORLEVEL%
-)
-set "LABEL_ARG="
-
 call :MAIN %*
 
 exit /b %ERRORLEVEL%
@@ -121,8 +109,8 @@ set "SECTION=MKDIR__DIR"
 
 if "%~1"=="" (
     set "ERROR_STATUS=1"
-    echo {ERROR} Missing required target directory.
-    echo {INFO}  USAGE: call :MKDIR__DIR "{FULL TARGET DIRECTORY PATH}"
+    echo %ERROR% Missing required target directory.
+    echo %INFO%  USAGE: call :MKDIR__DIR "{FULL TARGET DIRECTORY PATH}"
     goto :MKDIR__DIR_EXIT
 )
 
@@ -131,7 +119,7 @@ set "MKDIR_FAILED="
 set "ERROR_STATUS=0"
 
 if exist "%TARGETDIR%" (
-    echo {INFO} "%TARGETDIR%" already exists.
+    echo %INFO% "%TARGETDIR%" already exists.
     goto :MKDIR__DIR_EXIT
 )
 
@@ -140,11 +128,11 @@ if not exist "%TARGETDIR%"   (set "MKDIR_FAILED=1")
 
 if defined MKDIR_FAILED (
     set "ERROR_STATUS=1"
-    echo {ERROR} Failed to create "%TARGETDIR%"
+    echo %ERROR% Failed to create "%TARGETDIR%"
     goto :MKDIR__DIR_EXIT
 )
 
-echo {INFO} Created "%TARGETDIR%".
+echo %INFO% Created "%TARGETDIR%".
 
 :MKDIR__DIR_EXIT
 
@@ -172,14 +160,14 @@ if exist "%~dp0patch_sqlite_misc_autoext.tcl" (
     set "TOOLDIR=%~dp0extra"
 )
 if not defined TOOLDIR (
-    echo {ERROR} Failed to locate patch_sqlite_misc_autoext.tcl.
+    echo %ERROR% Failed to locate patch_sqlite_misc_autoext.tcl.
     exit /b 1
 )
-echo {INFO} TOOLDIR: %TOOLDIR%.
+echo %INFO% TOOLDIR: %TOOLDIR%.
 
 cd /d "%TOOLDIR%\.."
 set "PROJDIR=%CD%"
-echo {INFO} PROJDIR: %PROJDIR%.
+echo %INFO% PROJDIR: %PROJDIR%.
 
 set "OPT_XTRA="
 if not defined USE_ICU       (set "USE_ICU=1")
@@ -249,7 +237,7 @@ exit /b 0
 set "SECTION=ZLIB_OPTIONS"
 
 set "ZLIBDIR=%THIRDDIR%\zlib"
-echo {INFO} ZLIBDIR="%ZLIBDIR%"
+echo %INFO% ZLIBDIR="%ZLIBDIR%"
 
 echo ~~~~~ %SECTION% ~~~~~
 echo:
@@ -269,10 +257,10 @@ set "ICUBINDIR=%ICUDIR%\bin%ARCH%"
 
 set OPT_XTRA=%OPT_XTRA% -DSQLITE_ENABLE_ICU_COLLATIONS
 
-echo {INFO} ICUDIR="%ICUDIR%"
-echo {INFO} ICUINCDIR="%ICUINCDIR%"
-echo {INFO} ICULIBDIR="%ICULIBDIR%"
-echo {INFO} ICUBINDIR="%ICUBINDIR%"
+echo %INFO% ICUDIR="%ICUDIR%"
+echo %INFO% ICUINCDIR="%ICUINCDIR%"
+echo %INFO% ICULIBDIR="%ICULIBDIR%"
+echo %INFO% ICUBINDIR="%ICUBINDIR%"
 
 echo ~~~~~ %SECTION% ~~~~~
 echo:
@@ -429,17 +417,17 @@ setlocal
 set "SECTION=ZLIB_BUILD"
 
 if not exist "%ZLIBDIR%\zlib1.dll" (
-    echo {INFO} ===== Building ZLIB =====
+    echo %INFO% ===== Building ZLIB =====
     cd /d "%SQLITEDIR%"
     nmake /nologo "TOP=%SQLITEDIR%" "ZLIBLIB=all" /f "%SQLITE_MAKEFILE%" zlib
     set "ERROR_STATUS=!ERRORLEVEL!"
     if "!ERROR_STATUS!"=="0" (
-        echo {INFO} ----- Built ZLIB -----
+        echo %INFO% ----- Built ZLIB -----
     ) else (
-        echo {ERROR} Failed to build ZLIB. Error Code: !ERROR_STATUS!.
+        echo %ERROR% Failed to build ZLIB. Error Code: !ERROR_STATUS!.
     )
 ) else (
-    echo {INFO} ===== Using previously built ZLIB =====
+    echo %INFO% ===== Using previously built ZLIB =====
 )
 
 echo ~~~~~ %SECTION% ~~~~~
@@ -457,13 +445,13 @@ set "ERROR_STATUS=0"
 set "PREREQ=%CONDA_PREFIX%\python.exe"
 if not exist "%PREREQ%" (
     set "ERROR_STATUS=1"
-    echo {ERROR} Conda ICU is selected, but "%PREREQ%" does not exist.
+    echo %ERROR% Conda ICU is selected, but "%PREREQ%" does not exist.
     goto :ICU_CONDA_EXIT
 )
 set "PREREQ=%CONDA_PREFIX%\Library\bin\icuinfo.exe"
 if not exist "%PREREQ%" (
     set "ERROR_STATUS=1"
-    echo {ERROR} Conda ICU is selected, but "%PREREQ%" does not exist.
+    echo %ERROR% Conda ICU is selected, but "%PREREQ%" does not exist.
     goto :ICU_CONDA_EXIT
 )
 
@@ -546,21 +534,21 @@ set MISC_EXT=^
     "uint.c"      ^
     "uuid.c"
 
-echo {INFO} ========== Copy MISC_EXT ===========
+echo %INFO% ========== Copy MISC_EXT ===========
 "%TCLSH_CMD%" "%SQLITEDIR%\tool\cp.tcl" %MISC_EXT% "%TSRC%" || exit /b !ERRORLEVEL!
 
 echo:
 
-echo {INFO} ========== Patch MISC_EXT ===========
+echo %INFO% ========== Patch MISC_EXT ===========
 cd /d "%TSRC%"
 "%TCLSH_CMD%" "%TOOLDIR%\patch_sqlite_misc_autoext.tcl" %MISC_EXT% || exit /b !ERRORLEVEL!
 
 echo:
 
-echo {INFO} ========== Bundle MISC_EXT ===========
+echo %INFO% ========== Bundle MISC_EXT ===========
 "%TCLSH_CMD%" "%TOOLDIR%\bundle_extra_src.tcl" %MISC_EXT% || exit /b !ERRORLEVEL!
 
-echo {INFO} ========== Set EXTRA_SRC for extended SQLite build ===========
+echo %INFO% ========== Set EXTRA_SRC for extended SQLite build ===========
 
 set EXTRA_SRC=%EXTRA_SRC% ^
     ""%TSRC%\compress.c""      ^
@@ -594,7 +582,7 @@ cd /d "%BUILDDIR%" || exit /b !ERRORLEVEL!
 
 nmake /nologo "EXTRA_SRC=%EXTRA_SRC%" "TOP=%SQLITEDIR%" /f "%SQLITE_MAKEFILE%" sqlite3.def
 if not "%ERRORLEVEL%"=="0" (
-    echo {ERROR} Error creating sqlite3.def
+    echo %ERROR% Error creating sqlite3.def
     exit /b %ERRORLEVEL%
 )
 
@@ -609,7 +597,7 @@ for /f "usebackq tokens=2 delims=@ " %%A in (
     echo %%A
 ) >>"%BUILDDIR%\exports.txt"
 if not "%ERRORLEVEL%"=="0" (
-    echo {ERROR} Error updating sqlite3.def
+    echo %ERROR% Error updating sqlite3.def
     exit /b %ERRORLEVEL%
 )
 type "%BUILDDIR%\exports.txt" | sort >>"%BUILDDIR%\sqlite3.def"
@@ -617,7 +605,7 @@ del /Q "%BUILDDIR%\exports.txt"
 
 nmake /nologo "EXTRA_SRC=%EXTRA_SRC%" "TOP=%SQLITEDIR%" /f "%SQLITE_MAKEFILE%" %*
 if not "%ERRORLEVEL%"=="0" (
-    echo {ERROR} Error building SQLite.
+    echo %ERROR% Error building SQLite.
     exit /b %ERRORLEVEL%
 )
 
@@ -625,7 +613,7 @@ if not "%ERRORLEVEL%"=="0" (
 
 lib /def:"%BUILDDIR%\sqlite3.def" /out:"%BUILDDIR%\sqlite3.lib" /machine:%VSCMD_ARG_TGT_ARCH%
 if not "%ERRORLEVEL%"=="0" (
-    echo {ERROR} Error updating static SQLite lib.
+    echo %ERROR% Error updating static SQLite lib.
     exit /b %ERRORLEVEL%
 )
 
