@@ -30,7 +30,6 @@ echo ---------------------------------------------------------------------------
 echo %WARN% Processing %~1 download.
 echo:
 
-
 call :CHECKURL__URL_PATH %* || exit /b !ERRORLEVEL!
 call :DOWNLOAD__NAME_PATH_URL %* || exit /b !ERRORLEVEL!
 
@@ -39,7 +38,7 @@ echo %WARN% Completed %~1 processing.
 echo --------------------------------------------------------------------------------
 echo:
 
-exit /b %ERROR_STATUS%
+endlocal && exit /b %ERROR_STATUS%
 :: ============================================================================ MAIN END
 
 

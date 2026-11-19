@@ -32,7 +32,7 @@
 ::   Run from an initialized MSVC x86 or x64 developer command prompt.
 ::
 :: DOCUMENTATION
-::   See sqlite_msbuild.md for the complete build-system documentation. 
+::   See sqlite_msbuild.md for the complete build-system documentation.
 :: =============================================================================
 
 :: ============================= BEGIN DISPATCHER =============================
@@ -61,42 +61,42 @@ SetLocal EnableExtensions EnableDelayedExpansion
 
 set "ERROR_STATUS=0"
 
-call :CORE_ENV              || exit /b !ERRORLEVEL!
+call :CORE_ENV                || exit /b !ERRORLEVEL!
 
 if "%USE_ICU%"=="1" (
-    call :ICU_OPTIONS       || exit /b !ERRORLEVEL!
-)                          
-
-if "%USE_ZLIB%"=="1" (     
-    call :ZLIB_OPTIONS      || exit /b !ERRORLEVEL!
-)                          
-
-call :BUILD_OPTIONS         || exit /b !ERRORLEVEL!
-
-call :CHECK_PREREQUISITES   || exit /b !ERRORLEVEL!
-
-call :MAKE_DEBUG %*         || exit /b !ERRORLEVEL!
-
-call :SQLITE_DOWNLOAD       || exit /b !ERRORLEVEL!
-call :SQLITE_EXTRACT        || exit /b !ERRORLEVEL!
-
-if "%USE_ZLIB%"=="1" (     
-    call :ZLIB_DOWNLOAD     || exit /b !ERRORLEVEL!
-    call :ZLIB_EXTRACT      || exit /b !ERRORLEVEL!
-    call :ZLIB_BUILD        || exit /b !ERRORLEVEL!
-)                          
-
-if "%USE_ICU%"=="1" (      
-    call :ICU_CONDA         || exit /b !ERRORLEVEL!
-)                          
-
-call :SQLITE_BUILD_INIT     || exit /b !ERRORLEVEL!
-
-if "%SQLITE_EXTRA%"=="1" (
-    call :EXTRA_SRC_STOCK   || exit /b !ERRORLEVEL!
+    call :ICU_OPTIONS         || exit /b !ERRORLEVEL!
 )
 
-call :SQLITE_BUILD %*       || exit /b !ERRORLEVEL!
+if "%USE_ZLIB%"=="1" (
+    call :ZLIB_OPTIONS        || exit /b !ERRORLEVEL!
+)
+
+call :BUILD_OPTIONS           || exit /b !ERRORLEVEL!
+
+call "%~dp0msbuild_check.bat" || exit /b !ERRORLEVEL!
+
+call :MAKE_DEBUG %*           || exit /b !ERRORLEVEL!
+
+call :SQLITE_DOWNLOAD         || exit /b !ERRORLEVEL!
+call :SQLITE_EXTRACT          || exit /b !ERRORLEVEL!
+
+if "%USE_ZLIB%"=="1" (
+    call :ZLIB_DOWNLOAD       || exit /b !ERRORLEVEL!
+    call :ZLIB_EXTRACT        || exit /b !ERRORLEVEL!
+    call :ZLIB_BUILD          || exit /b !ERRORLEVEL!
+)
+
+if "%USE_ICU%"=="1" (
+    call :ICU_CONDA           || exit /b !ERRORLEVEL!
+)
+
+call :SQLITE_BUILD_INIT       || exit /b !ERRORLEVEL!
+
+if "%SQLITE_EXTRA%"=="1" (
+    call :EXTRA_SRC_STOCK     || exit /b !ERRORLEVEL!
+)
+
+call :SQLITE_BUILD %*         || exit /b !ERRORLEVEL!
 call :COLLECT_BINARIES
 
 EndLocal
@@ -377,77 +377,6 @@ exit /b 0
 
 
 :: ============================================================================
-:CHECK_PREREQUISITES
-
-setlocal
-set "SECTION=CHECK_PREREQUISITES"
-
-echo ===== Verifying environment =====
-
-if "%VisualStudioVersion%"=="" (
-    echo {ERROR} %%VisualStudioVersion%% is not set. Run this script from an MSVC shell.
-    set "ERROR_STATUS=1"
-) else (
-    echo {INFO} VisualStudioVersion=%VisualStudioVersion%
-)
-
-if "%VCINSTALLDIR%"=="" (
-    echo {ERROR} %%VSINSTALLDIR%% is not set. Run this script from an MSVC shell.
-    set "ERROR_STATUS=1"
-) else (
-    echo {INFO} VCINSTALLDIR=%VCINSTALLDIR%
-)
-
-set "CommandLocation="
-for /f "usebackq delims=" %%I in (`where cl.exe 2^>nul`) do (
-    if "!CommandLocation!"=="" (set "CommandLocation=%%~I")
-)
-if "%CommandLocation%"=="" (
-    echo {ERROR} cl.exe is not found. Run this script from an MSVC shell.
-    set "ERROR_STATUS=1"
-) else (
-    echo {INFO} CL_EXE=      %CommandLocation%
-)
-
-set "CommandLocation="
-for /f "usebackq delims=" %%I in (`where nmake.exe 2^>nul`) do (
-    if "!CommandLocation!"=="" (set "CommandLocation=%%~I")
-)
-if "%CommandLocation%"=="" (
-    echo {ERROR} nmake.exe is not found. Run this script from an MSVC shell.
-    set "ERROR_STATUS=1"
-) else (
-    echo {INFO} NMAKE_EXE=   %CommandLocation%
-)
-
-set "CommandLocation="
-for /f "usebackq delims=" %%I in (`where tclsh.exe 2^>nul`) do (
-    if "!CommandLocation!"=="" (set "CommandLocation=%%I")
-)
-if "%CommandLocation%"=="" (
-    echo {ERROR} tclsh.exe is not found. TCL is required and must be in the path.
-    set "ERROR_STATUS=1"
-) else (
-    echo {INFO} TCLSH_EXE=   %CommandLocation%
-)
-
-if not "%PROJDIR%"=="%PROJDIR: =%" (
-    echo {ERROR} Spaces in project dir are not supported: "%PROJDIR%".
-    set "ERROR_STATUS=1"
-)
-
-if "%ERROR_STATUS%"=="0" (
-    echo {OKOK} ----- Verified  environment -----
-) else (
-    echo {ERROR} ----- Environment is NOT OK -----
-)
-
-echo ~~~~~ %SECTION% ~~~~~
-echo:
-endlocal && set "ERROR_STATUS=%ERROR_STATUS%" && exit /b %ERROR_STATUS%
-
-
-:: ============================================================================
 :MAKE_DEBUG
 
 setlocal
@@ -477,7 +406,7 @@ set "NAME=SQLite"
 set "DISTRO=%CACHEDIR%\sqlite.zip"
 set "URL=https://sqlite.org/src/zip/sqlite.zip"
 
-call "%~dp0DownloadFile.bat" "%NAME%" "%DISTRO%" "%URL%"
+call "%~dp0download_file.bat" "%NAME%" "%DISTRO%" "%URL%"
 set "ERROR_STATUS=%ERRORLEVEL%"
 
 echo ~~~~~ %SECTION% ~~~~~
@@ -521,7 +450,7 @@ for /f "usebackq" %%U in (
 )
 set "URL=%URL_PREFIX%/download/%ZLIB_VERSION%/zlib-%ZLIB_VERSION:~1%.tar.gz"
 
-call "%~dp0DownloadFile.bat" "%NAME%" "%DISTRO%" "%URL%"
+call "%~dp0download_file.bat" "%NAME%" "%DISTRO%" "%URL%"
 set "ERROR_STATUS=%ERRORLEVEL%"
 
 echo ~~~~~ %SECTION% ~~~~~
@@ -653,7 +582,7 @@ set OPT_XTRA=%OPT_XTRA%^
     -DSQLITE_ENABLE_SHATHREE ^
     -DSQLITE_ENABLE_SQLAR    ^
     -DSQLITE_ENABLE_UINT     ^
-    -DSQLITE_ENABLE_UUID     
+    -DSQLITE_ENABLE_UUID
 
 cd /d "%SQLITEDIR%\ext\misc"
 
