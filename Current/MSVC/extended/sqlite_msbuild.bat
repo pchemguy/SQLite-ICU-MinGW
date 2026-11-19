@@ -466,7 +466,7 @@ if "%CommandLocation%"=="" (
     echo {ERROR} cl.exe is not found. Run this script from an MSVC shell.
     set "ERROR_STATUS=1"
 ) else (
-    echo {INFO} CL_EXE=%CommandLocation%
+    echo {INFO} CL_EXE=      %CommandLocation%
 )
 
 set "CommandLocation="
@@ -477,7 +477,7 @@ if "%CommandLocation%"=="" (
     echo {ERROR} nmake.exe is not found. Run this script from an MSVC shell.
     set "ERROR_STATUS=1"
 ) else (
-    echo {INFO} NMAKE_EXE=%CommandLocation%
+    echo {INFO} NMAKE_EXE=   %CommandLocation%
 )
 
 set "CommandLocation="
@@ -488,7 +488,7 @@ if "%CommandLocation%"=="" (
     echo {ERROR} tclsh.exe is not found. TCL is required and must be in the path.
     set "ERROR_STATUS=1"
 ) else (
-    echo {INFO} TCLSH_EXE=%CommandLocation%
+    echo {INFO} TCLSH_EXE=   %CommandLocation%
 )
 
 if not "%PROJDIR%"=="%PROJDIR: =%" (
