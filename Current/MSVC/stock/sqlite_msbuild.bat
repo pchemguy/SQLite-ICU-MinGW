@@ -365,14 +365,15 @@ endlocal && exit /b 0
 :: ============================================================================
 :SQLITE_DOWNLOAD
 
-setlocal
+setlocal DisableDelayedExpansion
 set "SECTION=SQLITE_DOWNLOAD"
 
 set "NAME=SQLite"
 set "DISTRO=%CACHEDIR%\sqlite.zip"
 set "URL=https://sqlite.org/src/zip/sqlite.zip"
 
-call "%~dp0download_file.bat" "%NAME%" "%DISTRO%" "%URL%"
+set "DOWNLOADER=%~dp0download_file.bat"
+call "%%DOWNLOADER%%" "%%NAME%%" "%%DISTRO%%" "%%URL%%" "sqlite/Makefile.msc"
 set "ERROR_STATUS=%ERRORLEVEL%"
 
 echo:
@@ -410,22 +411,33 @@ endlocal && exit /b %ERROR_STATUS%
 :: ============================================================================
 :ZLIB_DOWNLOAD
 
-setlocal
+setlocal DisableDelayedExpansion
 set "SECTION=ZLIB_DOWNLOAD"
 
 set "NAME=ZLIB"
 set "DISTRO=%CACHEDIR%\zlib.tar.gz"
+set "MEMBER=zlib-*/win32/Makefile.msc"
+if exist "%DISTRO%" (
+    "%TAR%" -tf "%DISTRO%" -- "%MEMBER%" >nul
+    if errorlevel 1 (
+        echo %ERROR% Invalid cache entry: "%DISTRO%". Move it aside before retrying.
+        exit /b 1
+    )
+    echo %OKOK% Using previously downloaded ZLIB: "%DISTRO%"
+    exit /b 0
+)
 rem set "URL=https://zlib.net/current/zlib.tar.gz"
 set "URL_PREFIX=https://github.com/madler/zlib/releases"
 
 for /f "usebackq" %%U in (
-    `curl.exe -fsSL -o NUL -w "%%{url_effective}" %URL_PREFIX%/latest`
+    `curl.exe -fsSL -o NUL -w "%%{url_effective}" -- "%URL_PREFIX%/latest"`
 ) do (
     set "ZLIB_VERSION=%%~nxU"
 )
 set "URL=%URL_PREFIX%/download/%ZLIB_VERSION%/zlib-%ZLIB_VERSION:~1%.tar.gz"
 
-call "%~dp0download_file.bat" "%NAME%" "%DISTRO%" "%URL%"
+set "DOWNLOADER=%~dp0download_file.bat"
+call "%%DOWNLOADER%%" "%%NAME%%" "%%DISTRO%%" "%%URL%%" "%%MEMBER%%"
 set "ERROR_STATUS=%ERRORLEVEL%"
 
 echo:
