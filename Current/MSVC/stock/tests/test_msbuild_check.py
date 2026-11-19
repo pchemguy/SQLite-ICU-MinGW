@@ -88,8 +88,7 @@ def test_icu_machine(preflight, tmp_path):
     for arch, expected in [("x86", 0x14C), ("x64", 0x8664)]:
         result = preflight(VSCMD_ARG_TGT_ARCH=arch, **options)
         assert (result.returncode == 0) == (machine == expected), result.stdout
-        if machine != expected:
-            assert str(dll) in result.stdout and arch in result.stdout
-            assert f"{machine:X}" in result.stdout.upper()
+        assert str(dll) in result.stdout and arch in result.stdout
+        assert f"{machine:X}" in result.stdout.upper()
     dll.write_bytes(b"not a PE image")
     assert preflight(**options).returncode != 0

@@ -131,6 +131,7 @@ for /f "usebackq delims=" %%F in (`dir /b /a:-d "!ICU_BIN!\icuuc*.dll" 2^>nul ^|
         echo %ERROR% "!ICU_BIN!\%%F": expected %VSCMD_ARG_TGT_ARCH% [%EXPECTED_MACHINE%], observed !MACHINE!.
         exit /b 1
     )
+    echo %OKOK% "!ICU_BIN!\%%F": PE machine !MACHINE! matches target %VSCMD_ARG_TGT_ARCH%.
 )
 if not defined FOUND_ICU (
     echo %ERROR% No versioned ICU common DLL found in "!ICU_BIN!".
