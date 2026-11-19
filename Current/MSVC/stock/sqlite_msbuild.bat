@@ -403,7 +403,7 @@ if exist "%FLAG%\" goto :SQLITE_EXTRACT_INCOMPLETE
 if not exist "%SQLITE_MAKEFILE%" goto :SQLITE_EXTRACT_INCOMPLETE
 if exist "%SQLITE_MAKEFILE%\" goto :SQLITE_EXTRACT_INCOMPLETE
 if exist "%FLAG%" goto :SQLITE_EXTRACT_DONE
->"%FLAG%" echo complete
+echo complete >"%FLAG%"
 if not "%ERRORLEVEL%"=="0" exit /b 1
 
 :SQLITE_EXTRACT_DONE
@@ -506,7 +506,7 @@ set "VERSION=zlib-[0-9][0-9.]*[.][0-9][0-9]*"
 dir /b /a:d "%DST%" | findstr /r /x /c:"%VERSION%" | findstr /l /v /c:".." >nul || goto :ZLIB_EXTRACT_BAD_ROOT
 if not exist "%DST%\%ROOT%\win32\Makefile.msc" goto :ZLIB_EXTRACT_BAD_ROOT
 if exist "%DST%\%ROOT%\win32\Makefile.msc\" goto :ZLIB_EXTRACT_BAD_ROOT
->"%DST%\%ROOT%\.zlib-staged" echo complete
+echo complete >"%DST%\%ROOT%\.zlib-staged"
 if not "%ERRORLEVEL%"=="0" goto :ZLIB_EXTRACT_FAILED
 if exist "%ZLIBDIR%" goto :ZLIB_EXTRACT_INCOMPLETE
 move "%DST%\%ROOT%" "%ZLIBDIR%" || goto :ZLIB_EXTRACT_FAILED
@@ -627,7 +627,7 @@ if "%ROOT%"=="%ICUDIR%" (
     echo %OKOK% Using previously staged ICU: "%ICUDIR%\bin%ARCH%\%COMMON%".
     goto :ICU_CONDA_EXIT
 )
->"%STAGE%\.icu-staged" echo complete
+echo complete >"%STAGE%\.icu-staged"
 if not "%ERRORLEVEL%"=="0" goto :ICU_CONDA_FAILED
 ren "%STAGE%" "icu" || goto :ICU_CONDA_FAILED
 echo %OKOK% Staged ICU from "%CONDA_PREFIX%" in "%ICUDIR%".
