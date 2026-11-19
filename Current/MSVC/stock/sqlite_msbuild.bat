@@ -397,7 +397,7 @@ set "SRC=%CACHEDIR%\sqlite.zip"
 set "DST=%OUT%"
 
 set "EXTRACTOR=%~dp0extract_archive.bat"
-call "%%EXTRACTOR%%" "%%NAME%%" "%%FLAG%%" "%%SRC%%" "%%DST%%" || exit /b
+call "%%EXTRACTOR%%" "%%NAME%%" "%%FLAG%%" "%%SRC%%" "%%DST%%" || exit /b 1
 if exist "%FLAG%\" goto :SQLITE_EXTRACT_INCOMPLETE
 if not exist "%SQLITE_MAKEFILE%" goto :SQLITE_EXTRACT_INCOMPLETE
 if exist "%SQLITE_MAKEFILE%\" goto :SQLITE_EXTRACT_INCOMPLETE
