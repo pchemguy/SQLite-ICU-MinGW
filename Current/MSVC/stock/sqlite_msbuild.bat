@@ -370,8 +370,9 @@ set "SECTION=SQLITE_DOWNLOAD"
 set "NAME=SQLite"
 set "DISTRO=%CACHEDIR%\sqlite.zip"
 set "URL=https://sqlite.org/src/zip/sqlite.zip"
+set "FLAG=sqlite/Makefile.msc"
 
-call "%~dp0download_file.bat" "%NAME%" "%DISTRO%" "%URL%" "sqlite/Makefile.msc"
+call "%~dp0download_file.bat" "%NAME%" "%DISTRO%" "%URL%" "%FLAG%"
 set "ERROR_STATUS=%ERRORLEVEL%"
 
 echo:
