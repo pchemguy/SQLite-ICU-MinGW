@@ -25,9 +25,6 @@ echo ---------------------------------------------------------------------------
 echo %WARN% Extracting archive.
 echo:
 
-if "%~1"=="" goto :EXTRACT_USAGE
-if "%~2"=="" goto :EXTRACT_USAGE
-if "%~3"=="" goto :EXTRACT_USAGE
 if "%~4"=="" goto :EXTRACT_USAGE
 
 set "NAME=%~1"
