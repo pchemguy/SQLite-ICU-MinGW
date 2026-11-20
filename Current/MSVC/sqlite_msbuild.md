@@ -179,6 +179,44 @@ out\bin\sqlite3.exe :memory: "SELECT str_casefold('ABC'), typeof(pblob_pack('[1,
 
 Expected output: `abc|blob|["12","3"]`.
 
+### Post-build registration checks
+
+From the build base, start the packaged shell with `out\bin\sqlite3.exe :memory:`. Run the query for each extension you enabled and compare its rows with the expected results below.
+
+**PBLOB**
+
+```sql
+SELECT * FROM pragma_function_list() WHERE name like 'pblob_%' ORDER BY name, narg;
+```
+
+| name | builtin | type | enc | narg | flags |
+| --- | ---: | --- | --- | ---: | ---: |
+| pblob_pack | 0 | s | utf8 | 1 | 2099200 |
+| pblob_pack | 0 | s | utf8 | 2 | 2099200 |
+| pblob_unpack | 0 | s | utf8 | 1 | 2099200 |
+
+**ICUex**
+
+```sql
+SELECT name FROM pragma_collation_list() WHERE name like 'UTF_%' ORDER BY name;
+```
+
+| name |
+| --- |
+| UTF_CI |
+| UTF_CI_AI |
+
+**RegexpMatches**
+
+```sql
+SELECT * FROM pragma_function_list() WHERE name like 'regexp%\_%' ESCAPE '\' ORDER BY name, narg;
+```
+
+| name | builtin | type | enc | narg | flags |
+| --- | ---: | --- | --- | ---: | ---: |
+| regexp_matches | 0 | s | utf8 | 2 | 2099200 |
+| regexpi_matches | 0 | s | utf8 | 2 | 2099200 |
+
 ### Adding a hook
 
 To add a project extension, place a batch file named `sqlite_ext_<name>.bat` beside `sqlite_msbuild.bat`. With `USE_EXTRAS=1` (the default), `:EXTRA_SRC_THIRD` calls each file matching `sqlite_ext_*` in that directory, with no arguments. The pattern is not restricted to `.bat`, so keep source files and notes outside that prefix. Use a harness path without spaces for hook discovery: the wildcard in the `for` loop is unquoted.
