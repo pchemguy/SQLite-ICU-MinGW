@@ -753,7 +753,7 @@ exit /b %ERRORLEVEL%
 set "SECTION=EXTRA_SRC_THIRD"
 
 for %%P in (%~dp0sqlite_ext_*) do (
-    echo {INFO} ========== Processing %%~P ==========
+    echo %INFO% ========== Processing %%~P ==========
     call "%%~P" || exit /b !ERRORLEVEL!
 )
 

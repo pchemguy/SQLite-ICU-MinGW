@@ -9,7 +9,8 @@
 ::
 ::   The workflow manages SQLite and optional dependency downloads, x86/x64
 ::   builds, ZLIB integration, ICU integration, stock SQLite ext/misc modules,
-::   DLL export/import-library generation, and final artifact collection.
+::   project extensions via sqlite_ext_* hooks, DLL export/import-library
+::   generation, and final artifact collection.
 ::
 ::   Conda is the only ICU provider. Staging preserves the existing include,
 ::   library, and binary paths used by the SQLite build and packaging steps.
@@ -27,6 +28,7 @@
 ::     USE_ICU
 ::     USE_ZLIB
 ::     SQLITE_EXTRA
+::     USE_EXTRAS
 ::
 ::   Run from an initialized MSVC x86 or x64 developer command prompt.
 ::
@@ -751,7 +753,7 @@ exit /b %ERRORLEVEL%
 set "SECTION=EXTRA_SRC_THIRD"
 
 for %%P in (%~dp0sqlite_ext_*) do (
-    echo {INFO} ========== Processing %%~P ==========
+    echo %INFO% ========== Processing %%~P ==========
     call "%%~P" || exit /b !ERRORLEVEL!
 )
 
