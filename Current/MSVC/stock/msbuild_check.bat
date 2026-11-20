@@ -42,6 +42,17 @@ if not defined EXPECTED_MACHINE (
 )
 
 set "CLIPATH="
+for /f "usebackq delims=" %%I in (`where nmake.exe 2^>nul`) do (
+    if "!CLIPATH!"=="" (set "CLIPATH=%%~I")
+)
+if "%CLIPATH%"=="" (
+    echo %ERROR% nmake.exe is not found. Run this script from an MSVC shell.
+    set "ERROR_STATUS=1"
+) else (
+    echo %INFO% NMAKE_EXE=   %CLIPATH%
+)
+
+set "CLIPATH="
 for /f "usebackq delims=" %%I in (`where cl.exe 2^>nul`) do (
     if "!CLIPATH!"=="" (set "CLIPATH=%%~I")
 )
@@ -53,15 +64,17 @@ if "%CLIPATH%"=="" (
 )
 
 set "CLIPATH="
-for /f "usebackq delims=" %%I in (`where nmake.exe 2^>nul`) do (
+for /f "usebackq delims=" %%I in (`where link.exe 2^>nul`) do (
     if "!CLIPATH!"=="" (set "CLIPATH=%%~I")
 )
 if "%CLIPATH%"=="" (
-    echo %ERROR% nmake.exe is not found. Run this script from an MSVC shell.
+    echo %ERROR% link.exe is not found. Run this script from an MSVC shell.
     set "ERROR_STATUS=1"
 ) else (
-    echo %INFO% NMAKE_EXE=   %CLIPATH%
+    echo %INFO% LINK_EXE=    %CLIPATH%
 )
+
+call :VERIFY_MS_LINKER || set "ERROR_STATUS=1"
 
 for %%T in (dumpbin.exe lib.exe curl.exe) do (
     where /q %%T || (
@@ -108,6 +121,51 @@ endlocal && exit /b %ERROR_STATUS%
 :: ############################################################################
 :: ############################################################################
 :: ############################################################################
+
+
+:: ============================================================================ VERIFY_MS_LINKER BEGIN
+:: ============================================================================
+:VERIFY_MS_LINKER
+
+where.exe /q link.exe
+if not "%ERRORLEVEL%"=="0" (
+    echo %ERROR% MSBuild: Linker link.exe not found on PATH.
+    exit /b 1
+)
+
+set "_CL_EXE="
+set "_CL_DIR="
+for /f "usebackq delims=" %%C in (`where.exe cl.exe 2^>nul`) do if not defined _CL_EXE (
+    set "_CL_EXE=%%~fC"
+    set "_CL_DIR=%%~dpC"
+)
+
+set "_LINK_EXE="
+set "_LINK_DIR="
+for /f "usebackq delims=" %%L in (`where.exe link.exe 2^>nul`) do if not defined _LINK_EXE (
+    set "_LINK_EXE=%%~fL"
+    set "_LINK_DIR=%%~dpL"
+)
+
+link.exe /? 2>&1 | findstr.exe /i /c:"Microsoft (R) Incremental Linker" /c:"/INCREMENTAL" >nul
+if not "%ERRORLEVEL%"=="0" (
+    echo %ERROR% MSBuild: Linker collision detected: link.exe is not the Microsoft Incremental Linker.
+    echo %ERROR% MSBuild: Executing link.exe resolved to "%_LINK_EXE%" -- likely MSYS/Git/GNU link.exe.
+    echo %ERROR% MSBuild: Expected MSVC toolset directory: "%_CL_DIR%".
+    exit /b 1
+)
+
+if /i not "%_LINK_DIR%"=="%_CL_DIR%" (
+    echo %ERROR% MSBuild: Linker collision detected: link.exe directory does not match active cl.exe directory.
+    echo %ERROR% MSBuild: Resolved link.exe: "%_LINK_EXE%"
+    echo %ERROR% MSBuild: Active cl.exe:     "%_CL_EXE%"
+    exit /b 1
+)
+
+echo %INFO%              Verified Microsoft linker.
+exit /b 0
+:: ============================================================================
+:: ============================================================================ VERIFY_MS_LINKER END
 
 
 :: ============================================================================ CHECK_ICU_MACHINE BEGIN
