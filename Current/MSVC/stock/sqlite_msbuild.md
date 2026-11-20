@@ -95,15 +95,15 @@ Download progress and errors go to the console on stderr. In `out\cache`, the re
 
 ### SQLite extraction
 
-[extract_archive.bat](extract_archive.bat) takes `"NAME" "FLAG" "SRC" "DST"`. `FLAG` is the on-disk path of a file or directory supplied by the archive. Paths are resolved relative to the caller. After checking that the archive file and destination directory exist, the helper skips extraction if `FLAG` exists. Otherwise it runs `"%TAR%" -x -f "%SRC%" -C "%DST%"` without changing the working directory and returns tar's status. When called independently with `TAR` unset, it uses `%SystemRoot%\System32\tar.exe`. With the optional `/stage` argument, the destination must not already exist; the helper creates it only when extraction is needed.
+[extract_archive.bat](extract_archive.bat) takes `"NAME" "FLAG" "SRC" "DST"`. `FLAG` is the on-disk path of a file or directory supplied by the archive. Paths are resolved relative to the caller. After checking that the archive file and destination directory exist, the helper skips extraction if `FLAG` exists. Otherwise it runs `"%TAR%" -x -f "%SRC%" -C "%DST%"` without changing the working directory and returns tar's status. When called independently with `TAR` unset, it uses `%SystemRoot%\System32\tar.exe`.
 
 For SQLite, the flag is `out\sqlite\Makefile.msc`, supplied by `sqlite.zip`. Its presence skips extraction; it does not prove that every other file was extracted.
 
 ### ZLIB staging and build
 
-On first use, `:ZLIB_EXTRACT` extracts into a fresh `out\sqlite\compat\zlib.stage`. It requires exactly one top-level entry: a directory named `zlib-<dotted-numeric-version>` containing `win32\Makefile.msc`. It moves that directory to `compat\zlib`. No online lookup is needed to determine the extracted directory name.
+`:ZLIB_EXTRACT` passes the existing `out\sqlite\compat` directory to the extractor. For a new build, it renames the single `zlib-<dotted-numeric-version>` directory containing `win32\Makefile.msc` to `zlib`. Keep unrelated or leftover `zlib-*` directories out of `compat`; the harness will not choose between multiple matches. The rename will not overwrite an existing `zlib` directory.
 
-The extractor requires the cached archive on every run. If `compat\zlib\win32\Makefile.msc` already exists, it skips extraction without creating `zlib.stage`. If `compat\zlib\zlib1.dll` is absent, the harness invokes `Makefile.msc`'s `zlib` target; otherwise it reuses the DLL.
+The extractor requires the cached archive on every run. If `compat\zlib\win32\Makefile.msc` already exists, it skips extraction. If `compat\zlib\zlib1.dll` is absent, the harness invokes `Makefile.msc`'s `zlib` target; otherwise it reuses the DLL.
 
 ### Conda ICU staging
 
@@ -176,7 +176,7 @@ The export list is not independently validated, and the temporary list is opened
 | You need to download a cached file again | Move the existing target file out of the cache, then rerun the build. |
 | SQLite extraction was interrupted | Move the incomplete `out\sqlite` tree aside and rerun with the cached ZIP. Otherwise an already extracted `Makefile.msc` will cause extraction to be skipped. The tree also contains staged dependencies. |
 | A final ICU or ZLIB tree fails validation | Move the affected `compat\icu` or `compat\zlib` tree aside. Do not manufacture the missing files. |
-| Staging stopped and left `icu.stage` or `zlib.stage` | Inspect the named staging directory and move it aside before retrying. Fresh staging requires a new directory; the harness does not merge its contents. |
+| ICU staging stopped and left `icu.stage` | Inspect the staging directory and move it aside before retrying. Fresh ICU staging requires a new directory. |
 | You need a different architecture, feature configuration, dependency version or clean source snapshot | Start in a separate clean base. Replacing a cached archive alone does not invalidate an already completed extraction or rebuild its dependent artifacts. |
 
 Most build stages stop on error; the diagnostic status and best-effort collection described above are exceptions to interpreting the final status as a build result. A fully cached normal build does not fetch upstream releases, but it still needs the local tools and, if enabled, the matching active Conda ICU. To reset the **same** build completely, move aside that base's generated `out` directory after retaining any artifacts you need.
