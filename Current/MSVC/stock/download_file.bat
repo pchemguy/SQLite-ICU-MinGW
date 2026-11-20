@@ -27,7 +27,7 @@ call :COLOR_SCHEME
 set "NAME=%~1"
 set "TARGET=%~f2"
 set "URL=%~3"
-set "MEMBER=%~4"
+set "FLAG=%~4"
 if not defined NAME goto :USAGE
 if "%~2"=="" goto :USAGE
 if not defined URL goto :USAGE
@@ -38,8 +38,8 @@ if exist "%TARGET%\" (
 
 if not defined TAR set "TAR=%SystemRoot%\System32\tar.exe"
 if not exist "%TARGET%" goto :FETCH
-if defined MEMBER (
-    "%TAR%" -tf "%TARGET%" -- "%MEMBER%" >nul || (
+if defined FLAG (
+    "%TAR%" -tf "%TARGET%" -- "%FLAG%" >nul || (
         echo %ERROR% Invalid cache entry: "%TARGET%". Move it aside before retrying.
         exit /b 1
     )
@@ -48,7 +48,7 @@ echo %OKOK% Using previously downloaded "%NAME%": "%TARGET%"
 exit /b 0
 
 :USAGE
-echo %ERROR% Usage: "%~nx0" "NAME" "TARGET" "URL" [ARCHIVE_MEMBER]
+echo %ERROR% Usage: "%~nx0" "NAME" "TARGET" "URL" [ARCHIVE_FLAG]
 exit /b 1
 :: ============================================================================
 :: ============================================================================ MAIN END
@@ -85,8 +85,8 @@ findstr /i /r /b /c:"200 [ 	]*text/html[; 	]" "%META%" >nul
 if errorlevel 2 goto :BAD_RESPONSE
 if not errorlevel 1 goto :BAD_RESPONSE
 
-if defined MEMBER (
-    "%TAR%" -tf "%PART%" -- "%MEMBER%" >nul || (
+if defined FLAG (
+    "%TAR%" -tf "%PART%" -- "%FLAG%" >nul || (
         echo %ERROR% Invalid downloaded archive for "%NAME%".
         goto :FAILED
     )
