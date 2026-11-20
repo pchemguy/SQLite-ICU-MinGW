@@ -62,6 +62,8 @@ if exist "%FLAG%" (
 )
 
 echo %INFO% ===== Extracting %NAME% =====
+echo:
+
 "%TAR%" -x -f "%SRC%" -C "%DST%"
 set "ERROR_STATUS=%ERRORLEVEL%"
 if "%ERROR_STATUS%"=="0" (
