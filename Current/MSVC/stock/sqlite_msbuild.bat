@@ -390,18 +390,14 @@ setlocal
 set "SECTION=SQLITE_EXTRACT"
 
 set "NAME=SQLite"
-set "FLAG=%SQLITEDIR%\.sqlite-extracted"
+set "FLAG=%SQLITE_MAKEFILE%"
 set "SRC=%CACHEDIR%\sqlite.zip"
 set "DST=%OUT%"
 
 call "%~dp0extract_archive.bat" "%NAME%" "%FLAG%" "%SRC%" "%DST%" || exit /b 1
+if not exist "%FLAG%" goto :SQLITE_EXTRACT_INCOMPLETE
 if exist "%FLAG%\" goto :SQLITE_EXTRACT_INCOMPLETE
-if not exist "%SQLITE_MAKEFILE%" goto :SQLITE_EXTRACT_INCOMPLETE
-if exist "%SQLITE_MAKEFILE%\" goto :SQLITE_EXTRACT_INCOMPLETE
-if exist "%FLAG%" goto :SQLITE_EXTRACT_DONE
-echo complete >"%FLAG%" || exit /b 1
 
-:SQLITE_EXTRACT_DONE
 set "ERROR_STATUS=0"
 
 echo:
@@ -475,14 +471,12 @@ setlocal
 set "SECTION=ZLIB_EXTRACT"
 
 set "NAME=ZLIB"
-set "FLAG=%ZLIBDIR%\.zlib-staged"
+set "FLAG=%ZLIBDIR%\win32\Makefile.msc"
 set "SRC=%CACHEDIR%\zlib.tar.gz"
 set "DST=%ZLIBDIR%.stage"
 if exist "%ZLIBDIR%" (
     if not exist "%FLAG%" goto :ZLIB_EXTRACT_INCOMPLETE
     if exist "%FLAG%\" goto :ZLIB_EXTRACT_INCOMPLETE
-    if not exist "%ZLIBDIR%\win32\Makefile.msc" goto :ZLIB_EXTRACT_INCOMPLETE
-    if exist "%ZLIBDIR%\win32\Makefile.msc\" goto :ZLIB_EXTRACT_INCOMPLETE
     echo %OKOK% ===== Using previously extracted ZLIB =====
     exit /b 0
 )
@@ -498,11 +492,9 @@ set "VERSION=zlib-[0-9][0-9.]*[.][0-9][0-9]*"
 dir /b /a:d "%DST%" | findstr /r /x /c:"%VERSION%" | findstr /l /v /c:".." >nul || goto :ZLIB_EXTRACT_BAD_ROOT
 if not exist "%DST%\%ROOT%\win32\Makefile.msc" goto :ZLIB_EXTRACT_BAD_ROOT
 if exist "%DST%\%ROOT%\win32\Makefile.msc\" goto :ZLIB_EXTRACT_BAD_ROOT
-echo complete >"%DST%\%ROOT%\.zlib-staged" || goto :ZLIB_EXTRACT_FAILED
 if exist "%ZLIBDIR%" goto :ZLIB_EXTRACT_INCOMPLETE
 move "%DST%\%ROOT%" "%ZLIBDIR%" || goto :ZLIB_EXTRACT_FAILED
 if not exist "%FLAG%" goto :ZLIB_EXTRACT_INCOMPLETE
-if not exist "%ZLIBDIR%\win32\Makefile.msc" goto :ZLIB_EXTRACT_INCOMPLETE
 rd "%DST%" || goto :ZLIB_EXTRACT_FAILED
 echo %OKOK% Staged "%ROOT%" in "%ZLIBDIR%".
 

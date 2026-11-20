@@ -53,24 +53,22 @@ def test_tar_rejects_a_file_as_destination(tmp_path):
     with zipfile.ZipFile(tmp_path / "input.zip", "w") as z:
         z.writestr("must-not-land-here", "data")
     (tmp_path / "not a dir").touch()
-    command = f'""{STOCK / "extract_archive.bat"}" test flag input.zip "not a dir""'
+    command = f'""{STOCK / "extract_archive.bat"}" test "not a dir\\must-not-land-here" input.zip "not a dir""'
     result = subprocess.run(f'"{os.environ["COMSPEC"]}" /d /s /c {command}', cwd=tmp_path)
     assert result.returncode != 0
     assert not (tmp_path / "must-not-land-here").exists()
 
 
-def test_sqlite_early_makefile_does_not_skip_extraction(stage, tmp_path):
+def test_sqlite_reuses_extracted_makefile(stage, tmp_path):
     sqlite = tmp_path / "sqlite"
-    sqlite.mkdir()
-    (sqlite / "Makefile.msc").touch()
-    (tmp_path / "sqlite.zip").write_bytes(b"incomplete archive")
-    assert stage("SQLITE_EXTRACT").returncode != 0
     with zipfile.ZipFile(tmp_path / "sqlite.zip", "w") as z:
-        z.writestr("sqlite/Makefile.msc", "complete")
-        z.writestr("sqlite/tail", "last")
+        z.writestr("sqlite/Makefile.msc", "original")
     result = stage("SQLITE_EXTRACT")
     assert result.returncode == 0, result.stdout
-    assert (sqlite / "tail").read_text() == "last"
+    assert list(sqlite.iterdir()) == [sqlite / "Makefile.msc"]
+    (sqlite / "Makefile.msc").write_text("keep")
+    assert stage("SQLITE_EXTRACT").returncode == 0
+    assert (sqlite / "Makefile.msc").read_text() == "keep"
 
 
 @pytest.mark.parametrize("names, valid", [
@@ -85,6 +83,7 @@ def test_zlib_publishes_one_versioned_root(stage, tmp_path, names, valid):
     assert (result.returncode == 0) == valid, result.stdout
     assert final.exists() == valid
     if valid:
+        assert list(final.iterdir()) == [final / "win32"]
         (tmp_path / "zlib.tar.gz").unlink()
         assert stage("ZLIB_EXTRACT").returncode == 0
         (final / "win32/Makefile.msc").unlink()
