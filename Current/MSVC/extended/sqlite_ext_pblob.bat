@@ -20,6 +20,7 @@ if "%SQLITE_ENABLE_PBLOB%"=="0" (
     exit /b 0
 )
 
+call :PBLOB_DOWNLOAD    || exit /b !ERRORLEVEL!
 call :FP16_DOWNLOAD     || exit /b !ERRORLEVEL!
 call :FP16_EXTRACT      || exit /b !ERRORLEVEL!
 call :EXTRA_SRC_THIRD   || exit /b !ERRORLEVEL!
@@ -37,6 +38,30 @@ exit /b %ERROR_STATUS%
 :: ############################################################################
 :: ############################################################################
 :: ############################################################################
+
+
+:: ============================================================================ PBLOB_DOWNLOAD BEGIN
+:: ============================================================================
+:PBLOB_DOWNLOAD
+
+setlocal
+set "SECTION=PBLOB_DOWNLOAD"
+
+call :MKDIR__DIR "%CACHEDIR%\SQLitePackedBlob\src"
+
+set "NAME=PBLOB"
+set "DISTRO=%CACHEDIR%\SQLitePackedBlob\src\pblob.c"
+set "URL=https://raw.githubusercontent.com/pchemguy/SQLitePackedBlob/refs/heads/main/src/pblob.c"
+
+call "%~dp0download_file.bat" "%NAME%" "%DISTRO%" "%URL%"
+set "ERROR_STATUS=%ERRORLEVEL%"
+
+echo:
+echo %INFO% ~~~~~ %SECTION% ~~~~~
+echo:
+endlocal && exit /b %ERROR_STATUS%
+:: ============================================================================
+:: ============================================================================ PBLOB_DOWNLOAD END
 
 
 :: ============================================================================ FP16_DOWNLOAD BEGIN
@@ -101,7 +126,7 @@ set "SECTION=EXTRA_SRC_THIRD"
 set OPT_XTRA=%OPT_XTRA% -DSQLITE_ENABLE_PBLOB
 
 set SOURCES=^
-    "%PROJDIR%\src\pblob.c"
+    "%CACHEDIR%\SQLitePackedBlob\src\pblob.c"
 
 set MISC_EXT=^
     "pblob.c"
@@ -131,6 +156,57 @@ echo:
 exit /b %ERRORLEVEL%
 :: ============================================================================
 :: ============================================================================ EXTRA_SRC_THIRD END
+
+
+:: ============================================================================ MKDIR__DIR BEGIN
+:: ============================================================================
+:MKDIR__DIR
+
+:: Creates the target directory if the path does not exist.
+::
+:: %~1 - Full target directory path.
+::
+:: Accepts an existing path without checking its type.
+:: Fails if mkdir fails or the path is still missing.
+
+setlocal
+set "SECTION=MKDIR__DIR"
+
+if "%~1"=="" (
+    set "ERROR_STATUS=1"
+    echo %ERROR% Missing required target directory.
+    echo %INFO%  USAGE: call :MKDIR__DIR "{FULL TARGET DIRECTORY PATH}"
+    goto :MKDIR__DIR_EXIT
+)
+
+set "TARGETDIR=%~1"
+set "MKDIR_FAILED="
+set "ERROR_STATUS=0"
+
+if exist "%TARGETDIR%" (
+    echo %INFO% "%TARGETDIR%" already exists.
+    goto :MKDIR__DIR_EXIT
+)
+
+cmd /c mkdir "%TARGETDIR%" || set "MKDIR_FAILED=1"
+if not exist "%TARGETDIR%"   (set "MKDIR_FAILED=1")
+
+if defined MKDIR_FAILED (
+    set "ERROR_STATUS=1"
+    echo %ERROR% Failed to create "%TARGETDIR%"
+    goto :MKDIR__DIR_EXIT
+)
+
+echo %INFO% Created "%TARGETDIR%".
+
+:MKDIR__DIR_EXIT
+
+echo:
+echo %INFO% ~~~~~ %SECTION% ~~~~~
+echo:
+endlocal && exit /b %ERROR_STATUS%
+:: ============================================================================
+:: ============================================================================ MKDIR__DIR END
 
 
 :: ============================================================================ COLOR_SCHEME BEGIN
