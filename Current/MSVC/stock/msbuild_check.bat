@@ -41,26 +41,26 @@ if not defined EXPECTED_MACHINE (
     set "ERROR_STATUS=1"
 )
 
-set "CommandLocation="
+set "CLIPATH="
 for /f "usebackq delims=" %%I in (`where cl.exe 2^>nul`) do (
-    if "!CommandLocation!"=="" (set "CommandLocation=%%~I")
+    if "!CLIPATH!"=="" (set "CLIPATH=%%~I")
 )
-if "%CommandLocation%"=="" (
+if "%CLIPATH%"=="" (
     echo %ERROR% cl.exe is not found. Run this script from an MSVC shell.
     set "ERROR_STATUS=1"
 ) else (
-    echo %INFO% CL_EXE=      %CommandLocation%
+    echo %INFO% CL_EXE=      %CLIPATH%
 )
 
-set "CommandLocation="
+set "CLIPATH="
 for /f "usebackq delims=" %%I in (`where nmake.exe 2^>nul`) do (
-    if "!CommandLocation!"=="" (set "CommandLocation=%%~I")
+    if "!CLIPATH!"=="" (set "CLIPATH=%%~I")
 )
-if "%CommandLocation%"=="" (
+if "%CLIPATH%"=="" (
     echo %ERROR% nmake.exe is not found. Run this script from an MSVC shell.
     set "ERROR_STATUS=1"
 ) else (
-    echo %INFO% NMAKE_EXE=   %CommandLocation%
+    echo %INFO% NMAKE_EXE=   %CLIPATH%
 )
 
 for %%T in (dumpbin.exe lib.exe curl.exe) do (
@@ -74,14 +74,14 @@ if not exist "%windir%\System32\tar.exe" (
     set "ERROR_STATUS=1"
 )
 
-set "CommandLocation="
+set "CLIPATH="
 for /f "usebackq delims=" %%I in (`where tclsh.exe 2^>nul`) do (
-    if "!CommandLocation!"=="" (set "CommandLocation=%%I")
+    if "!CLIPATH!"=="" (set "CLIPATH=%%I")
 )
-if "%CommandLocation%"=="" (
+if "%CLIPATH%"=="" (
     echo %WARN% tclsh.exe was not found on PATH. Continuing without external Tcl.
 ) else (
-    echo %INFO% TCLSH_EXE=   %CommandLocation%
+    echo %INFO% TCLSH_EXE=   %CLIPATH%
 )
 
 if "%USE_ICU%"=="1" if "%ERROR_STATUS%"=="0" (
