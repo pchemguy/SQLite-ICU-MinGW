@@ -64,8 +64,7 @@ if "%CommandLocation%"=="" (
 )
 
 for %%T in (dumpbin.exe lib.exe curl.exe) do (
-    where /q %%T
-    if errorlevel 1 (
+    where /q %%T || (
         echo %ERROR% %%T is not found on PATH.
         set "ERROR_STATUS=1"
     )

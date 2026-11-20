@@ -63,9 +63,9 @@ echo %INFO% Downloading "%NAME%" to "%PART%"
 :: Write final status and media type from the GET, not a separate HEAD. The
 :: trailing semicolon makes bare and parameterized media types comparable.
 curl.exe -fL --globoff --retry 3 --dump-header "%HEADER_LOG%" --output "%PART%" --write-out "%%{http_code} %%{content_type};\n" -- "%URL%" >"%META%"
-set "RC=%ERRORLEVEL%"
-if not "%RC%"=="0" (
-    echo %ERROR% Download failed with status %RC%.
+if not "%ERRORLEVEL%"=="0" (
+    set "RC=%ERRORLEVEL%"
+    echo %ERROR% Download failed with status %ERRORLEVEL%.
     goto :FAILED
 )
 
@@ -73,13 +73,12 @@ if not "%RC%"=="0" (
 set "RC=1"
 findstr /b /c:"200 " "%META%" >nul || goto :BAD_RESPONSE
 findstr /i /r /b /c:"200 [ 	]*text/html[; 	]" "%META%" >nul
-if errorlevel 2 goto :BAD_RESPONSE
-if not errorlevel 1 goto :BAD_RESPONSE
+if not "%ERRORLEVEL%"=="1" goto :BAD_RESPONSE
 
 :: REN stays in the same directory and does not overwrite an existing target.
 ren "%PART%" "%~nx2"
-set "RC=%ERRORLEVEL%"
-if not "%RC%"=="0" (
+if not "%ERRORLEVEL%"=="0" (
+    set "RC=%ERRORLEVEL%"
     echo %ERROR% Could not publish "%TARGET%".
     goto :FAILED
 )
