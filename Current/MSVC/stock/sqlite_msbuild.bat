@@ -364,7 +364,7 @@ endlocal && exit /b 0
 :: ============================================================================
 :SQLITE_DOWNLOAD
 
-setlocal DisableDelayedExpansion
+setlocal
 set "SECTION=SQLITE_DOWNLOAD"
 
 set "NAME=SQLite"
@@ -386,7 +386,7 @@ endlocal && exit /b %ERROR_STATUS%
 :: ============================================================================
 :SQLITE_EXTRACT
 
-setlocal DisableDelayedExpansion
+setlocal
 set "SECTION=SQLITE_EXTRACT"
 
 set "NAME=SQLite"
@@ -421,7 +421,7 @@ exit /b 1
 :: ============================================================================
 :ZLIB_DOWNLOAD
 
-setlocal DisableDelayedExpansion
+setlocal
 set "SECTION=ZLIB_DOWNLOAD"
 
 set "NAME=ZLIB"
@@ -473,7 +473,7 @@ endlocal && exit /b %ERROR_STATUS%
 :: ============================================================================
 :ZLIB_EXTRACT
 
-setlocal DisableDelayedExpansion
+setlocal
 set "SECTION=ZLIB_EXTRACT"
 
 set "NAME=ZLIB"
@@ -561,7 +561,7 @@ endlocal && exit /b %ERROR_STATUS%
 :: ============================================================================
 :ICU_CONDA
 
-setlocal DisableDelayedExpansion
+setlocal
 set "SECTION=ICU_CONDA"
 
 set "ERROR_STATUS=0"
