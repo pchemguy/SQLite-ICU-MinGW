@@ -394,21 +394,13 @@ set "FLAG=%SQLITE_MAKEFILE%"
 set "SRC=%CACHEDIR%\sqlite.zip"
 set "DST=%OUT%"
 
-call "%~dp0extract_archive.bat" "%NAME%" "%FLAG%" "%SRC%" "%DST%" || exit /b 1
-if not exist "%FLAG%" goto :SQLITE_EXTRACT_INCOMPLETE
-if exist "%FLAG%\" goto :SQLITE_EXTRACT_INCOMPLETE
-
-set "ERROR_STATUS=0"
+call "%~dp0extract_archive.bat" "%NAME%" "%FLAG%" "%SRC%" "%DST%"
+set "ERROR_STATUS=%ERRORLEVEL%"
 
 echo:
 echo %INFO% ~~~~~ %SECTION% ~~~~~
 echo:
 endlocal && exit /b %ERROR_STATUS%
-
-:SQLITE_EXTRACT_INCOMPLETE
-echo %ERROR% Expected "%SQLITE_MAKEFILE%" after SQLite extraction.
-echo         Move aside the incomplete tree and retry.
-exit /b 1
 :: ============================================================================
 :: ============================================================================ SQLITE_EXTRACT END
 
