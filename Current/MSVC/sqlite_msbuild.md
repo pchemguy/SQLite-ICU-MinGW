@@ -2,17 +2,17 @@
 url: https://chatgpt.com/c/6a786079-f408-83eb-87b1-e0d35b2804a5
 ---
 
-# Building stock SQLite with MSVC on Windows
+# Building SQLite with MSVC on Windows
 
-[sqlite_msbuild.bat](sqlite_msbuild.bat) builds the SQLite shell, DLL and static library with MSVC and SQLite's `Makefile.msc`. It generates an import library for the DLL and collects the distribution under `out\`. The default build includes ZLIB, ICU from an active Conda environment, and 15 stock SQLite extensions compiled into SQLite.
+[sqlite_msbuild.bat](sqlite_msbuild.bat) builds the SQLite shell, DLL and static library with MSVC and SQLite's `Makefile.msc`. It generates an import library for the DLL and collects the distribution under `out\`. The default build includes ZLIB, ICU from the active Conda environment, 15 stock SQLite `ext/misc` modules and three project extensions: **ICUex**, **PBLOB** and **RegexpMatches**. All configurations use this same harness in `Current\MSVC`.
 
 **One base directory is for one build.** Use a separate copy of the harness and its tool directory for each target architecture, build configuration or dependency installation. The script derives `out\` from the location of its tools, **not** from the directory where you invoke it. Starting another developer prompt in a different working directory does not isolate an x86 build from an x64 build.
 
 ## Run a build
 
 1. Open an **x64** or **x86 Native Tools Command Prompt** with the MSVC C/C++ tools and Windows SDK installed (available with [Visual Studio or Build Tools](https://visualstudio.microsoft.com/downloads/)). Use Windows CMD.
-2. For the default build, activate a Conda environment containing ICU for that same target architecture. To build without ICU, set `USE_ICU=0`; no Conda environment is then required.
-3. From `Current\MSVC\stock` in your chosen base, run:
+2. For the default build, activate a Conda environment containing ICU for that same target architecture. For a build without ICU or Conda, use the [bare preset](#build-presets). For a custom build without ICU, set both `USE_ICU=0` and `SQLITE_ENABLE_ICUEX=0` (or skip all project hooks with `USE_EXTRAS=0`).
+3. From `Current\MSVC` in your chosen base, run:
 
 ```cmd
 sqlite_msbuild.bat
@@ -29,19 +29,25 @@ Use `0` or `1`. Defaults apply when the variables are unset.
 | `USE_ICU` | `1` | Stage Conda ICU, set the ICU include/library paths, add `SQLITE_ENABLE_ICU_COLLATIONS` and collect ICU runtime DLLs. |
 | `USE_ZLIB` | `1` | Obtain and build ZLIB, or reuse it from this build; collect `zlib1.dll`. |
 | `SQLITE_EXTRA` | `1` | Integrate the stock `ext\misc` modules. Any value other than `0` forces `USE_ZLIB=1`; only `1` runs the extension stage. |
-| `USE_EXTRAS` | `1` | Run [project extension hooks](#project-extension-hooks) beside `sqlite_msbuild.bat`. Set to `0` to skip them. This switch does not change `SQLITE_EXTRA` or `USE_ZLIB`. |
+| `USE_EXTRAS` | `1` | Run the [project extension hooks](#project-extension-hooks) for ICUex, PBLOB and RegexpMatches. Set to `0` to skip all three without changing `SQLITE_EXTRA` or `USE_ZLIB`. |
 
-For a build without ICU, ZLIB, stock extensions or project hooks, run the following **in its own base**. Setting `USE_ZLIB=0` alone is not sufficient.
+### Build presets
+
+Run one launcher from its own build base:
+
+| Launcher | Conda ICU | ZLIB | Stock `ext/misc` | Project extensions |
+|---|---|---|---|---|
+| [sqlite_msbuild_bare.bat](sqlite_msbuild_bare.bat) | No | No | No | None |
+| [sqlite_msbuild_bare_icu.bat](sqlite_msbuild_bare_icu.bat) | Yes | No | No | None |
+| [sqlite_msbuild_bare_icu_ext.bat](sqlite_msbuild_bare_icu_ext.bat) | Yes | Yes | Yes | None |
+| [sqlite_msbuild_bare_icu_ext_extra.bat](sqlite_msbuild_bare_icu_ext_extra.bat) | Yes | Yes | Yes | All three |
+
+The launchers set their switches and call `sqlite_msbuild.bat` without forwarding arguments. Invoke the main script directly for a custom selection or NMake target. For example, to build the default configuration except for PBLOB and its FP16 headers, start in a fresh base and run:
 
 ```cmd
-set "USE_ICU=0"
-set "SQLITE_EXTRA=0"
-set "USE_EXTRAS=0"
-set "USE_ZLIB=0"
+set "SQLITE_ENABLE_PBLOB=0"
 sqlite_msbuild.bat
 ```
-
-To keep the 15 stock extensions but skip project hooks, use `SQLITE_EXTRA=1` and `USE_EXTRAS=0`. The stock harness has no ICU provider selector, ICU source-build fallback, built-in FP16 stage or separate test build.
 
 ### NMake targets and diagnostics
 
@@ -71,7 +77,7 @@ The optional [pyenv bootstrap](pyenv/Anaconda.bat) downloads the `win-64` Microm
 
 ## Build sequence and paths
 
-The script locates `patch_sqlite_misc_autoext.tcl` beside the batch file or under `tool\`, `tools\` or `extra\`. Its directory becomes `TOOLDIR`; the parent is `PROJDIR`. In the repository layout, `PROJDIR` is `Current\MSVC\stock`. Paths below are relative to that base.
+The script locates `patch_sqlite_misc_autoext.tcl` beside the batch file or under `tool\`, `tools\` or `extra\`. Its directory becomes `TOOLDIR`; the parent is `PROJDIR`. In the repository layout, `PROJDIR` is `Current\MSVC`. Paths below are relative to that base.
 
 | Order | Stage | Main location or result |
 |---:|---|---|
@@ -88,12 +94,14 @@ The script locates `patch_sqlite_misc_autoext.tcl` beside the batch file or unde
 |---|---|---|
 | SQLite | Fetch `https://sqlite.org/src/zip/sqlite.zip` (a source snapshot, not a pinned release). | `out\cache\sqlite.zip` |
 | ZLIB | Follow `https://github.com/madler/zlib/releases/latest` and record the effective URL in `out\cache\zlib-release-url.txt`. Check cURL's status and require this repository's `/releases/tag/v<version>` with a dotted numeric version before requesting `/releases/download/v<version>/zlib-<version>.tar.gz`. | `out\cache\zlib.tar.gz` |
+| Project extension sources | Each enabled hook downloads its single C file from its project's `main` branch. | `out\cache\SQLiteICUex\src\icuex.c`, `out\cache\SQLitePackedBlob\src\pblob.c`, `out\cache\SQLiteRegexpMatches\src\regexpmatches.c` |
+| FP16 (PBLOB only) | Fetch the [FP16](https://github.com/Maratyszcza/FP16) `master` archive. | `out\cache\fp16_master.zip` |
 
-If the target file exists, the download stage returns success without inspecting its contents or contacting the server. For ZLIB this also skips the latest-release lookup. There is no automatic refresh, hash check, ETag check or version comparison. For repeatable builds, retain the exact archives and record the Conda package versions, MSVC toolset and build settings.
+If the target file exists, the download stage returns success without inspecting its contents or contacting the server. For ZLIB this also skips the latest-release lookup. There is no automatic refresh, hash check, ETag check or version comparison. For repeatable builds, retain the exact archives and cached extension sources, and record the Conda package versions, MSVC toolset and build settings.
 
 The shared [download_file.bat](download_file.bat) interface is `download_file.bat "NAME" "TARGET" "URL"`. On a miss, it downloads into `<target>.part` using a redirect-following GET with retries, not a separate HEAD request. It requires a successful cURL exit and final HTTP status `200` and rejects `text/html` irrespective of case or media-type parameters before renaming the partial file to the final name. A missing or generic content type is not by itself an error. A leftover `.part` is never a cache hit.
 
-Download progress and errors go to the console on stderr. In `out\cache`, the response-header chain is written to `sqlite.log` or `zlib.tar.log`; final status and content type go to `sqlite.zip.response.log` or `zlib.tar.gz.response.log`. These are distinct from the release URL log. The harness removes old `out\stdout.log` and `out\stderr.log` during setup; it does not record a general build transcript in them.
+Download progress and errors go to the console on stderr. For SQLite and ZLIB, the response-header chain in `out\cache` is written to `sqlite.log` or `zlib.tar.log`; final status and content type go to `sqlite.zip.response.log` or `zlib.tar.gz.response.log`. These are distinct from the release URL log. The harness removes old `out\stdout.log` and `out\stderr.log` during setup; it does not record a general build transcript in them.
 
 ### SQLite extraction
 
@@ -155,11 +163,67 @@ In `tsrc`, [patch_sqlite_misc_autoext.tcl](tool/patch_sqlite_misc_autoext.tcl) a
 
 ## Project extension hooks
 
-To add a project extension, place a batch file named `sqlite_ext_<name>.bat` beside `sqlite_msbuild.bat`. With `USE_EXTRAS=1` (the default), `:EXTRA_SRC_THIRD` calls each file matching `sqlite_ext_*` in that directory, with no arguments. The pattern is not restricted to `.bat`, so keep source files and notes outside that prefix. Use a harness path without spaces for hook discovery: the wildcard in the `for` loop is unquoted. The stock directory ships no matching hooks, so enabling the switch alone adds no modules.
+Each of the three shipped hooks runs by default when `USE_EXTRAS=1`. Set an individual switch to `0` to skip that extension and its downloads. The enabled extensions are compiled into SQLite; there are no separate extension DLLs to load.
+
+| Extension | Switch | SQL interface and build dependency |
+|---|---|---|
+| [ICUex](sqlite_ext_icuex.bat) | `SQLITE_ENABLE_ICUEX` | Provides the `UTF_CI` and `UTF_CI_AI` collations, `str_casefold()` and `str_normalize()`. Keep `USE_ICU=1` for the Conda ICU headers and libraries. |
+| [PBLOB](sqlite_ext_pblob.bat) | `SQLITE_ENABLE_PBLOB` | `pblob_pack()` and `pblob_unpack()` convert between one-dimensional numeric JSON arrays and binary16 or binary32 floating-point BLOBs. It uses SQLite’s internal JSON routines. The hook copies the headers from `out\sqlite\compat\FP16-master\include` into `out\build\tsrc`; no FP16 library is built. |
+| [RegexpMatches](sqlite_ext_regexpmatches.bat) | `SQLITE_ENABLE_REGEXPMATCHES` | `regexp_matches()` and `regexpi_matches()` return successive matches as a JSON array. Keep `SQLITE_EXTRA=1`: the module uses SQLite's JSON internals and must follow the stock `regexp.c` in the amalgamation. |
+
+To check that all three registered in the packaged shell, run this after a full build:
+
+```cmd
+out\bin\sqlite3.exe :memory: "SELECT str_casefold('ABC'), typeof(pblob_pack('[1,2]')), regexp_matches('[0-9]+','a12b3');"
+```
+
+Expected output: `abc|blob|["12","3"]`.
+
+### Post-build registration checks
+
+From the build base, start the packaged shell with `out\bin\sqlite3.exe :memory:`. Run the query for each extension you enabled and compare its rows with the expected results below.
+
+**PBLOB**
+
+```sql
+SELECT * FROM pragma_function_list() WHERE name like 'pblob_%' ORDER BY name, narg;
+```
+
+| name | builtin | type | enc | narg | flags |
+| --- | ---: | --- | --- | ---: | ---: |
+| pblob_pack | 0 | s | utf8 | 1 | 2099200 |
+| pblob_pack | 0 | s | utf8 | 2 | 2099200 |
+| pblob_unpack | 0 | s | utf8 | 1 | 2099200 |
+
+**ICUex**
+
+```sql
+SELECT name FROM pragma_collation_list() WHERE name like 'UTF_%' ORDER BY name;
+```
+
+| name |
+| --- |
+| UTF_CI |
+| UTF_CI_AI |
+
+**RegexpMatches**
+
+```sql
+SELECT * FROM pragma_function_list() WHERE name like 'regexp%\_%' ESCAPE '\' ORDER BY name, narg;
+```
+
+| name | builtin | type | enc | narg | flags |
+| --- | ---: | --- | --- | ---: | ---: |
+| regexp_matches | 0 | s | utf8 | 2 | 2099200 |
+| regexpi_matches | 0 | s | utf8 | 2 | 2099200 |
+
+### Adding a hook
+
+To add a project extension, place a batch file named `sqlite_ext_<name>.bat` beside `sqlite_msbuild.bat`. With `USE_EXTRAS=1` (the default), `:EXTRA_SRC_THIRD` calls each file matching `sqlite_ext_*` in that directory, with no arguments. The pattern is not restricted to `.bat`, so keep source files and notes outside that prefix. Use a harness path without spaces for hook discovery: the wildcard in the `for` loop is unquoted.
 
 Hooks run after `out\build\tsrc` is ready and before SQLite is built, even when `SQLITE_EXTRA=0`. Use `%PROJDIR%` for project inputs and `%TSRC%` for prepared sources rather than relying on the current working directory. Append source paths to `EXTRA_SRC` and any compiler definitions to `OPT_XTRA`, preserving values from the stock stage or earlier hooks. Those changes must still be in the caller’s environment when the hook returns. A nonzero exit code stops the build before NMake compiles SQLite.
 
-If a hook relies on the stock auto-extension dispatcher, note that `:EXTRA_SRC_STOCK` adds `misc_ext_init.c` to `EXTRA_SRC` and sets `SQLITE_EXTRA_AUTOEXT`. With `SQLITE_EXTRA=0`, the hook must arrange registration itself if it needs it.
+The shipped hooks update the generated dispatcher, but only `:EXTRA_SRC_STOCK` adds `misc_ext_init.c` to `EXTRA_SRC` and sets `SQLITE_EXTRA_AUTOEXT`. Keep `SQLITE_EXTRA=1` for their built-in registration. With `SQLITE_EXTRA=0`, a custom hook that needs registration must arrange it itself.
 
 ## Exports and import library
 
@@ -193,7 +257,7 @@ Most build stages stop on error; the diagnostic status and best-effort collectio
 
 ## Harness tests
 
-From `Current\MSVC\stock` in a Windows MSVC developer prompt with Python and pytest available:
+From `Current\MSVC` in a Windows MSVC developer prompt with Python and pytest available:
 
 ```cmd
 python -m pytest tests
