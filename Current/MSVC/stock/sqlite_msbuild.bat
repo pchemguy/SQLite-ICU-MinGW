@@ -410,7 +410,8 @@ echo:
 endlocal && exit /b %ERROR_STATUS%
 
 :SQLITE_EXTRACT_INCOMPLETE
-echo %ERROR% Expected "%SQLITE_MAKEFILE%" after SQLite extraction. Move aside the incomplete tree and retry.
+echo %ERROR% Expected "%SQLITE_MAKEFILE%" after SQLite extraction.
+echo         Move aside the incomplete tree and retry.
 exit /b 1
 :: ============================================================================
 :: ============================================================================ SQLITE_EXTRACT END
@@ -514,6 +515,7 @@ endlocal && exit /b 0
 
 :ZLIB_EXTRACT_BAD_ROOT
 echo %ERROR% Expected one versioned zlib directory containing win32\Makefile.msc.
+
 :ZLIB_EXTRACT_FAILED
 echo %ERROR% Could not stage ZLIB. Inspect "%DST%" and move it aside before retrying.
 exit /b 1
@@ -598,18 +600,22 @@ for %%F in ("%STAGE%\bin%ARCH%\icu??.dll" "%STAGE%\bin%ARCH%\icutest*.dll") do (
 
 :ICU_CONDA_VALIDATE
 set "COMMON="
-for /f "usebackq delims=" %%F in (`dir /b /a:-d "%ROOT%\bin%ARCH%\icuuc*.dll" 2^>nul ^| findstr /i /r /x "icuuc[0-9][0-9]*\.dll"`) do (
+for /f "usebackq delims=" %%F in (
+    `dir /b /a:-d "%ROOT%\bin%ARCH%\icuuc*.dll" 2^>nul ^| findstr /i /r /x "icuuc[0-9][0-9]*\.dll"`
+) do (
     if defined COMMON goto :ICU_CONDA_BAD_VERSION
     set "COMMON=%%F"
 )
 if not defined COMMON goto :ICU_CONDA_BAD_VERSION
 :: All runtime components must have the same version suffix as the common DLL.
 set "SUFFIX=%COMMON:~5%"
-for %%F in ("%ROOT%\include\unicode\utypes.h" "%ROOT%\include\unicode\ucol.h"
-            "%ROOT%\include\unicode\uregex.h" "%ROOT%\include\unicode\ustring.h"
-            "%ROOT%\lib%ARCH%\icudt.lib" "%ROOT%\lib%ARCH%\icuuc.lib" "%ROOT%\lib%ARCH%\icuin.lib"
-            "%ROOT%\bin%ARCH%\icuinfo.exe" "%ROOT%\bin%ARCH%\%COMMON%"
-            "%ROOT%\bin%ARCH%\icuin%SUFFIX%" "%ROOT%\bin%ARCH%\icudt%SUFFIX%") do (
+for %%F in (
+    "%ROOT%\include\unicode\utypes.h" "%ROOT%\include\unicode\ucol.h"
+    "%ROOT%\include\unicode\uregex.h" "%ROOT%\include\unicode\ustring.h"
+    "%ROOT%\lib%ARCH%\icudt.lib" "%ROOT%\lib%ARCH%\icuuc.lib" "%ROOT%\lib%ARCH%\icuin.lib"
+    "%ROOT%\bin%ARCH%\icuinfo.exe" "%ROOT%\bin%ARCH%\%COMMON%"
+    "%ROOT%\bin%ARCH%\icuin%SUFFIX%" "%ROOT%\bin%ARCH%\icudt%SUFFIX%"
+) do (
     set "REQUIRED=%%~fF"
     if not exist "%%~fF" goto :ICU_CONDA_BAD_FILE
     if exist "%%~fF\" goto :ICU_CONDA_BAD_FILE
@@ -627,10 +633,13 @@ goto :ICU_CONDA_EXIT
 :ICU_CONDA_BAD_VERSION
 echo %ERROR% Expected one versioned ICU common DLL in "%ROOT%\bin%ARCH%".
 goto :ICU_CONDA_INVALID
+
 :ICU_CONDA_BAD_FILE
 echo %ERROR% Missing or invalid ICU file: "%REQUIRED%".
+
 :ICU_CONDA_INVALID
 if "%ROOT%"=="%ICUDIR%" goto :ICU_CONDA_INCOMPLETE
+
 :ICU_CONDA_FAILED
 echo %ERROR% Could not stage ICU. Inspect "%STAGE%" and move it aside before retrying.
 exit /b 1
