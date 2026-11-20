@@ -465,23 +465,21 @@ set "SECTION=ZLIB_EXTRACT"
 set "NAME=ZLIB"
 set "FLAG=%ZLIBDIR%\win32\Makefile.msc"
 set "SRC=%CACHEDIR%\zlib.tar.gz"
-set "DST=%ZLIBDIR%.stage"
-call "%~dp0extract_archive.bat" "%NAME%" "%FLAG%" "%SRC%" "%DST%" /stage || exit /b !ERRORLEVEL!
-if not exist "%DST%" goto :ZLIB_EXTRACT_DONE
+set "DST=%THIRDDIR%"
+call "%~dp0extract_archive.bat" "%NAME%" "%FLAG%" "%SRC%" "%DST%" || exit /b !ERRORLEVEL!
 
 set "ROOT="
-for /f "usebackq eol=| delims=" %%D in (`dir /b /a "%DST%"`) do (
+for /f "usebackq eol=| delims=" %%D in (`dir /b /a:d "%DST%\zlib-*" 2^>nul`) do (
     if defined ROOT goto :ZLIB_EXTRACT_BAD_ROOT
     set "ROOT=%%D"
 )
+if not defined ROOT if exist "%ZLIBDIR%\." goto :ZLIB_EXTRACT_DONE
 set "VERSION=zlib-[0-9][0-9.]*[.][0-9][0-9]*"
-dir /b /a:d "%DST%" | findstr /r /x /c:"%VERSION%" | findstr /l /v /c:".." >nul || goto :ZLIB_EXTRACT_BAD_ROOT
+dir /b /a:d "%DST%\zlib-*" 2>nul | findstr /r /x /c:"%VERSION%" | findstr /l /v /c:".." >nul || goto :ZLIB_EXTRACT_BAD_ROOT
 if not exist "%DST%\%ROOT%\win32\Makefile.msc" goto :ZLIB_EXTRACT_BAD_ROOT
 if exist "%DST%\%ROOT%\win32\Makefile.msc\" goto :ZLIB_EXTRACT_BAD_ROOT
-if exist "%ZLIBDIR%" goto :ZLIB_EXTRACT_INCOMPLETE
-move "%DST%\%ROOT%" "%ZLIBDIR%" || goto :ZLIB_EXTRACT_FAILED
-rd "%DST%" || goto :ZLIB_EXTRACT_FAILED
-echo %OKOK% Staged "%ROOT%" in "%ZLIBDIR%".
+ren "%DST%\%ROOT%" "zlib" || exit /b !ERRORLEVEL!
+echo %OKOK% Renamed "%ROOT%" to "%ZLIBDIR%".
 
 :ZLIB_EXTRACT_DONE
 echo:
@@ -491,13 +489,6 @@ endlocal && exit /b 0
 
 :ZLIB_EXTRACT_BAD_ROOT
 echo %ERROR% Expected one versioned zlib directory containing win32\Makefile.msc.
-
-:ZLIB_EXTRACT_FAILED
-echo %ERROR% Could not stage ZLIB. Inspect "%DST%" and move it aside before retrying.
-exit /b 1
-
-:ZLIB_EXTRACT_INCOMPLETE
-echo %ERROR% Incomplete ZLIB tree at "%ZLIBDIR%". Move it aside before retrying.
 exit /b 1
 :: ============================================================================
 :: ============================================================================ ZLIB_EXTRACT END

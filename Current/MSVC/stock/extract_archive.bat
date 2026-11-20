@@ -7,8 +7,7 @@
 :: %~2 - Path to a file or directory from the archive.
 ::       If it already exists on disk, skip extraction.
 :: %~3 - Archive path - MUST exist.
-:: %~4 - Extraction directory path - MUST exist unless /stage is specified.
-:: %~5 - Optional /stage: destination must not exist; create it only if extracting.
+:: %~4 - Extraction directory path - MUST exist.
 ::
 
 :: ============================================================================ MAIN BEGIN
@@ -49,12 +48,7 @@ if exist "%SRC%\" (
     goto :EXTRACT_EXIT
 )
 
-if /i "%~5"=="/stage" (
-    if exist "%DST%" (
-        echo %ERROR% Staging path "%DST%" already exists. Move it aside before retrying.
-        exit /b 1
-    )
-) else if not exist "%DST%\." (
+if not exist "%DST%\." (
     set "ERROR_STATUS=1"
     echo %ERROR% Directory "%DST%" not found.
     goto :EXTRACT_EXIT
@@ -66,9 +60,6 @@ if exist "%FLAG%" (
 )
 
 echo %INFO% ===== Extracting %NAME% =====
-if /i "%~5"=="/stage" (
-    mkdir "%DST%" || exit /b 1
-)
 "%TAR%" -x -f "%SRC%" -C "%DST%"
 set "ERROR_STATUS=%ERRORLEVEL%"
 if "%ERROR_STATUS%"=="0" (
@@ -81,7 +72,7 @@ goto :EXTRACT_EXIT
 :EXTRACT_USAGE
 set "ERROR_STATUS=1"
 echo %ERROR% Missing required parameters.
-echo %INFO%  USAGE: call extract_archive.bat "NAME" "FLAG" "SRC" "DST" [/stage]
+echo %INFO%  USAGE: call extract_archive.bat "NAME" "FLAG" "SRC" "DST"
 
 :EXTRACT_EXIT
 

@@ -88,7 +88,6 @@ def test_zlib_publishes_one_versioned_root(stage, tmp_path, names, valid):
         makefile.write_text("keep")
         assert stage("ZLIB_EXTRACT").returncode == 0
         assert makefile.read_text() == "keep"
-        assert not (tmp_path / "zlib.stage").exists()
         makefile.unlink()
         assert stage("ZLIB_EXTRACT").returncode != 0
 
@@ -99,7 +98,6 @@ def test_zlib_requires_archive_even_when_flag_exists(stage, tmp_path):
     makefile.write_text("keep")
     assert stage("ZLIB_EXTRACT").returncode != 0
     assert makefile.read_text() == "keep"
-    assert not (tmp_path / "zlib.stage").exists()
 
 
 def test_icu_publishes_and_reuses_one_set(stage, tmp_path):
