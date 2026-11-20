@@ -29,17 +29,19 @@ Use `0` or `1`. Defaults apply when the variables are unset.
 | `USE_ICU` | `1` | Stage Conda ICU, set the ICU include/library paths, add `SQLITE_ENABLE_ICU_COLLATIONS` and collect ICU runtime DLLs. |
 | `USE_ZLIB` | `1` | Obtain and build ZLIB, or reuse it from this build; collect `zlib1.dll`. |
 | `SQLITE_EXTRA` | `1` | Integrate the stock `ext\misc` modules. Any value other than `0` forces `USE_ZLIB=1`; only `1` runs the extension stage. |
+| `USE_EXTRAS` | `1` | Run [project extension hooks](#project-extension-hooks) beside `sqlite_msbuild.bat`. Set to `0` to skip them. This switch does not change `SQLITE_EXTRA` or `USE_ZLIB`. |
 
-For a build without ICU, ZLIB or stock extensions, run the following **in its own base**. Setting `USE_ZLIB=0` alone is not sufficient.
+For a build without ICU, ZLIB, stock extensions or project hooks, run the following **in its own base**. Setting `USE_ZLIB=0` alone is not sufficient.
 
 ```cmd
 set "USE_ICU=0"
 set "SQLITE_EXTRA=0"
+set "USE_EXTRAS=0"
 set "USE_ZLIB=0"
 sqlite_msbuild.bat
 ```
 
-These are the three feature switches in the stock harness. There is no ICU provider selector or ICU source-build fallback. It does not stage FP16, integrate project-specific extensions, or create a separate test build.
+To keep the 15 stock extensions but skip project hooks, use `SQLITE_EXTRA=1` and `USE_EXTRAS=0`. The stock harness has no ICU provider selector, ICU source-build fallback, built-in FP16 stage or separate test build.
 
 ### NMake targets and diagnostics
 
@@ -77,7 +79,7 @@ The script locates `patch_sqlite_misc_autoext.tcl` beside the batch file or unde
 | 2 | Obtain and extract the SQLite snapshot | `out\cache\sqlite.zip` → `out\sqlite` |
 | 3 | If ZLIB is enabled, obtain, stage and build it | `out\cache\zlib.tar.gz` → `out\sqlite\compat\zlib` |
 | 4 | If ICU is enabled, stage or validate the Conda files | `%CONDA_PREFIX%\Library` → `out\sqlite\compat\icu` |
-| 5 | Run `.target_source` from the build directory; prepare stock extensions if enabled | `out\build\tsrc` |
+| 5 | Run `.target_source`, then prepare stock extensions (`SQLITE_EXTRA=1`), then call project hooks (`USE_EXTRAS=1`) | `out\build\tsrc` |
 | 6 | Generate exports, run the requested SQLite build, regenerate the import library, then collect available artifacts | `out\build` → `out\bin`, `out\include`, `out\lib` |
 
 ### Downloads and cache
@@ -150,6 +152,14 @@ SQLITE_SOUNDEX
 | `sha1.c`, `shathree.c`, `sqlar.c`, `uint.c`, `uuid.c` | `SQLITE_ENABLE_SHA`, `SQLITE_ENABLE_SHATHREE`, `SQLITE_ENABLE_SQLAR`, `SQLITE_ENABLE_UINT`, `SQLITE_ENABLE_UUID` |
 
 In `tsrc`, [patch_sqlite_misc_autoext.tcl](tool/patch_sqlite_misc_autoext.tcl) adapts the extensions for built-in registration and generates `misc_ext_init.c`. Then [bundle_extra_src.tcl](tool/bundle_extra_src.tcl) inlines local source dependencies. The harness passes the 15 translation units and `misc_ext_init.c` to NMake through `EXTRA_SRC` and sets `SQLITE_EXTRA_AUTOEXT=sqlite3ExtraAutoExtInit`. These modules do not require separate loadable-extension DLLs.
+
+## Project extension hooks
+
+To add a project extension, place a batch file named `sqlite_ext_<name>.bat` beside `sqlite_msbuild.bat`. With `USE_EXTRAS=1` (the default), `:EXTRA_SRC_THIRD` calls each file matching `sqlite_ext_*` in that directory, with no arguments. The pattern is not restricted to `.bat`, so keep source files and notes outside that prefix. Use a harness path without spaces for hook discovery: the wildcard in the `for` loop is unquoted. The stock directory ships no matching hooks, so enabling the switch alone adds no modules.
+
+Hooks run after `out\build\tsrc` is ready and before SQLite is built, even when `SQLITE_EXTRA=0`. Use `%PROJDIR%` for project inputs and `%TSRC%` for prepared sources rather than relying on the current working directory. Append source paths to `EXTRA_SRC` and any compiler definitions to `OPT_XTRA`, preserving values from the stock stage or earlier hooks. Those changes must still be in the caller’s environment when the hook returns. A nonzero exit code stops the build before NMake compiles SQLite.
+
+If a hook relies on the stock auto-extension dispatcher, note that `:EXTRA_SRC_STOCK` adds `misc_ext_init.c` to `EXTRA_SRC` and sets `SQLITE_EXTRA_AUTOEXT`. With `SQLITE_EXTRA=0`, the hook must arrange registration itself if it needs it.
 
 ## Exports and import library
 
