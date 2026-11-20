@@ -1,68 +1,98 @@
 @echo off
 
+:: https://github.com/pchemguy/SQLitePackedBlob
 
-:: ================================ BEGIN MAIN ================================
+:: ============================================================================ MAIN BEGIN
+:: ============================================================================
+:MAIN
+
+set "ERROR_STATUS=0"
+
+call :COLOR_SCHEME
+
+echo:
+echo --------------------------------------------------------------------------------
+echo %WARN% Preparing SQLite PBLOB.
+echo:
+
 if "%SQLITE_ENABLE_PBLOB%"=="0" (
-    echo {INFO} PBLOB extension is disabled via SQLITE_ENABLE_PBLOB=0, skipping.
+    echo %INFO% PBLOB extension is disabled via SQLITE_ENABLE_PBLOB=0, skipping.
     exit /b 0
 )
-echo {INFO} PBLOB extension processing.
-
-set "MAIN=%~dp0sqlite_msbuild.bat"
 
 call :FP16_DOWNLOAD     || exit /b !ERRORLEVEL!
 call :FP16_EXTRACT      || exit /b !ERRORLEVEL!
 call :EXTRA_SRC_THIRD   || exit /b !ERRORLEVEL!
 
-echo {INFO} PBLOB extension completed.
+echo:
+echo %WARN% Completed SQLite PBLOB preparation.
+echo --------------------------------------------------------------------------------
+echo:
 
-exit /b 0
-:: ================================= END MAIN =================================
+exit /b %ERROR_STATUS%
+:: ============================================================================
+:: ============================================================================ MAIN END
 
 
+:: ############################################################################
+:: ############################################################################
+:: ############################################################################
+
+
+:: ============================================================================ FP16_DOWNLOAD BEGIN
 :: ============================================================================
 :FP16_DOWNLOAD
 
 setlocal
 set "SECTION=FP16_DOWNLOAD"
 
+set "NAME=FP16"
 set "DISTRO=%CACHEDIR%\fp16_master.zip"
 set "URL=https://github.com/Maratyszcza/FP16/archive/refs/heads/master.zip"
 
-call "%MAIN%" :DOWNLOAD__NAME_PATH_URL FP16 "%DISTRO%" "%URL%"
+call "%~dp0download_file.bat" "%NAME%" "%DISTRO%" "%URL%"
 set "ERROR_STATUS=%ERRORLEVEL%"
 
-echo ~~~~~ %SECTION% ~~~~~
 echo:
-endlocal && set "ERROR_STATUS=%ERROR_STATUS%" && exit /b %ERROR_STATUS%
+echo %INFO% ~~~~~ %SECTION% ~~~~~
+echo:
+endlocal && exit /b %ERROR_STATUS%
+:: ============================================================================
+:: ============================================================================ FP16_DOWNLOAD END
 
 
+:: ============================================================================ FP16_EXTRACT BEGIN
 :: ============================================================================
 :FP16_EXTRACT
 
 setlocal
 set "SECTION=FP16_EXTRACT"
 
+set "NAME=FP16"
 set "FLAG=%THIRDDIR%\FP16-master"
 set "SRC=%CACHEDIR%\fp16_master.zip"
 set "DST=%THIRDDIR%"
 
-call "%MAIN%" :EXTRACT__NAME_FLAG_SRC_DST FP16 "%FLAG%" "%SRC%" "%DST%"
+call "%~dp0extract_archive.bat" "%NAME%" "%FLAG%" "%SRC%" "%DST%"
 set "ERROR_STATUS=%ERRORLEVEL%"
 if not "%ERROR_STATUS%"=="0" goto :FP16_EXTRACT_EXIT
 
-echo {INFO} ========== Copy FP16 ===========
+echo %INFO% ========== Copy %NAME% ===========
 
 xcopy /H /Y /B /E /Q "%THIRDDIR%\FP16-master\include\*" "%TSRC%"
 set "ERROR_STATUS=%ERRORLEVEL%"
 
 :FP16_EXTRACT_EXIT
 
-echo ~~~~~ %SECTION% ~~~~~
 echo:
-endlocal && set "ERROR_STATUS=%ERROR_STATUS%" && exit /b %ERROR_STATUS%
+echo %INFO% ~~~~~ %SECTION% ~~~~~
+echo:
+endlocal && exit /b %ERROR_STATUS%
+:: ============================================================================
+:: ============================================================================ FP16_EXTRACT END
 
 
+:: ============================================================================ EXTRA_SRC_THIRD BEGIN
 :: ============================================================================
 :EXTRA_SRC_THIRD
 
@@ -76,25 +106,54 @@ set SOURCES=^
 set MISC_EXT=^
     "pblob.c"
 
-echo {INFO} ========== Copy MISC_EXT ===========
+echo %INFO% ========== Copy MISC_EXT ===========
 "%TCLSH_CMD%" "%SQLITEDIR%\tool\cp.tcl" %SOURCES% "%TSRC%" || exit /b !ERRORLEVEL!
 
 echo:
 
-echo {INFO} ========== Patch MISC_EXT ===========
+echo %INFO% ========== Patch MISC_EXT ===========
 cd /d "%TSRC%"
 "%TCLSH_CMD%" "%TOOLDIR%\patch_sqlite_misc_autoext.tcl" %MISC_EXT% || exit /b !ERRORLEVEL!
 
 echo:
 
-echo {INFO} ========== Bundle MISC_EXT ===========
+echo %INFO% ========== Bundle MISC_EXT ===========
 "%TCLSH_CMD%" "%TOOLDIR%\bundle_extra_src.tcl" %MISC_EXT% || exit /b !ERRORLEVEL!
 
-echo {INFO} ========== Set EXTRA_SRC for extended SQLite build ===========
+echo %INFO% ========== Set EXTRA_SRC for extended SQLite build ===========
 
 set EXTRA_SRC=%EXTRA_SRC% ^
     ""%TSRC%\pblob.c""
 
-echo ~~~~~ %SECTION% ~~~~~
+echo:
+echo %INFO% ~~~~~ %SECTION% ~~~~~
 echo:
 exit /b %ERRORLEVEL%
+:: ============================================================================
+:: ============================================================================ EXTRA_SRC_THIRD END
+
+
+:: ============================================================================ COLOR_SCHEME BEGIN
+:: ============================================================================
+:COLOR_SCHEME
+:: ---------------------------------------------------------------------
+:: Color Scheme (with NOCOLOR fallback)
+:: ---------------------------------------------------------------------
+
+if defined _ARG_NOCOLOR set "NOCOLOR=1"
+if defined NO_COLOR set "NOCOLOR=1"
+if defined NOCOLOR (
+    set  "INFO= [INFO]  "
+    set  "OKOK= [-OK-]  "
+    set  "WARN= [WARN]  "
+    set "ERROR= [ERROR] "
+) else (
+    set  "INFO=[100;92m [INFO]  [0m"
+    set  "OKOK=[103;94m [-OK-]  [0m"
+    set  "WARN=[106;35m [WARN]  [0m"
+    set "ERROR=[105;34m [ERROR] [0m"
+)
+
+exit /b 0
+:: ============================================================================
+:: ============================================================================ COLOR_SCHEME END
