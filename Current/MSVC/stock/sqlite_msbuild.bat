@@ -193,25 +193,25 @@ if not "%SQLITE_EXTRA%"=="0" (set "USE_ZLIB=1")
 
 set "MSG=USE_ICU:       %USE_ICU% - ICU is"
 if "%USE_ICU%"=="1" (
-    set "MSG=%MSG% ON."
+    set "MSG=%INFO% %MSG% ON."
 ) else (
-    set "MSG=%MSG% OFF."
+    set "MSG=%WARN% %MSG% OFF."
 )
 echo %MSG%
 
 set "MSG=USE_ZLIB:      %USE_ZLIB% - ZLIB is"
 if "%USE_ZLIB%"=="1" (
-    set "MSG=%MSG% ON."
+    set "MSG=%INFO% %MSG% ON."
 ) else (
-    set "MSG=%MSG% OFF."
+    set "MSG=%WARN% %MSG% OFF."
 )
 echo %MSG%
 
 set "MSG=SQLITE_EXTRA:  %SQLITE_EXTRA% - Misc SQLite Extensions Extra is"
 if "%SQLITE_EXTRA%"=="1" (
-    set "MSG=%MSG% ON."
+    set "MSG=%INFO% %MSG% ON."
 ) else (
-    set "MSG=%MSG% OFF."
+    set "MSG=%WARN% %MSG% OFF."
 )
 echo %MSG%
 
