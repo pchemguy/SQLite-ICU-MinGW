@@ -370,9 +370,8 @@ set "SECTION=SQLITE_DOWNLOAD"
 set "NAME=SQLite"
 set "DISTRO=%CACHEDIR%\sqlite.zip"
 set "URL=https://sqlite.org/src/zip/sqlite.zip"
-set "FLAG=sqlite/Makefile.msc"
 
-call "%~dp0download_file.bat" "%NAME%" "%DISTRO%" "%URL%" "%FLAG%"
+call "%~dp0download_file.bat" "%NAME%" "%DISTRO%" "%URL%"
 set "ERROR_STATUS=%ERRORLEVEL%"
 
 echo:
@@ -427,11 +426,9 @@ set "SECTION=ZLIB_DOWNLOAD"
 
 set "NAME=ZLIB"
 set "DISTRO=%CACHEDIR%\zlib.tar.gz"
-set "MEMBER=zlib-*/win32/Makefile.msc"
 if not exist "%DISTRO%" goto :ZLIB_DOWNLOAD_LATEST
-"%TAR%" -tf "%DISTRO%" -- "%MEMBER%" >nul
-if not "%ERRORLEVEL%"=="0" (
-    echo %ERROR% Invalid cache entry: "%DISTRO%". Move it aside before retrying.
+if exist "%DISTRO%\" (
+    echo %ERROR% Expected a file, not a directory: "%DISTRO%"
     exit /b 1
 )
 echo %OKOK% Using previously downloaded ZLIB: "%DISTRO%"
@@ -459,7 +456,7 @@ if not defined ZLIB_VERSION (
 )
 set "URL=%URL_PREFIX%/download/%ZLIB_VERSION%/zlib-%ZLIB_VERSION:~1%.tar.gz"
 
-call "%~dp0download_file.bat" "%NAME%" "%DISTRO%" "%URL%" "%MEMBER%"
+call "%~dp0download_file.bat" "%NAME%" "%DISTRO%" "%URL%"
 set "ERROR_STATUS=%ERRORLEVEL%"
 
 echo:

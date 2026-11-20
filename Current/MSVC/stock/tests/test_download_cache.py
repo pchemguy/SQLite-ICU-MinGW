@@ -1,28 +1,17 @@
 """Windows integration tests for the stock cache; no Internet, MSVC or Conda required."""
 
-import io
 import os
 from contextlib import contextmanager
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 import subprocess
-import tarfile
 from threading import Thread
-import zipfile
 
 import pytest
 
 
 pytestmark = pytest.mark.skipif(os.name != "nt", reason="executes Windows batch files")
 STOCK = Path(__file__).resolve().parents[1]
-MEMBER = "sqlite/Makefile.msc"
-
-
-def archive(member=MEMBER):
-    data = io.BytesIO()
-    with zipfile.ZipFile(data, "w") as z:
-        z.writestr(member, "test")
-    return data.getvalue()
 
 
 @contextmanager
@@ -70,17 +59,17 @@ def cmd(command, directory, **extra):
     )
 
 
-def download(target, url, member=MEMBER):
+def download(target, url):
     return cmd(
-        '"%TEST_HELPER%" "SQLite" "%TEST_TARGET%" "%TEST_URL%" "%TEST_MEMBER%"',
+        '"%TEST_HELPER%" "SQLite" "%TEST_TARGET%" "%TEST_URL%"',
         target.parent, TEST_HELPER=str(STOCK / "download_file.bat"),
-        TEST_TARGET=str(target), TEST_URL=url, TEST_MEMBER=member,
+        TEST_TARGET=str(target), TEST_URL=url,
     )
 
 
 @pytest.mark.parametrize("media", [None, "application/octet-stream"])
 def test_get_preserves_arguments_and_warm_hit_makes_no_request(tmp_path, media):
-    body = archive()
+    body = b"opaque payload"
     target = tmp_path / "cache & build !.zip"
     with endpoint(body, media) as (base, seen):
         query = "/file?a=one%20two&b=three%2Ffour!five"
@@ -88,12 +77,12 @@ def test_get_preserves_arguments_and_warm_hit_makes_no_request(tmp_path, media):
         wrapper = tmp_path / "outer.bat"
         wrapper.write_bytes(
             b'@setlocal DisableDelayedExpansion\r\n'
-            b'@call "%%TEST_HELPER%%" "SQLite" "%%TEST_TARGET%%" "%%TEST_URL%%" "%%TEST_MEMBER%%"\r\n'
+            b'@call "%%TEST_HELPER%%" "SQLite" "%%TEST_TARGET%%" "%%TEST_URL%%"\r\n'
             b'@exit /b %errorlevel%\r\n'
         )
         result = cmd('"%TEST_WRAPPER%"', tmp_path, TEST_WRAPPER=str(wrapper),
                      TEST_HELPER=str(STOCK / "download_file.bat"), TEST_TARGET=str(target),
-                     TEST_URL=base + query, TEST_MEMBER=MEMBER)
+                     TEST_URL=base + query)
         assert result.returncode == 0, (result.stdout, result.stderr)
         result = download(target, base + query)
         assert result.returncode == 0, (result.stdout, result.stderr)
@@ -103,15 +92,13 @@ def test_get_preserves_arguments_and_warm_hit_makes_no_request(tmp_path, media):
 
 def test_redirect_html_is_not_final_content_type(tmp_path):
     target = tmp_path / "sqlite.zip"
-    with endpoint(archive()) as (base, seen):
+    with endpoint(b"payload") as (base, seen):
         assert download(target, base + "/redirect").returncode == 0
         assert seen == [("GET", "/redirect"), ("GET", "/file")]
 
 
 @pytest.mark.parametrize(("body", "media", "short"), [
-    (archive(), "Text/HTML; charset=utf-8", False),
-    (b"not an archive", None, False),
-    (archive("other/Makefile.msc"), "application/zip", False),
+    (b"unexpected content", "Text/HTML; charset=utf-8", False),
     (b"partial", "application/zip", True),
 ])
 def test_failure_cannot_publish_or_prevent_retry(tmp_path, body, media, short):
@@ -120,15 +107,15 @@ def test_failure_cannot_publish_or_prevent_retry(tmp_path, body, media, short):
         assert download(target, base + "/file").returncode != 0
     assert not target.exists()
     assert not Path(str(target) + ".part").exists()
-    with endpoint(archive()) as (base, _):
+    with endpoint(b"retry") as (base, _):
         assert download(target, base + "/file").returncode == 0
 
 
-def test_suspect_legacy_cache_fails_without_network_or_overwrite(tmp_path):
+def test_existing_target_is_reused_without_network_or_overwrite(tmp_path):
     target = tmp_path / "sqlite.zip"
     target.write_bytes(b"legacy partial")
-    with endpoint(archive()) as (base, seen):
-        assert download(target, base + "/file").returncode != 0
+    with endpoint(b"replacement") as (base, seen):
+        assert download(target, base + "/file").returncode == 0
         assert not seen
     assert target.read_bytes() == b"legacy partial"
 
@@ -153,16 +140,15 @@ def test_missing_url_does_not_open_logs(tmp_path):
     assert not list(tmp_path.iterdir())
 
 
-def test_zlib_cache_hit_precedes_latest_resolution(tmp_path):
-    # Call the real label in isolation; neither helper downloads nor NMake may run.
-    with tarfile.open(tmp_path / "zlib.tar.gz", "w:gz") as z:
-        z.addfile(tarfile.TarInfo("zlib-1.4/win32/Makefile.msc"))
+@pytest.mark.parametrize(("name", "stage"), [("sqlite.zip", "SQLITE_DOWNLOAD"), ("zlib.tar.gz", "ZLIB_DOWNLOAD")])
+def test_cached_target_needs_neither_curl_nor_tar(tmp_path, name, stage):
+    (tmp_path / name).write_bytes(b"opaque cache entry")
+    (tmp_path / "download_file.bat").write_bytes((STOCK / "download_file.bat").read_bytes())
     driver = tmp_path / "stage.bat"
     driver.write_bytes(
-        b"@echo off\r\ncall :ZLIB_DOWNLOAD\r\nexit /b %errorlevel%\r\n"
+        f"@echo off\r\ncall :{stage}\r\nexit /b %errorlevel%\r\n".encode("ascii")
         + (STOCK / "sqlite_msbuild.bat").read_bytes()
     )
     result = cmd('"%TEST_DRIVER%"', tmp_path, TEST_DRIVER=str(driver),
-                 CACHEDIR=str(tmp_path), TAR=os.path.join(os.environ["SystemRoot"], "System32", "tar.exe"),
-                 PATH=str(tmp_path))
+                 CACHEDIR=str(tmp_path), TAR=str(tmp_path / "absent-tar.exe"), PATH=str(tmp_path))
     assert result.returncode == 0, (result.stdout, result.stderr)

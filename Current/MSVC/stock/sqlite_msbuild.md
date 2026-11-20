@@ -82,14 +82,14 @@ The script locates `patch_sqlite_misc_autoext.tcl` beside the batch file or unde
 
 ### Downloads and cache
 
-| Component | On a cache miss | Required archive member on download **and** reuse |
+| Component | On a cache miss | Cache target |
 |---|---|---|
-| SQLite | Fetch `https://sqlite.org/src/zip/sqlite.zip` (a source snapshot, not a pinned release). | `sqlite/Makefile.msc` |
-| ZLIB | Follow `https://github.com/madler/zlib/releases/latest` and record the effective URL in `out\cache\zlib-release-url.txt`. Check cURL's status and require this repository's `/releases/tag/v<version>` with a dotted numeric version before requesting `/releases/download/v<version>/zlib-<version>.tar.gz`. | `zlib-*/win32/Makefile.msc` |
+| SQLite | Fetch `https://sqlite.org/src/zip/sqlite.zip` (a source snapshot, not a pinned release). | `out\cache\sqlite.zip` |
+| ZLIB | Follow `https://github.com/madler/zlib/releases/latest` and record the effective URL in `out\cache\zlib-release-url.txt`. Check cURL's status and require this repository's `/releases/tag/v<version>` with a dotted numeric version before requesting `/releases/download/v<version>/zlib-<version>.tar.gz`. | `out\cache\zlib.tar.gz` |
 
-Both archive paths are checked **before** network access. A valid cached ZLIB archive skips even the latest-release lookup. An invalid existing archive fails the build and is left in place: inspect it and move it aside before retrying. There is no automatic refresh, hash check, ETag check or version comparison. Archive-member validation checks layout, not provenance. For repeatable builds, retain the exact archives and record the Conda package versions, MSVC toolset and build settings.
+If the target file exists, the download stage returns success without inspecting its contents or contacting the server. For ZLIB this also skips the latest-release lookup. There is no automatic refresh, hash check, ETag check or version comparison. For repeatable builds, retain the exact archives and record the Conda package versions, MSVC toolset and build settings.
 
-The shared [download_file.bat](download_file.bat) interface is `download_file.bat "NAME" "TARGET" "URL" [ARCHIVE_MEMBER]`. On a miss, it downloads into `<target>.part` using a redirect-following GET with retries, not a separate HEAD request. It requires a successful cURL exit and final HTTP status `200`, rejects `text/html` irrespective of case or media-type parameters, and checks the optional archive member before renaming the partial file to the final name. A missing or generic content type is not by itself an error. A leftover `.part` is never a cache hit. Without an archive-member argument, an existing regular target is reused without inspecting its contents.
+The shared [download_file.bat](download_file.bat) interface is `download_file.bat "NAME" "TARGET" "URL"`. On a miss, it downloads into `<target>.part` using a redirect-following GET with retries, not a separate HEAD request. It requires a successful cURL exit and final HTTP status `200` and rejects `text/html` irrespective of case or media-type parameters before renaming the partial file to the final name. A missing or generic content type is not by itself an error. A leftover `.part` is never a cache hit.
 
 Download progress and errors go to the console on stderr. In `out\cache`, the response-header chain is written to `sqlite.log` or `zlib.tar.log`; final status and content type go to `sqlite.zip.response.log` or `zlib.tar.gz.response.log`. These are distinct from the release URL log. The harness removes old `out\stdout.log` and `out\stderr.log` during setup; it does not record a general build transcript in them.
 
@@ -173,7 +173,7 @@ The export list is not independently validated, and the temporary list is opened
 
 | Situation | Action |
 |---|---|
-| The downloader reports an invalid cache entry | Move aside the named final archive and retry. A `.part` file is not the completed archive. |
+| You need to download a cached file again | Move the existing target file out of the cache, then rerun the build. |
 | SQLite extraction was interrupted | Retry with the valid cached ZIP. If the tree has a marker but fails the makefile check, move the incomplete `out\sqlite` tree aside and retry; it also contains the staged dependencies. |
 | A final ICU or ZLIB tree is unmarked or fails validation | Move the affected `compat\icu` or `compat\zlib` tree aside. This includes trees left by older harness versions. Do not create a marker by hand or fill missing files from another installation. |
 | Staging stopped and left `icu.stage` or `zlib.stage` | Inspect the named staging directory and move it aside before retrying. Fresh staging requires a new directory; the harness does not merge its contents. |
