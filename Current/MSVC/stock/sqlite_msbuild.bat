@@ -371,8 +371,7 @@ set "NAME=SQLite"
 set "DISTRO=%CACHEDIR%\sqlite.zip"
 set "URL=https://sqlite.org/src/zip/sqlite.zip"
 
-set "DOWNLOADER=%~dp0download_file.bat"
-call "%%DOWNLOADER%%" "%%NAME%%" "%%DISTRO%%" "%%URL%%" "sqlite/Makefile.msc"
+call "%~dp0download_file.bat" "%NAME%" "%DISTRO%" "%URL%" "sqlite/Makefile.msc"
 set "ERROR_STATUS=%ERRORLEVEL%"
 
 echo:
@@ -458,8 +457,7 @@ if not defined ZLIB_VERSION (
 )
 set "URL=%URL_PREFIX%/download/%ZLIB_VERSION%/zlib-%ZLIB_VERSION:~1%.tar.gz"
 
-set "DOWNLOADER=%~dp0download_file.bat"
-call "%%DOWNLOADER%%" "%%NAME%%" "%%DISTRO%%" "%%URL%%" "%%MEMBER%%"
+call "%~dp0download_file.bat" "%NAME%" "%DISTRO%" "%URL%" "%MEMBER%"
 set "ERROR_STATUS=%ERRORLEVEL%"
 
 echo:

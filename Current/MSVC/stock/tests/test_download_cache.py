@@ -84,7 +84,7 @@ def test_get_preserves_arguments_and_warm_hit_makes_no_request(tmp_path, media):
     target = tmp_path / "cache & build !.zip"
     with endpoint(body, media) as (base, seen):
         query = "/file?a=one%20two&b=three%2Ffour!five"
-        # Match the production callers' second-pass expansion at the CALL boundary.
+        # Keep percent escapes literal when this test passes its URL through CALL.
         wrapper = tmp_path / "outer.bat"
         wrapper.write_bytes(
             b'@setlocal DisableDelayedExpansion\r\n'
