@@ -466,14 +466,8 @@ set "NAME=ZLIB"
 set "FLAG=%ZLIBDIR%\win32\Makefile.msc"
 set "SRC=%CACHEDIR%\zlib.tar.gz"
 set "DST=%ZLIBDIR%.stage"
-if exist "%ZLIBDIR%" (
-    if not exist "%FLAG%" goto :ZLIB_EXTRACT_INCOMPLETE
-    if exist "%FLAG%\" goto :ZLIB_EXTRACT_INCOMPLETE
-    echo %OKOK% ===== Using previously extracted ZLIB =====
-    exit /b 0
-)
-mkdir "%DST%" || goto :ZLIB_EXTRACT_FAILED
-call "%~dp0extract_archive.bat" "%NAME%" "%FLAG%" "%SRC%" "%DST%" || goto :ZLIB_EXTRACT_FAILED
+call "%~dp0extract_archive.bat" "%NAME%" "%FLAG%" "%SRC%" "%DST%" /stage || exit /b !ERRORLEVEL!
+if not exist "%DST%" goto :ZLIB_EXTRACT_DONE
 
 set "ROOT="
 for /f "usebackq eol=| delims=" %%D in (`dir /b /a "%DST%"`) do (
@@ -486,10 +480,10 @@ if not exist "%DST%\%ROOT%\win32\Makefile.msc" goto :ZLIB_EXTRACT_BAD_ROOT
 if exist "%DST%\%ROOT%\win32\Makefile.msc\" goto :ZLIB_EXTRACT_BAD_ROOT
 if exist "%ZLIBDIR%" goto :ZLIB_EXTRACT_INCOMPLETE
 move "%DST%\%ROOT%" "%ZLIBDIR%" || goto :ZLIB_EXTRACT_FAILED
-if not exist "%FLAG%" goto :ZLIB_EXTRACT_INCOMPLETE
 rd "%DST%" || goto :ZLIB_EXTRACT_FAILED
 echo %OKOK% Staged "%ROOT%" in "%ZLIBDIR%".
 
+:ZLIB_EXTRACT_DONE
 echo:
 echo %INFO% ~~~~~ %SECTION% ~~~~~
 echo:

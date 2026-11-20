@@ -95,15 +95,15 @@ Download progress and errors go to the console on stderr. In `out\cache`, the re
 
 ### SQLite extraction
 
-[extract_archive.bat](extract_archive.bat) takes `"NAME" "FLAG" "SRC" "DST"`. `FLAG` is the on-disk path of a file or directory supplied by the archive. Paths are resolved relative to the caller. After checking that the archive file and destination directory exist, the helper skips extraction if `FLAG` exists. Otherwise it runs `"%TAR%" -x -f "%SRC%" -C "%DST%"` without changing the working directory and returns tar's status. When called independently with `TAR` unset, it uses `%SystemRoot%\System32\tar.exe`.
+[extract_archive.bat](extract_archive.bat) takes `"NAME" "FLAG" "SRC" "DST"`. `FLAG` is the on-disk path of a file or directory supplied by the archive. Paths are resolved relative to the caller. After checking that the archive file and destination directory exist, the helper skips extraction if `FLAG` exists. Otherwise it runs `"%TAR%" -x -f "%SRC%" -C "%DST%"` without changing the working directory and returns tar's status. When called independently with `TAR` unset, it uses `%SystemRoot%\System32\tar.exe`. With the optional `/stage` argument, the destination must not already exist; the helper creates it only when extraction is needed.
 
 For SQLite, the flag is `out\sqlite\Makefile.msc`, supplied by `sqlite.zip`. Its presence skips extraction; it does not prove that every other file was extracted.
 
 ### ZLIB staging and build
 
-On first use, `:ZLIB_EXTRACT` extracts into a fresh `out\sqlite\compat\zlib.stage`. It requires exactly one top-level entry: a directory named `zlib-<dotted-numeric-version>` containing `win32\Makefile.msc`. It moves that directory to `compat\zlib` and checks that the makefile exists at its final path. No online lookup is needed to determine the extracted directory name.
+On first use, `:ZLIB_EXTRACT` extracts into a fresh `out\sqlite\compat\zlib.stage`. It requires exactly one top-level entry: a directory named `zlib-<dotted-numeric-version>` containing `win32\Makefile.msc`. It moves that directory to `compat\zlib`. No online lookup is needed to determine the extracted directory name.
 
-Later runs reuse `compat\zlib` if `win32\Makefile.msc` exists there as a file. If `compat\zlib\zlib1.dll` is absent, the harness invokes `Makefile.msc`'s `zlib` target; otherwise it reuses the DLL.
+The extractor requires the cached archive on every run. If `compat\zlib\win32\Makefile.msc` already exists, it skips extraction without creating `zlib.stage`. If `compat\zlib\zlib1.dll` is absent, the harness invokes `Makefile.msc`'s `zlib` target; otherwise it reuses the DLL.
 
 ### Conda ICU staging
 
