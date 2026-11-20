@@ -88,6 +88,10 @@ if "%SQLITE_EXTRA%"=="1" (
     call :EXTRA_SRC_STOCK     || exit /b !ERRORLEVEL!
 )
 
+if "%USE_EXTRAS%"=="1" (
+    call :EXTRA_SRC_THIRD     || exit /b !ERRORLEVEL!
+)
+
 call :SQLITE_BUILD %*         || exit /b !ERRORLEVEL!
 call :COLLECT_BINARIES
 
@@ -190,6 +194,7 @@ if not defined USE_ICU       (set "USE_ICU=1")
 if not defined USE_ZLIB      (set "USE_ZLIB=1")
 if not defined SQLITE_EXTRA  (set "SQLITE_EXTRA=1")
 if not "%SQLITE_EXTRA%"=="0" (set "USE_ZLIB=1")
+if not defined USE_EXTRAS    (set "USE_EXTRAS=1")
 
 set "MSG=USE_ICU:       %USE_ICU% - ICU is"
 if "%USE_ICU%"=="1" (
@@ -209,6 +214,14 @@ echo %MSG%
 
 set "MSG=SQLITE_EXTRA:  %SQLITE_EXTRA% - Misc SQLite Extensions Extra is"
 if "%SQLITE_EXTRA%"=="1" (
+    set "MSG=%INFO% %MSG% ON."
+) else (
+    set "MSG=%WARN% %MSG% OFF."
+)
+echo %MSG%
+
+set "MSG=USE_EXTRAS:    %USE_EXTRAS% - Extras are"
+if "%USE_EXTRAS%"=="1" (
     set "MSG=%INFO% %MSG% ON."
 ) else (
     set "MSG=%WARN% %MSG% OFF."
@@ -729,6 +742,25 @@ echo:
 exit /b %ERRORLEVEL%
 :: ============================================================================
 :: ============================================================================ EXTRA_SRC_STOCK END
+
+
+:: ============================================================================ EXTRA_SRC_THIRD BEGIN
+:: ============================================================================
+:EXTRA_SRC_THIRD
+
+set "SECTION=EXTRA_SRC_THIRD"
+
+for %%P in (%~dp0sqlite_ext_*) do (
+    echo {INFO} ========== Processing %%~P ==========
+    call "%%~P" || exit /b !ERRORLEVEL!
+)
+
+echo:
+echo %INFO% ~~~~~ %SECTION% ~~~~~
+echo:
+exit /b %ERRORLEVEL%
+:: ============================================================================
+:: ============================================================================ EXTRA_SRC_THIRD END
 
 
 :: ============================================================================ SQLITE_BUILD BEGIN
