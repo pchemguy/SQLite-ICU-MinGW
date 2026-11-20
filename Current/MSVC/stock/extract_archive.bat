@@ -4,8 +4,8 @@
 :: Extracts archive using Windows Tar.
 ::
 :: %~1 - Name.
-:: %~2 - Caller-created flag (file or directory). After checking the archive
-::       and destination, skip extraction if the flag exists.
+:: %~2 - Path to a file or directory from the archive. If it already exists
+::       on disk, skip extraction.
 :: %~3 - Archive path - MUST exist.
 :: %~4 - Extraction directory path - MUST exist.
 ::

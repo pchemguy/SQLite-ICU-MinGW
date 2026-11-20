@@ -95,15 +95,15 @@ Download progress and errors go to the console on stderr. In `out\cache`, the re
 
 ### SQLite extraction
 
-[extract_archive.bat](extract_archive.bat) takes `"NAME" "FLAG" "SRC" "DST"`. It resolves paths relative to the caller, requires an existing archive file and destination directory, then skips extraction if the caller's flag exists. Otherwise it runs `"%TAR%" -x -f "%SRC%" -C "%DST%"` without changing the working directory and returns tar's status. When called independently with `TAR` unset, it uses `%SystemRoot%\System32\tar.exe`. The helper **does not create the flag**; its caller determines when the result is complete.
+[extract_archive.bat](extract_archive.bat) takes `"NAME" "FLAG" "SRC" "DST"`. `FLAG` is the on-disk path of a file or directory supplied by the archive. Paths are resolved relative to the caller. After checking that the archive file and destination directory exist, the helper skips extraction if `FLAG` exists. Otherwise it runs `"%TAR%" -x -f "%SRC%" -C "%DST%"` without changing the working directory and returns tar's status. When called independently with `TAR` unset, it uses `%SystemRoot%\System32\tar.exe`.
 
-For SQLite, the flag is `out\sqlite\.sqlite-extracted`. After extraction the harness requires `out\sqlite\Makefile.msc` to be a file before writing the flag. A makefile unpacked before an interrupted run is not sufficient for reuse. Conversely, a marker with a missing makefile is an error, not a valid source tree.
+For SQLite, the flag is `out\sqlite\Makefile.msc`, supplied by `sqlite.zip`. Its presence skips extraction; it does not prove that every other file was extracted.
 
 ### ZLIB staging and build
 
-On first use, `:ZLIB_EXTRACT` extracts into a fresh `out\sqlite\compat\zlib.stage`. It requires exactly one top-level entry: a directory named `zlib-<dotted-numeric-version>` containing `win32\Makefile.msc`. It writes `.zlib-staged` inside that directory, moves that specific directory to `compat\zlib`, and checks the final marker and makefile. No online lookup is needed to determine the extracted directory name.
+On first use, `:ZLIB_EXTRACT` extracts into a fresh `out\sqlite\compat\zlib.stage`. It requires exactly one top-level entry: a directory named `zlib-<dotted-numeric-version>` containing `win32\Makefile.msc`. It moves that directory to `compat\zlib` and checks that the makefile exists at its final path. No online lookup is needed to determine the extracted directory name.
 
-A final tree is reusable only with both `.zlib-staged` and `win32\Makefile.msc`. If `compat\zlib\zlib1.dll` is absent, the harness invokes `Makefile.msc`'s `zlib` target; otherwise it reuses the DLL. Extraction completion and compilation completion are separate checks.
+Later runs reuse `compat\zlib` if `win32\Makefile.msc` exists there as a file. If `compat\zlib\zlib1.dll` is absent, the harness invokes `Makefile.msc`'s `zlib` target; otherwise it reuses the DLL.
 
 ### Conda ICU staging
 
@@ -174,8 +174,8 @@ The export list is not independently validated, and the temporary list is opened
 | Situation | Action |
 |---|---|
 | You need to download a cached file again | Move the existing target file out of the cache, then rerun the build. |
-| SQLite extraction was interrupted | Retry with the valid cached ZIP. If the tree has a marker but fails the makefile check, move the incomplete `out\sqlite` tree aside and retry; it also contains the staged dependencies. |
-| A final ICU or ZLIB tree is unmarked or fails validation | Move the affected `compat\icu` or `compat\zlib` tree aside. This includes trees left by older harness versions. Do not create a marker by hand or fill missing files from another installation. |
+| SQLite extraction was interrupted | Move the incomplete `out\sqlite` tree aside and rerun with the cached ZIP. Otherwise an already extracted `Makefile.msc` will cause extraction to be skipped. The tree also contains staged dependencies. |
+| A final ICU or ZLIB tree fails validation | Move the affected `compat\icu` or `compat\zlib` tree aside. Do not manufacture the missing files. |
 | Staging stopped and left `icu.stage` or `zlib.stage` | Inspect the named staging directory and move it aside before retrying. Fresh staging requires a new directory; the harness does not merge its contents. |
 | You need a different architecture, feature configuration, dependency version or clean source snapshot | Start in a separate clean base. Replacing a cached archive alone does not invalidate an already completed extraction or rebuild its dependent artifacts. |
 
@@ -189,4 +189,4 @@ From `Current\MSVC\stock` in a Windows MSVC developer prompt with Python and pyt
 python -m pytest tests
 ```
 
-The [cache tests](tests/test_download_cache.py) use a loopback HTTP server; the [preflight tests](tests/test_msbuild_check.py) cover target selection and PE-machine checking; the [staging tests](tests/test_dependency_staging.py) cover explicit extraction destinations, interrupted state, ZLIB release handling and ICU set validation. Some cases require real MSVC tools. These tests do not replace a native end-to-end build and link test for each target architecture.
+The [cache tests](tests/test_download_cache.py) use a loopback HTTP server; the [preflight tests](tests/test_msbuild_check.py) cover target selection and PE-machine checking; the [staging tests](tests/test_dependency_staging.py) cover explicit extraction destinations, reuse of extracted files, ZLIB release handling and ICU set validation. Some cases require real MSVC tools. These tests do not replace a native end-to-end build and link test for each target architecture.
