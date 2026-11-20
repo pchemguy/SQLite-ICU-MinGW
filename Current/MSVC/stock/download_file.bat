@@ -1,20 +1,19 @@
 @echo off
 
 ::
-:: Downloads file via cURL. A completed cache entry is reused offline.
+:: Downloads a missing file via cURL. An existing target file is reused as is.
 ::
 :: Arguments:
 ::     %1 - Name (logging label).
 ::     %2 - Full download path.
 ::     %3 - Download URL.
-::     %4 - Optional archive member pattern to validate with Windows tar.
 ::
 :: Examples:
 ::     set "NAME=SQLite"
 ::     set "DISTRO=%~dp0sqlite.zip"
 ::     set "URL=https://sqlite.org/src/zip/sqlite.zip"
 ::     
-::     call "%~dp0download_file.bat" "%NAME%" "%DISTRO%" "%URL%" "sqlite/Makefile.msc"
+::     call "%~dp0download_file.bat" "%NAME%" "%DISTRO%" "%URL%"
 
 
 :: ============================================================================ MAIN BEGIN
@@ -27,7 +26,6 @@ call :COLOR_SCHEME
 set "NAME=%~1"
 set "TARGET=%~f2"
 set "URL=%~3"
-set "FLAG=%~4"
 if not defined NAME goto :USAGE
 if "%~2"=="" goto :USAGE
 if not defined URL goto :USAGE
@@ -36,19 +34,12 @@ if exist "%TARGET%\" (
     exit /b 1
 )
 
-if not defined TAR set "TAR=%SystemRoot%\System32\tar.exe"
 if not exist "%TARGET%" goto :FETCH
-if defined FLAG (
-    "%TAR%" -tf "%TARGET%" -- "%FLAG%" >nul || (
-        echo %ERROR% Invalid cache entry: "%TARGET%". Move it aside before retrying.
-        exit /b 1
-    )
-)
 echo %OKOK% Using previously downloaded "%NAME%": "%TARGET%"
 exit /b 0
 
 :USAGE
-echo %ERROR% Usage: "%~nx0" "NAME" "TARGET" "URL" [ARCHIVE_FLAG]
+echo %ERROR% Usage: "%~nx0" "NAME" "TARGET" "URL"
 exit /b 1
 :: ============================================================================
 :: ============================================================================ MAIN END
@@ -84,13 +75,6 @@ findstr /b /c:"200 " "%META%" >nul || goto :BAD_RESPONSE
 findstr /i /r /b /c:"200 [ 	]*text/html[; 	]" "%META%" >nul
 if errorlevel 2 goto :BAD_RESPONSE
 if not errorlevel 1 goto :BAD_RESPONSE
-
-if defined FLAG (
-    "%TAR%" -tf "%PART%" -- "%FLAG%" >nul || (
-        echo %ERROR% Invalid downloaded archive for "%NAME%".
-        goto :FAILED
-    )
-)
 
 :: REN stays in the same directory and does not overwrite an existing target.
 ren "%PART%" "%~nx2"
