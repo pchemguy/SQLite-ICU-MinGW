@@ -25,7 +25,12 @@ echo ---------------------------------------------------------------------------
 echo %WARN% Extracting archive.
 echo:
 
-if "%~4"=="" goto :EXTRACT_USAGE
+if "%~4"=="" (
+    set "ERROR_STATUS=1"
+    echo %ERROR% Missing required parameters.
+    echo %INFO%  USAGE: call extract_archive.bat "NAME" "FLAG" "SRC" "DST"
+    goto :EXTRACT_EXIT
+)
 
 set "NAME=%~1"
 set "FLAG=%~f2"
@@ -64,12 +69,6 @@ if "%ERROR_STATUS%"=="0" (
 ) else (
     echo %ERROR% Failed to extract %NAME%. Error Code: %ERROR_STATUS%.
 )
-goto :EXTRACT_EXIT
-
-:EXTRACT_USAGE
-set "ERROR_STATUS=1"
-echo %ERROR% Missing required parameters.
-echo %INFO%  USAGE: call extract_archive.bat "NAME" "FLAG" "SRC" "DST"
 
 :EXTRACT_EXIT
 
