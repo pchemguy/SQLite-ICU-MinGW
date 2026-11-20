@@ -4,8 +4,8 @@
 :: Extracts archive using Windows Tar.
 ::
 :: %~1 - Name.
-:: %~2 - Path to a file or directory from the archive. If it already exists
-::       on disk, skip extraction.
+:: %~2 - Path to a file or directory from the archive.
+::       If it already exists on disk, skip extraction.
 :: %~3 - Archive path - MUST exist.
 :: %~4 - Extraction directory path - MUST exist.
 ::
@@ -14,7 +14,7 @@
 :: ============================================================================
 :MAIN
 
-SetLocal EnableExtensions DisableDelayedExpansion
+setlocal EnableExtensions EnableDelayedExpansion
 
 set "ERROR_STATUS=0"
 

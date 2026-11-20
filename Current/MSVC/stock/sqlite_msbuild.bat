@@ -47,7 +47,7 @@ exit /b %ERRORLEVEL%
 :: ============================================================================
 :MAIN
 
-SetLocal EnableExtensions EnableDelayedExpansion
+setlocal EnableExtensions EnableDelayedExpansion
 
 set "ERROR_STATUS=0"
 

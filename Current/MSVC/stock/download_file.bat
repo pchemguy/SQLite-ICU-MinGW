@@ -20,7 +20,7 @@
 :: ============================================================================
 :MAIN
 
-setlocal EnableExtensions DisableDelayedExpansion
+setlocal EnableExtensions EnableDelayedExpansion
 call :COLOR_SCHEME
 
 set "NAME=%~1"
