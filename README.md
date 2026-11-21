@@ -1,6 +1,13 @@
 This project explores the building process of the SQLite library and the SQLiteODBC driver on Windows with two toolchains: Microsoft Visual C++ Build Tools (MSVC) and MSYS2/MinGW. The particular focus is on the SQLite-specific building workflow and customizing/extending the building process. The project provides several scripts producing custom builds of the SQLite library and the SQLiteODBC driver. These builds incorporate extended SQLite-related functionality, and the scripts can be used as templates and further tailored to specific needs.
 
-For native Linux builds, the Bash/GCC harness produces the SQLite CLI, shared library and static archive with optional built-in extensions. It uses system ICU and zlib packages. [Linux build instructions and presets](Current/GCC/README.md)
+### Current SQLite build harnesses
+
+Both harnesses build the SQLite CLI and libraries with presets for ICU, stock SQLite modules, and the ICUex, PBLOB and RegexpMatches project extensions.
+
+| Directory and build guide | Workflow |
+| --- | --- |
+| [./Current/GCC](./Current/GCC/README.md) | Bash and GCC on Linux build shared and static libraries using system ICU and zlib when selected. The optional Conda wrapper installs the custom library and verifies it from Python. |
+| [./Current/MSVC](./Current/MSVC/README.md) | Run the CMD harness from an x86 or x64 MSVC Native Tools Command Prompt to build the DLL, import library and static library. The default build uses ICU from the active Conda environment and builds or reuses zlib. |
 
 ### Windows features
 
