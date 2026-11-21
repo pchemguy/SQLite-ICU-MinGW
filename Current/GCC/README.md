@@ -13,6 +13,17 @@ out/bin/sqlite3 :memory: "SELECT str_casefold('ABC'), typeof(pblob_pack('[1,2]')
 
 The full build returns `abc|blob|["12","3"]`. The script resolves its paths from its own directory and can be invoked from another working directory.
 
+### Use the build from Conda Python
+
+```bash
+./sqlite_build_conda.sh --preset full
+out/conda/bin/python -c 'import sqlite3; print(sqlite3.sqlite_version)'
+```
+
+The wrapper accepts the same presets and defaults to `full`. It runs the bundled Conda bootstrap with both manifests when `out/conda/bin/python` is missing. Subsequent runs reuse that Python. The bootstrap also creates `out/conda_activate.sh` for interactive use. [Bootstrap manifests](tool/conda_env)
+
+Each run removes `out/bin` and `out/build`, retains the download cache and SQLite source tree, and invokes `sqlite_build.sh` with the selected preset. The wrapper atomically replaces the file behind Conda's `lib/libsqlite3.so.0`, preserving its symlinks and package cache. It then runs the prefix's Python, queries SQLite, checks the loaded library path in `/proc/self/maps`, and compares the file with the build output. A failed verification restores the previous library. Set `OUT_DIR` to use another dedicated output root. The prefix is always `$OUT_DIR/conda`.
+
 ### Presets and switches
 
 | `--preset` | Upstream ICU | Stock modules | Project extensions | Required system development packages |
@@ -22,7 +33,7 @@ The full build returns `abc|blob|["12","3"]`. The script resolves its paths from
 | `bare-icu-ext` | On | All 15 | Off | ICU, zlib |
 | `full` (default) | On | All 15 | ICUex, PBLOB, RegexpMatches | ICU, zlib |
 
-Environment switches accept `0` or `1` and override the preset.
+`./sqlite_build.sh --check-preset NAME` checks a preset name without starting a build. Environment switches accept `0` or `1` and override the preset.
 
 | Variable | Effect |
 |---|---|
