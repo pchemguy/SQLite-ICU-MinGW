@@ -21,6 +21,11 @@ declare -a header_archives=() prepare_steps=() smoke_tests=()
 
 # Run the requested action and publish the SQLite package after verification.
 main() {
+    if [[ ${1:-} == --check-preset ]]; then
+        (( $# == 2 )) || die '--check-preset requires exactly one name'
+        select_preset "$2"
+        return
+    fi
     parse_arguments "$@"
     if [[ $action == help ]]; then
         usage
@@ -28,13 +33,16 @@ main() {
     fi
 
     select_preset "$preset"
+    base=$(CDPATH='' cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
+    # shellcheck source=tool/build_root.sh
+    source "$base/tool/build_root.sh"
     resolve_paths
     if [[ $action == clean ]]; then
         clean_output_root
         return
     fi
 
-    open_build_root
+    open_build_root build
     resolve_build_settings
     load_build_helpers
     ensure_dependencies
@@ -80,6 +88,7 @@ parse_arguments() {
 # Print the supported command-line forms to standard output.
 usage() {
     printf '%s\n' 'Usage: sqlite_build.sh [--preset bare|bare-icu|bare-icu-ext|full] [clean]' \
+        '       sqlite_build.sh --check-preset NAME' \
         'The default is full. OUT_DIR selects the local build and install root.'
 }
 
@@ -100,51 +109,23 @@ select_preset() {
     esac
 }
 
-# Resolve the driver and output paths, including the entries owned by clean.
+# Resolve the output root and the paths used by the SQLite build.
 resolve_paths() {
-    base=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
-    out=$(realpath -m -- "${OUT_DIR:-$base/out}")
-    [[ $out != / ]] || die 'OUT_DIR must identify a dedicated build root.'
+    resolve_output_root
     cache=$out/cache
     src=$out/sqlite
     build=$out/build
     tsrc=$build/tsrc
     sqlite_zip=$cache/sqlite.zip
     extension_stamp=$tsrc/.extensions-ready
-    managed_paths=("$build" "$src" "$out/.packages" "$out/package" "$out/bin" "$out/include" "$out/lib")
 }
 
 # Lock an existing managed root and remove its build outputs, retaining the cache.
 clean_output_root() {
     if [[ ! -d $out ]]; then return 0; fi
     lock_output_root
-    check_output_ownership
+    check_output_ownership clean
     rm -rf -- "${managed_paths[@]}"
-}
-
-# Create and lock the build root, then establish ownership of its output paths.
-open_build_root() {
-    mkdir -p -- "$out"
-    lock_output_root
-    check_output_ownership
-    [[ $out != *' '* ]] || die 'SQLite configure requires a space-free OUT_DIR.'
-}
-
-# Hold the output directory's exclusive lock until this driver exits.
-lock_output_root() {
-    exec {lockfd}>"$out/.sqlite-build.lock"
-    flock "$lockfd"
-}
-
-# Recognize a marked root or claim an unused build root while holding its lock.
-check_output_ownership() {
-    local marker=$out/.sqlite-gcc-root path
-    if [[ -f $marker ]]; then return 0; fi
-    if [[ $action == clean ]]; then die "Unmanaged output directory: $out"; fi
-    for path in "${managed_paths[@]}"; do
-        [[ ! -e $path && ! -L $path ]] || die "Existing unmanaged path: $path"
-    done
-    touch "$marker"
 }
 
 # Apply preset defaults to unset feature switches and resolve the toolchain.
