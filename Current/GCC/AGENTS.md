@@ -2,15 +2,17 @@
 
 `./sqlite_build.sh` builds the SQLite CLI and shared and static libraries on Linux. The `./sqlite_ext_*.sh` hooks register project extensions. Build helpers live in `./tool/`, the Conda bootstrap in `./tool/conda_env/`, and preset tests in `./tests/`.
 
-## Conda Python with custom SQLite
+## Setup recipe for Conda Python with custom SQLite
 
-Install and verify the requested preset in `./out/conda` with [./sqlite_build_conda.sh](./sqlite_build_conda.sh). Select `full` for all project extensions.
+Use this recipe only when the user requests a Conda environment with custom SQLite or the current task requires one. Skip it during routine agent startup.
+
+If `./out/conda/bin/python` already provides the required build, use it directly for scripts and tests. For initial setup or a rebuild, run [./sqlite_build_conda.sh](./sqlite_build_conda.sh) with the requested preset. Select `full` for all project extensions.
 
 ```bash
 ./sqlite_build_conda.sh --preset full && source ./out/conda_activate.sh
 ```
 
-Use `./out/conda/bin/python` directly for scripts and tests. [Setup and extension checks](./README.md#use-the-build-from-conda-python)
+[Setup and extension checks](./README.md#use-the-build-from-conda-python)
 
 ## Bash design
 
