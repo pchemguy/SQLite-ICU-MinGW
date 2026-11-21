@@ -9,13 +9,34 @@ import pytest
 
 
 BASE = Path(__file__).resolve().parents[1]
+PROCEDURES = BASE / "tool/procedures.sh"
 SOURCES = BASE / "tool/sources.sh"
 DEPENDENCIES = BASE / "tool/dependencies.sh"
 
 
 def shell(script, *args, env=None):
-    return subprocess.run(["/bin/bash", "-euc", 'die() { echo "$*" >&2; exit 1; }\n' + script,
-                           "test", *map(str, args)], env=env, capture_output=True, text=True)
+    return subprocess.run(["/bin/bash", "-euc", 'source "$1"; shift\n' + script,
+                           "test", PROCEDURES, *map(str, args)], env=env, capture_output=True, text=True)
+
+
+def test_zero_argument_call_preserves_state_output_and_status():
+    result = shell("""record() {
+    value=updated
+    printf '%s' "$#"
+    return 37
+}
+value=initial
+status=0
+call 'record()' || status=$?
+printf '|%s|%s' "$value" "$status"
+""")
+    assert result.returncode == 0 and result.stdout == "0|updated|37"
+
+
+@pytest.mark.parametrize("invocation", ["call", "call usage", "call 'usage()' arg"])
+def test_call_rejects_invalid_notation(invocation):
+    result = shell(invocation)
+    assert result.returncode == 1 and "Expected a zero-argument call" in result.stderr
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -100,7 +121,7 @@ fi
 """)
     calls = tmp_path / "calls"
     env = dict(os.environ, PATH=str(tmp_path), STATE=str(tmp_path / "present"), CALLS=str(calls), FAIL="0")
-    script = 'source "$1"; USE_ICU=$2; SQLITE_EXTRA=$3; ensure_dependencies'
+    script = """source "$1"; USE_ICU=$2; SQLITE_EXTRA=$3; call 'ensure_dependencies()'"""
     assert shell(script, DEPENDENCIES, 0, 0, env=env).returncode == 0
     assert not calls.exists()
     assert shell(script, DEPENDENCIES, 1, 1, env=dict(env, FAIL="1")).returncode
