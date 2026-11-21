@@ -22,53 +22,40 @@ declare -a header_archives=() prepare_steps=() smoke_tests=()
 # ============================================================================ MAIN BEGIN
 # Run the requested action and publish the SQLite package after verification.
 main() {
-    load_build_helpers "${BASH_SOURCE[0]}"
     parse_arguments "$@"
     if [[ $action == help ]]; then
-        call 'usage()'
+        usage
         return 0
     fi
 
     select_preset "$preset"
-    call 'resolve_paths()'
+    resolve_paths
     if [[ $action == clean ]]; then
-        call 'clean_output_root()'
+        clean_output_root
         return
     fi
 
-    call 'open_build_root()'
-    call 'resolve_build_settings()'
-    call 'ensure_dependencies()'
-    call 'create_workspace()'
-    call 'prepare_sqlite_source()'
+    open_build_root
+    resolve_build_settings
+    load_build_helpers
+    ensure_dependencies
+    create_workspace
+    prepare_sqlite_source
 
-    call 'set_build_options()'
-    call 'collect_extensions()'
-    call 'report_build_settings()'
-    call 'write_build_inputs()'
-    call 'configure_sqlite_if_needed()'
-    call 'prepare_target_sources()'
-    call 'compile_sqlite()'
+    set_build_options
+    collect_extensions
+    report_build_settings
+    write_build_inputs
+    configure_sqlite_if_needed
+    prepare_target_sources
+    compile_sqlite
 
-    call 'stage_package()'
-    call 'verify_package()'
-    call 'publish_package()'
-    call 'report_success()'
+    stage_package
+    verify_package
+    publish_package
+    report_success
 }
 # ============================================================================ MAIN END
-
-# ============================================================================ LOAD_BUILD_HELPERS BEGIN
-# Locate the driver from $1 and load the procedure, dependency, and source helpers.
-load_build_helpers() {
-    base=$(cd -- "$(dirname -- "$1")" && pwd -P)
-    # shellcheck source=tool/procedures.sh
-    source "$base/tool/procedures.sh"
-    # shellcheck source=tool/dependencies.sh
-    source "$base/tool/dependencies.sh"
-    # shellcheck source=tool/sources.sh
-    source "$base/tool/sources.sh"
-}
-# ============================================================================ LOAD_BUILD_HELPERS END
 
 # ============================================================================ PARSE_ARGUMENTS BEGIN
 # Record the requested action and preset, stopping at the first help option.
@@ -102,6 +89,14 @@ usage() {
 }
 # ============================================================================ USAGE END
 
+# ============================================================================ DIE BEGIN
+# Write a diagnostic to standard error and stop the build.
+die() {
+    printf 'sqlite_build: %s\n' "$*" >&2
+    exit 1
+}
+# ============================================================================ DIE END
+
 # ============================================================================ SELECT_PRESET BEGIN
 # Set the default ICU, stock-module, and project-hook switches for preset $1.
 select_preset() {
@@ -116,8 +111,9 @@ select_preset() {
 # ============================================================================ SELECT_PRESET END
 
 # ============================================================================ RESOLVE_PATHS BEGIN
-# Resolve the output paths, including the entries owned by clean.
+# Resolve the driver and output paths, including the entries owned by clean.
 resolve_paths() {
+    base=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
     out=$(realpath -m -- "${OUT_DIR:-$base/out}")
     [[ $out != / ]] || die 'OUT_DIR must identify a dedicated build root.'
     cache=$out/cache
@@ -134,8 +130,8 @@ resolve_paths() {
 # Lock an existing managed root and remove its build outputs, retaining the cache.
 clean_output_root() {
     if [[ ! -d $out ]]; then return 0; fi
-    call 'lock_output_root()'
-    call 'check_output_ownership()'
+    lock_output_root
+    check_output_ownership
     rm -rf -- "${managed_paths[@]}"
 }
 # ============================================================================ CLEAN_OUTPUT_ROOT END
@@ -144,8 +140,8 @@ clean_output_root() {
 # Create and lock the build root, then establish ownership of its output paths.
 open_build_root() {
     mkdir -p -- "$out"
-    call 'lock_output_root()'
-    call 'check_output_ownership()'
+    lock_output_root
+    check_output_ownership
     [[ $out != *' '* ]] || die 'SQLite configure requires a space-free OUT_DIR.'
 }
 # ============================================================================ OPEN_BUILD_ROOT END
@@ -176,8 +172,8 @@ check_output_ownership() {
 resolve_build_settings() {
     : "${USE_ICU=$preset_icu}" "${SQLITE_EXTRA=$preset_stock}" "${USE_EXTRAS=$preset_extras}"
     : "${SQLITE_ENABLE_ICUEX=$USE_ICU}" "${SQLITE_ENABLE_PBLOB=1}" "${SQLITE_ENABLE_REGEXPMATCHES=$SQLITE_EXTRA}"
-    call 'validate_features()'
-    call 'set_toolchain_defaults()'
+    validate_features
+    set_toolchain_defaults
 }
 # ============================================================================ RESOLVE_BUILD_SETTINGS END
 
@@ -188,10 +184,10 @@ validate_features() {
     for flag in USE_ICU SQLITE_EXTRA USE_EXTRAS SQLITE_ENABLE_ICUEX SQLITE_ENABLE_PBLOB SQLITE_ENABLE_REGEXPMATCHES; do
         [[ ${!flag} =~ ^[01]$ ]] || die "$flag must be 0 or 1."
     done
-    if [[ $USE_EXTRAS == 1 && $SQLITE_ENABLE_ICUEX == 1 && $USE_ICU == 0 ]]; then
+    if (( USE_EXTRAS && SQLITE_ENABLE_ICUEX && !USE_ICU )); then
         die 'ICUex requires USE_ICU=1.'
     fi
-    if [[ $USE_EXTRAS == 1 && $SQLITE_ENABLE_REGEXPMATCHES == 1 && $SQLITE_EXTRA == 0 ]]; then
+    if (( USE_EXTRAS && SQLITE_ENABLE_REGEXPMATCHES && !SQLITE_EXTRA )); then
         die 'RegexpMatches requires SQLITE_EXTRA=1 (stock regexp.c).'
     fi
 }
@@ -205,6 +201,16 @@ set_toolchain_defaults() {
     export CC CFLAGS
 }
 # ============================================================================ SET_TOOLCHAIN_DEFAULTS END
+
+# ============================================================================ LOAD_BUILD_HELPERS BEGIN
+# Load the dependency and source helpers used by this driver and its hooks.
+load_build_helpers() {
+    # shellcheck source=tool/dependencies.sh
+    source "$base/tool/dependencies.sh"
+    # shellcheck source=tool/sources.sh
+    source "$base/tool/sources.sh"
+}
+# ============================================================================ LOAD_BUILD_HELPERS END
 
 # ============================================================================ CREATE_WORKSPACE BEGIN
 # Create the per-run staging directory, install cleanup traps, and open the cache.
@@ -225,7 +231,7 @@ create_workspace() {
 cleanup_workspace() {
     local status=$1 cleanup_status=0
     rm -rf -- "${work:?}" || cleanup_status=$?
-    if [[ $status -ne 0 ]]; then exit "$status"; fi
+    if (( status != 0 )); then exit "$status"; fi
     exit "$cleanup_status"
 }
 # ============================================================================ CLEANUP_WORKSPACE END
@@ -233,8 +239,8 @@ cleanup_workspace() {
 # ============================================================================ PREPARE_SQLITE_SOURCE BEGIN
 # Acquire the canonical archive and make its matching source tree available.
 prepare_sqlite_source() {
-    call 'fetch_sqlite_archive()'
-    call 'refresh_sqlite_source()'
+    fetch_sqlite_archive
+    refresh_sqlite_source
 }
 # ============================================================================ PREPARE_SQLITE_SOURCE END
 
@@ -264,9 +270,9 @@ refresh_sqlite_source() {
 # ============================================================================ SET_BUILD_OPTIONS BEGIN
 # Assemble the default SQLite options and flags for the selected dependencies.
 set_build_options() {
-    call 'set_sqlite_defaults()'
-    if [[ $USE_ICU == 1 ]]; then call 'add_icu_flags()'; fi
-    if [[ $SQLITE_EXTRA == 1 ]]; then call 'add_zlib_flags()'; fi
+    set_sqlite_defaults
+    if (( USE_ICU )); then add_icu_flags; fi
+    if (( SQLITE_EXTRA )); then add_zlib_flags; fi
 }
 # ============================================================================ SET_BUILD_OPTIONS END
 
@@ -308,9 +314,9 @@ add_zlib_flags() {
 # ============================================================================ COLLECT_EXTENSIONS BEGIN
 # Register stock sources first, then project hooks, and finalize the Make inputs.
 collect_extensions() {
-    if [[ $SQLITE_EXTRA == 1 ]]; then call 'register_stock_extensions()'; fi
-    if [[ $USE_EXTRAS == 1 ]]; then call 'load_project_hooks()'; fi
-    call 'finalize_extension_list()'
+    if (( SQLITE_EXTRA )); then register_stock_extensions; fi
+    if (( USE_EXTRAS )); then load_project_hooks; fi
+    finalize_extension_list
 }
 # ============================================================================ COLLECT_EXTENSIONS END
 
@@ -362,9 +368,9 @@ report_build_settings() {
 # Write the compiler, dependency, and source records used to detect stale builds.
 write_build_inputs() {
     {
-        call 'write_toolchain_inputs()'
-        call 'write_dependency_inputs()'
-        call 'write_input_digests()'
+        write_toolchain_inputs
+        write_dependency_inputs
+        write_input_digests
     } > "$inputs"
 }
 # ============================================================================ WRITE_BUILD_INPUTS END
@@ -395,7 +401,7 @@ write_dependency_inputs() {
             pkg-config --cflags --libs "$module"
         else
             printf '%s: no pkg-config metadata\n' "$module"
-            if [[ $module == zlib ]] && call 'system_zlib_available()'; then
+            if [[ $module == zlib ]] && system_zlib_available; then
                 printf 'zlib: system headers and library found\n'
             fi
         fi
@@ -423,8 +429,8 @@ write_input_digests() {
 # Reconfigure on a manifest change and record inputs after all configure checks succeed.
 configure_sqlite_if_needed() {
     if cmp -s "$inputs" "$build/build-inputs.txt"; then return 0; fi
-    call 'configure_sqlite()'
-    if [[ $SQLITE_EXTRA == 1 ]]; then call 'verify_configured_zlib()'; fi
+    configure_sqlite
+    if (( SQLITE_EXTRA )); then verify_configured_zlib; fi
     cp -- "$inputs" "$build/build-inputs.txt"
 }
 # ============================================================================ CONFIGURE_SQLITE_IF_NEEDED END
@@ -448,16 +454,16 @@ verify_configured_zlib() {
 # ============================================================================ PREPARE_TARGET_SOURCES BEGIN
 # Generate the target source tree and restage selected extensions when needed.
 prepare_target_sources() {
-    call 'prepare_target_tree()'
-    if call 'extensions_need_staging()'; then
-        call 'invalidate_extension_stamp()'
-        call 'copy_extension_sources()'
-        call 'run_extension_prepare_hooks()'
-        call 'select_tcl_interpreter()'
-        call 'generate_extension_dispatcher()'
-        call 'verify_dispatcher_entries()'
-        call 'bundle_extension_headers()'
-        call 'mark_extensions_ready()'
+    prepare_target_tree
+    if extensions_need_staging; then
+        invalidate_extension_stamp
+        copy_extension_sources
+        run_extension_prepare_hooks
+        select_tcl_interpreter
+        generate_extension_dispatcher
+        verify_dispatcher_entries
+        bundle_extension_headers
+        mark_extensions_ready
     fi
 }
 # ============================================================================ PREPARE_TARGET_SOURCES END
@@ -501,9 +507,7 @@ copy_extension_sources() {
 # Run the preparation callbacks registered by the selected project hooks.
 run_extension_prepare_hooks() {
     local prepare
-    for prepare in "${prepare_steps[@]}"; do
-        call "${prepare}()"
-    done
+    for prepare in "${prepare_steps[@]}"; do "$prepare"; done
 }
 # ============================================================================ RUN_EXTENSION_PREPARE_HOOKS END
 
@@ -570,10 +574,10 @@ make_sqlite() {
 stage_package() {
     version=$(<"$src/VERSION")
     mkdir -p -- "$stage"/{bin,include,lib/pkgconfig} "$out/.packages"
-    call 'stage_cli()'
-    call 'stage_libraries()'
-    call 'stage_headers()'
-    call 'write_pkgconfig()'
+    stage_cli
+    stage_libraries
+    stage_headers
+    write_pkgconfig
 }
 # ============================================================================ STAGE_PACKAGE END
 
@@ -626,7 +630,7 @@ verify_package() {
 # Expose the verified generation atomically and then retire previous generations.
 publish_package() {
     local generation=".packages/prefix.${work##*.}"
-    call 'ensure_package_links()'
+    ensure_package_links
     switch_package_generation "$generation"
     prune_old_generations "$generation"
 }

@@ -14,7 +14,7 @@ install_packages() {
     else
         die "Install the development packages for this build ($deb_names on Debian or $rpm_names on Fedora), then rerun."
     fi
-    if [[ $EUID -ne 0 ]]; then
+    if (( EUID != 0 )); then
         command -v sudo >/dev/null || die "Administrator privileges required. Run: ${command[*]} ${packages[*]}"
         elevate=(sudo)
     fi
@@ -31,18 +31,18 @@ install_packages() {
 ensure_dependencies() {
     local apt_updated=0
     local -a deb=() rpm=() modules=()
-    if [[ $USE_ICU == 0 && $SQLITE_EXTRA == 0 ]]; then return; fi
+    if (( !USE_ICU && !SQLITE_EXTRA )); then return; fi
     if ! command -v pkg-config >/dev/null; then
         install_packages pkg-config pkgconf-pkg-config
     fi
-    if [[ $USE_ICU == 1 ]]; then
+    if (( USE_ICU )); then
         modules+=(icu-i18n icu-uc)
         if ! pkg-config --exists icu-i18n icu-uc; then
             deb+=(libicu-dev)
             rpm+=(libicu-devel)
         fi
     fi
-    if [[ $SQLITE_EXTRA == 1 ]]; then
+    if (( SQLITE_EXTRA )); then
         modules+=(zlib)
         if ! pkg-config --exists zlib; then
             deb+=(zlib1g-dev)

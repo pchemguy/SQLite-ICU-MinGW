@@ -1,8 +1,8 @@
 # ============================================================================ PREPARE_PBLOB BEGIN
 # Prepare PBLOB's FP16 headers and SQLite result-subtype registration in tsrc.
 prepare_pblob() {
-    call 'stage_fp16_headers()'
-    call 'declare_pblob_result_subtype()'
+    stage_fp16_headers
+    declare_pblob_result_subtype
 }
 # ============================================================================ PREPARE_PBLOB END
 
@@ -22,7 +22,7 @@ declare_pblob_result_subtype() {
 }
 # ============================================================================ DECLARE_PBLOB_RESULT_SUBTYPE END
 
-if [[ $SQLITE_ENABLE_PBLOB == 1 ]]; then
+if (( SQLITE_ENABLE_PBLOB )); then
     project_source SQLitePackedBlob pblob PBLOB
     # The deferred preparation callback also uses this archive path.
     fp16="${cache:?}/fp16_master.zip"
