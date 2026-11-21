@@ -1,76 +1,105 @@
-# Porting the SQLite build harness to Linux
+# Building SQLite with GCC on Linux
 
-Build the customized SQLite CLI, shared library and static library with Bash, GCC and SQLite's canonical Unix makefiles. Keep the local `out/` layout, the four feature presets and the extensions built into each SQLite connection. Use the host package manager for ICU and zlib. The Windows baseline for this plan is [the MSVC harness at `77c8dbd`](https://github.com/pchemguy/SQLite-ICU-MinGW/tree/77c8dbd26d322b4bb541c2f351b67e824a418be4/Current/MSVC).
+`sqlite_build.sh` builds a native SQLite CLI, shared library and static archive from SQLite's canonical source tree. The default build includes upstream ICU support, 15 stock `ext/misc` modules, and the ICUex, PBLOB and RegexpMatches project extensions. Applications get the selected extensions on each new SQLite connection.
 
-## Entry point and presets
+## Build
 
-Use `./sqlite_build.sh [--preset NAME]` as the entry point. Running it without arguments selects `full`. Resolve paths from the script directory so it can be invoked from any working directory. Default the build root to `Current/GCC/out` and allow `OUT_DIR` to select another root for a different configuration or native architecture. The upstream configure script rejects spaces in source and build paths. Use a space-free `OUT_DIR` when the checkout path contains spaces.
+Run from `Current/GCC` with Bash, GCC, GNU Make, binutils, `flock` and the standard GNU utilities available. Fetching and extracting sources uses `curl` and `unzip`. The harness uses `tclsh` if available or builds SQLite's bundled Jim interpreter. The ordinary build runs without Python.
 
-| Preset | Built-in ICU | Stock `ext/misc` | Project extensions | System development packages to ensure |
+```bash
+./sqlite_build.sh
+out/bin/sqlite3 :memory: "SELECT str_casefold('ABC'), typeof(pblob_pack('[1,2]')), regexp_matches('[0-9]+','a12b3');"
+```
+
+The full build returns `abc|blob|["12","3"]`. The script resolves its paths from its own directory and can be invoked from another working directory.
+
+### Presets and switches
+
+| `--preset` | Upstream ICU | Stock modules | Project extensions | Required system development packages |
 |---|---|---|---|---|
 | `bare` | Off | Off | Off | None |
 | `bare-icu` | On | Off | Off | ICU |
-| `bare-icu-ext` | On | On | Off | ICU, zlib |
-| `full` | On | On | ICUex, PBLOB, RegexpMatches | ICU, zlib |
+| `bare-icu-ext` | On | All 15 | Off | ICU, zlib |
+| `full` (default) | On | All 15 | ICUex, PBLOB, RegexpMatches | ICU, zlib |
 
-Retain `USE_ICU`, `SQLITE_EXTRA`, `USE_EXTRAS`, `SQLITE_ENABLE_ICUEX`, `SQLITE_ENABLE_PBLOB` and `SQLITE_ENABLE_REGEXPMATCHES`. Accept `0` and `1` as environment overrides for the preset defaults. `USE_EXTRAS=0` skips all project hooks and their downloads. Derive the zlib requirement from the selected components. The stock set includes `compress.c` and `sqlar.c`, both of which call zlib.
+Environment switches accept `0` or `1` and override the preset.
 
-## What changes on Linux
-
-| Windows workflow | Linux design |
+| Variable | Effect |
 |---|---|
-| `msbuild_check.bat`, Native Tools prompt, Windows SDK and PE machine checks | Use the active `gcc`, GNU `make` and `ar`. Check the tools needed by the selected stage and let `configure` probe the compiler and linker. Record `gcc -dumpmachine` for the build. Omit the separate environment-check script and x86/x64 directory logic. |
-| Conda bootstrap and activation, `.icu-staged`, ICU DLL suffix checks and copies | Discover the distro's ICU development files with `pkg-config`. Install them when missing. The Linux loader resolves ICU and its data from the host. |
-| `USE_ZLIB`, latest-release lookup, source download, compilation and collection of `zlib1.dll` | Resolve the distro's zlib development package when a selected component requires it. Let the system loader find `libz`. |
-| `download_file.bat`, Windows `tar.exe`, `copy`/`xcopy` and directory-search fallbacks | Keep the cache guarantees in Bash. Use `curl` on cache misses, `unzip` for the SQLite and FP16 ZIPs, and ordinary `mkdir`, `cp` and `install`. |
-| `Makefile.msc`, `nmake` diagnostics and four batch launchers | Configure out of tree and use GNU Make. One Bash entry point selects the four presets. Keep `clean` independent of fetching, compiling and packaging. Return the failing command's status. |
-| `dumpbin`, `.def`, `lib.exe`, separate import-library and static-library directories | Produce an ELF shared object with a SONAME, its linker symlink and a static archive in `out/lib/`. Verify them by linking consumers. |
-| `pyenv/`, DLL-path discovery, test-API generator and auxiliary scripts | The normal build uses the two Tcl source-transformation tools. Leave the Windows environment launchers, optional test-API tooling and unused copy/replace helpers out of the Linux build path. Python is needed for the pytest harness tests. |
+| `USE_ICU` | Enable SQLite's upstream ICU functions and ICU collations. |
+| `SQLITE_EXTRA` | Build the 15 stock modules. `compress.c` and `sqlar.c` require zlib. |
+| `USE_EXTRAS` | Enable the project hooks. Setting this to `0` skips all project downloads. |
+| `SQLITE_ENABLE_ICUEX` | Select ICUex. Defaults to `USE_ICU` and requires ICU. |
+| `SQLITE_ENABLE_PBLOB` | Select PBLOB. Defaults to `1` when project hooks run and fetches the FP16 headers. |
+| `SQLITE_ENABLE_REGEXPMATCHES` | Select RegexpMatches. Defaults to `SQLITE_EXTRA` and requires stock `regexp.c`. |
 
-### Dependency installation
+```bash
+OUT_DIR="$PWD/out-bare" ./sqlite_build.sh --preset bare
+SQLITE_ENABLE_PBLOB=0 ./sqlite_build.sh --preset full
+SQLITE_EXTRA=0 ./sqlite_build.sh --preset full
+```
 
-With ICU enabled, probe `pkg-config --exists icu-io`. This is the module SQLite requests with `--with-icu-config=pkg-config`. Pass that option together with `--enable-icu-collations` to retain both upstream ICU support and its collation support. When stock extensions are selected, probe `pkg-config --exists zlib` and confirm that configure found `zlib.h` and `-lz`. Run package-manager operations only for missing requirements. With ICU disabled, leave its opt-in configure flags unset. [SQLite ICU configuration](https://github.com/sqlite/sqlite/blob/5672ed86435140683ce66b12d021e5941c4cee48/autosetup/sqlite-config.tcl#L1392-L1487)
+The last command builds ICUex and PBLOB without the stock set. SQLite JSON is required by PBLOB and RegexpMatches. `CC` selects the compiler executable (default `gcc`), `CFLAGS` defaults to `-O2`, and `JOBS` sets GNU Make parallelism. `CPPFLAGS` and `LDFLAGS` are passed through to configure. SQLite's configure requires a space-free source and build path. Set `OUT_DIR` to a space-free location when the harness is in a directory with spaces.
 
-| Initial package-manager support | Missing ICU development files | Missing zlib development files |
-|---|---|---|
-| Debian / Ubuntu | `apt-get install -y libicu-dev` | `apt-get install -y zlib1g-dev` |
-| Fedora / RHEL family with DNF | `dnf install -y libicu-devel` | `dnf install -y 'pkgconfig(zlib)'` |
+### System dependencies
 
-If the `pkg-config` command itself is missing on a build that needs it, install the provider first. Install the missing development packages together as root or via `sudo`. Refresh APT indexes when needed, then recheck the modules before configuring. If installation fails or privileges are unavailable, stop with the package name and installation command. Other distributions can build with the same modules already installed. Run the rest of the build as the invoking user. ICU and zlib runtime libraries stay in the host library paths. [Debian ICU](https://packages.debian.org/trixie/amd64/libicu-dev/filelist) · [Debian zlib](https://packages.debian.org/trixie/amd64/zlib1g-dev/filelist) · [Fedora ICU](https://packages.fedoraproject.org/pkgs/icu/libicu-devel/) · [Fedora zlib compatibility package](https://packages.fedoraproject.org/pkgs/zlib-ng/zlib-ng-compat-devel/)
+When ICU is selected, the harness probes `icu-i18n` and `icu-uc` with `pkg-config` and passes their flags directly to configure. SQLite and ICUex call both APIs. Specifying them explicitly also works on Fedora, where `icu-io` alone contributes only `-licuio`. When the stock modules are selected, the harness probes `zlib` and checks that configure found its headers and library.
 
-**In `bare` and `bare-icu`, zlib is optional.** Skip the zlib package request in these presets. Upstream configure already detects usable zlib headers and libraries. When available, the shell can use them for ZIP/archive support. When absent, the bare presets can proceed. Keep upstream's resulting flags and record the detected configuration so the runtime dependencies of a particular build are visible. [Upstream zlib probe](https://github.com/sqlite/sqlite/blob/5672ed86435140683ce66b12d021e5941c4cee48/autosetup/sqlite-config.tcl#L682-L692) · [Shell source](https://github.com/sqlite/sqlite/blob/5672ed86435140683ce66b12d021e5941c4cee48/src/shell.c.in#L285-L307)
+| Package manager | ICU | zlib | Provider of `pkg-config` if missing |
+|---|---|---|---|
+| APT | `libicu-dev` | `zlib1g-dev` | `pkg-config` |
+| DNF | `libicu-devel` | `pkgconfig(zlib)` | `pkgconf-pkg-config` |
 
-## Source preparation and compilation
+A missing requirement triggers installation through APT or DNF, followed by a second probe. Only package installation and the APT index refresh use `sudo` when the caller is an ordinary user. Other distributions can build with the required modules already installed. The `bare` and `bare-icu` presets leave optional zlib support to SQLite's own detection. ICU and zlib runtime libraries are resolved by the system loader.
 
-1. **Fetch only selected inputs.** Keep the existing SQLite canonical source snapshot and project source URLs. Cache `sqlite.zip`, the enabled hooks' C files and the FP16 archive for PBLOB in `out/cache/`. Reuse completed downloads offline. On a miss, follow redirects, retry, require a successful final HTTP 200, reject HTML, and rename the completed `.part` file into place. Extract ZIPs into a temporary directory and publish only after checking the expected files. For SQLite these include `configure`, `main.mk` and `tool/mksqlite3c.tcl`. Keep the extracted tree at `out/sqlite/`. Capture source IDs or cached file digests so a build using moving upstream refs can be identified.
-2. **Configure and generate sources.** From `out/build/`, run `../sqlite/configure` with `CC=gcc`, `CFLAGS=-O2`, the local `out/` prefix, `--enable-shared`, `--enable-static`, `--soname=legacy` and `--disable-rpath`. The distribution targets can use `--disable-tcl` to skip the optional SQLite Tcl bindings. Map `SESSION=1` to `--enable-session` (including the preupdate hook), and carry across `SQLITE_ENABLE_RBU`, `SQLITE_ENABLE_API_ARMOR` and the full `:BUILD_OPTIONS` list. Also account for features inherited from `Makefile.msc`, including FTS5, RTree/Geopoly, column metadata and the diagnostic virtual tables. Pass additional definitions through `make OPTIONS=...` from the first `.target_source` invocation through compilation so generated parser code, CLI and libraries see the intended options. [Harness flags](../MSVC/sqlite_msbuild.bat) · [MSVC defaults](https://github.com/sqlite/sqlite/blob/5672ed86435140683ce66b12d021e5941c4cee48/Makefile.msc#L381-L425) · [Unix build rules](https://github.com/sqlite/sqlite/blob/5672ed86435140683ce66b12d021e5941c4cee48/main.mk#L243-L277)
-3. **Prepare built-ins after `make .target_source`.** This target recreates `out/build/tsrc`. Stage pristine extension sources there after it completes. Use the existing `patch_sqlite_misc_autoext.tcl` and `bundle_extra_src.tcl` from that directory with basenames and either a suitable `tclsh` or SQLite's host-built Jim interpreter. Include byte-identical copies of the two portable helpers in `Current/GCC/tool/` so the GCC harness can be copied independently. Keep the MSVC list of 15 modules and their exact enable macros, including the `rot13.c` → `SQLITE_ENABLE_ROT` and `sha1.c` → `SQLITE_ENABLE_SHA` mappings. [Stock module list](../MSVC/README.md#sqlite-build-settings-and-stock-extensions) · [Source preparation rule](https://github.com/sqlite/sqlite/blob/5672ed86435140683ce66b12d021e5941c4cee48/main.mk#L1079-L1096)
-4. **Assemble one ordered extension list.** Adapt `sqlite_ext_*.bat` to Bash hooks discovered as `sqlite_ext_*.sh`, with stable order and a shared list of staged source files and definitions. ICUex requires ICU. PBLOB requires SQLite JSON and the extracted FP16 headers, which the bundler inlines. RegexpMatches requires SQLite JSON and the private definitions in stock `regexp.c`, which must appear first. With project hooks enabled, default ICUex on when ICU is selected and RegexpMatches on when the stock set is selected. Reject an explicit request that cannot be satisfied. Generate one fresh `misc_ext_init.c` for the selected set, append it once, and set `SQLITE_EXTRA_AUTOEXT=sqlite3ExtraAutoExtInit` whenever the set is nonempty. This also permits PBLOB or ICUex with the stock set disabled. [Project hooks](../MSVC/README.md#project-extension-hooks)
-5. **Build and collect.** Pass the same ordered `EXTRA_SRC` list (build-relative `tsrc/...` paths) to the GNU Make targets for `sqlite3.c`, `sqlite3`, `libsqlite3.so` and `libsqlite3.a`. Keep the upstream CLI recipe. Validate and publish the required files as a set. A missing library, failed copy or dangling link fails the build. Record the effective settings, compiler target and dependency versions for each output root. When the inputs or settings change, regenerate from pristine sources and replace the managed package files. Separate `OUT_DIR` values retain multiple configurations side by side. `clean` preserves the download cache. [Amalgamation rule](https://github.com/sqlite/sqlite/blob/5672ed86435140683ce66b12d021e5941c4cee48/main.mk#L1146-L1150) · [CLI recipe](https://github.com/sqlite/sqlite/blob/5672ed86435140683ce66b12d021e5941c4cee48/main.mk#L2215-L2229)
+## Local outputs
 
-## Local products
+`OUT_DIR` defaults to `out/` beside the script.
 
-| Location | Contents |
+| Path under `OUT_DIR` | Contents |
 |---|---|
-| `out/cache/`, `out/sqlite/`, `out/build/tsrc/` | Reusable downloads, extracted canonical sources and prepared sources, respectively. `out/build/` also holds the generated amalgamation and intermediate build files. |
-| `out/bin/` | `sqlite3` |
-| `out/lib/` | `libsqlite3.so.<SQLite-version>` with SONAME `libsqlite3.so.0`, relative `libsqlite3.so.0` and `libsqlite3.so` symlinks, and `libsqlite3.a` |
-| `out/include/` | `sqlite3.h`, `sqlite3ext.h` and `sqlite3session.h` from the matching source/build |
-| `out/lib/pkgconfig/` | `sqlite3.pc` with `prefix=${pcfiledir}/../..` and private dependencies reflecting the actual build |
+| `bin/` | `sqlite3` |
+| `lib/` | Versioned `libsqlite3.so.<version>`, its `libsqlite3.so.0` and `libsqlite3.so` symlinks, and `libsqlite3.a` |
+| `include/` | `sqlite3.h`, `sqlite3ext.h`, `sqlite3session.h` |
+| `lib/pkgconfig/sqlite3.pc` | Relocatable consumer compile and link flags, including private library dependencies |
+| `cache/` | SQLite source ZIP, selected project C files, and the FP16 ZIP for PBLOB |
+| `sqlite/` | Extracted canonical SQLite sources |
+| `build/` | Configured build tree, `tsrc/`, generated `sqlite3.c`, and `build-inputs.txt` with source digests, effective flags, compiler and dependency information |
 
-The static archive contains SQLite and the selected extensions. Its consumers supply the system libraries recorded in `sqlite3.pc`. The upstream CLI embeds its own copy of SQLite, so a separate C client must exercise the packaged shared library.
+`bin`, `include` and `lib` point into `package/`. The harness stages and checks the new distribution before switching the `package` symlink. To copy a complete prefix with its relative library symlinks, use `mkdir -p /path/to/prefix` and `cp -a out/package/. /path/to/prefix/`.
 
-## Implementation order and acceptance
+For a shared-library consumer, point `PKG_CONFIG_PATH` at the local `sqlite3.pc` and select the local library at runtime. For a static SQLite consumer, link `out/lib/libsqlite3.a` explicitly and retain the private system link flags from `pkg-config --static --libs sqlite3`. The installed CLI embeds its own copy of the customized amalgamation. The tests exercise the packaged libraries through separate C clients.
 
-| Increment | Acceptance |
+## Source preparation and reuse
+
+The first build fetches SQLite's canonical `sqlite.zip`, the enabled project sources from their `main` branches and FP16 from `master` when PBLOB is selected. Downloads follow redirects, retry, and enter the cache only after a complete HTTP 200 response with a non-HTML body. Extraction checks the expected source files before publishing the source tree. A warm build reuses the cache and prepared inputs. To refresh a moving upstream source, move its cached file aside and run the build again. [SQLite source](https://sqlite.org/src/zip/sqlite.zip) · [ICUex](https://github.com/pchemguy/SQLiteICUex) · [PBLOB](https://github.com/pchemguy/SQLitePackedBlob) · [RegexpMatches](https://github.com/pchemguy/SQLiteRegexpMatches) · [FP16](https://github.com/Maratyszcza/FP16)
+
+After `make .target_source`, the two Tcl helpers patch the selected extension initializers, generate `misc_ext_init.c` and bundle local headers. The ordered `EXTRA_SRC` list puts the stock regex engine before RegexpMatches, which uses its private definitions. Both PBLOB and RegexpMatches also use SQLite's private JSON code. The PBLOB hook declares `SQLITE_RESULT_SUBTYPE` on the staged `pblob_unpack` registration so the strict upstream CLI can return nested JSON. The cached upstream source stays available for subsequent builds.
+
+The Bash hooks beside the driver run in filename order after the stock modules. A hook can use `project_source REPOSITORY BASENAME MACRO` to fetch a C file and add it to the amalgamation, or `add_source PATH MACRO` for a local file. The PBLOB hook shows how to track a header archive, prepare files in `tsrc/`, and add a SQL smoke check. The driver rebuilds generated code when effective settings or inputs change and serializes builds using the same output root.
+
+`./sqlite_build.sh clean` removes the managed source, build and package outputs while retaining `out/cache/`. Use a separate `OUT_DIR` to keep several presets available side by side.
+
+## Verification
+
+Run the cache and dependency tests and the native build matrix with Python, pytest, `pkg-config`, GCC and binutils available.
+
+```bash
+python3 -m pytest -v tests
+```
+
+The native tests build all four presets, disable each custom extension in turn, and build a project-only selection. They relocate each prefix and run the packaged CLI and separately linked shared and static C clients. They check all stock modules, both ICUex collations, the project functions' arities and flags, and representative SQL results. The full preset also exercises an offline rebuild and confirms that a failed archive copy preserves the published package. To retain the last configuration and its source cache between test runs, pass `--build-root /path/to/dedicated-test-output`.
+
+| Stock source(s) | Availability checked on a fresh library connection |
 |---|---|
-| 1. Local driver, cache and `bare` | Invoke from another directory, repeat from a warm cache with networking disabled, and recover from interrupted downloads or extraction. Run on hosts with and without zlib development files. The bare build requests neither ICU nor zlib and works in both cases. |
-| 2. System dependencies and `bare-icu` | Exercise preinstalled and missing ICU on APT and DNF, including installation failure. Confirm that this preset provisions only ICU. Run `lower('I','tr_TR')` and verify U+0131. |
-| 3. Stock extensions and project hooks | Build `bare-icu-ext` and `full`, including a host that needs the zlib development package installed. Exercise `uncompress(compress(...))`, PBLOB pack/unpack, ICUex folding/collations and both RegexpMatches functions. Compare registered functions, arities and flags with the Windows post-build queries. Exercise each hook disabled and a project-only build. [Expected registrations](../MSVC/README.md#post-build-registration-checks) |
-| 4. Packaged consumers and rebuilds | Link and run separate C clients against the local shared object and the explicit static archive. Verify the shared client's resolved SQLite path and the library SONAME with `ldd`/`readelf`. Query a fresh library connection for registrations and portable compile options, including in `bare`, since the CLI supplies some stock functions itself. Move the output prefix and repeat the consumer test. Require a nonzero exit on packaging failure and check for stale artifacts when changing presets. |
+| `compress`, `decimal`, `noop`, `regexp`, `remember`, `rot13`, `sha1`, `shathree`, `sqlar`, `uuid` | `compress`, `decimal`, `noop`, `regexpi`, `remember`, `rot13`, `sha1`, `sha3`, `sqlar_compress`, `uuid` |
+| `csv`, `fuzzer`, `prefixes`, `series` | Virtual-table modules `csv`, `fuzzer`, `prefixes`, `generate_series` |
+| `uint` | Collation `uint` |
 
-## Feasibility checks performed during planning
+| Project extension | SQL surface checked |
+|---|---|
+| ICUex | Collations `UTF_CI`, `UTF_CI_AI`, `str_casefold(text)`, `str_normalize(text, kind)` |
+| PBLOB | `pblob_pack(json)`, `pblob_pack(json, format)`, `pblob_unpack(blob)` |
+| RegexpMatches | `regexp_matches(pattern, text)`, `regexpi_matches(pattern, text)` |
 
-On Debian x86-64 with GCC 14.2, the existing Tcl tools processed all 15 stock modules and all three project modules. A focused compile used the SQLite 3.54.1 release amalgamation, matching stock sources, Debian ICU development headers and the host ICU 76 and zlib runtimes. A fresh connection to the shared library exposed all 18 modules. The CLI and separately linked shared and static C consumers returned `abc`, `blob` and `["12","3"]` from the Windows smoke query. The shared client resolved SQLite from the local `out/lib/` and ICU and zlib from system paths.
-
-A separate run of the canonical configure script detected the installed zlib development files and added the compiler and linker flags for the shell and library automatically. The complete cold build from a canonical source archive, automatic package installation and the four-preset matrix are acceptance work for implementation.
+The shell also registers several stock extensions itself. Use a library connection when verifying that a preset omits the stock modules. [Windows verification queries](../MSVC/README.md#post-build-registration-checks)
