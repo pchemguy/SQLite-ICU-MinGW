@@ -19,7 +19,6 @@ declare -a configure_args=() options=() extra_src=()
 declare -a sources=() names=() macros=() hooks=()
 declare -a header_archives=() prepare_steps=() smoke_tests=()
 
-# ============================================================================ MAIN BEGIN
 # Run the requested action and publish the SQLite package after verification.
 main() {
     parse_arguments "$@"
@@ -55,9 +54,7 @@ main() {
     publish_package
     report_success
 }
-# ============================================================================ MAIN END
 
-# ============================================================================ PARSE_ARGUMENTS BEGIN
 # Record the requested action and preset, stopping at the first help option.
 parse_arguments() {
     while (( $# )); do
@@ -79,25 +76,19 @@ parse_arguments() {
         esac
     done
 }
-# ============================================================================ PARSE_ARGUMENTS END
 
-# ============================================================================ USAGE BEGIN
 # Print the supported command-line forms to standard output.
 usage() {
     printf '%s\n' 'Usage: sqlite_build.sh [--preset bare|bare-icu|bare-icu-ext|full] [clean]' \
         'The default is full. OUT_DIR selects the local build and install root.'
 }
-# ============================================================================ USAGE END
 
-# ============================================================================ DIE BEGIN
 # Write a diagnostic to standard error and stop the build.
 die() {
     printf 'sqlite_build: %s\n' "$*" >&2
     exit 1
 }
-# ============================================================================ DIE END
 
-# ============================================================================ SELECT_PRESET BEGIN
 # Set the default ICU, stock-module, and project-hook switches for preset $1.
 select_preset() {
     case $1 in
@@ -108,9 +99,7 @@ select_preset() {
         *) die "Unknown preset: $1" ;;
     esac
 }
-# ============================================================================ SELECT_PRESET END
 
-# ============================================================================ RESOLVE_PATHS BEGIN
 # Resolve the driver and output paths, including the entries owned by clean.
 resolve_paths() {
     base=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
@@ -124,9 +113,7 @@ resolve_paths() {
     extension_stamp=$tsrc/.extensions-ready
     managed_paths=("$build" "$src" "$out/.packages" "$out/package" "$out/bin" "$out/include" "$out/lib")
 }
-# ============================================================================ RESOLVE_PATHS END
 
-# ============================================================================ CLEAN_OUTPUT_ROOT BEGIN
 # Lock an existing managed root and remove its build outputs, retaining the cache.
 clean_output_root() {
     if [[ ! -d $out ]]; then return 0; fi
@@ -134,9 +121,7 @@ clean_output_root() {
     check_output_ownership
     rm -rf -- "${managed_paths[@]}"
 }
-# ============================================================================ CLEAN_OUTPUT_ROOT END
 
-# ============================================================================ OPEN_BUILD_ROOT BEGIN
 # Create and lock the build root, then establish ownership of its output paths.
 open_build_root() {
     mkdir -p -- "$out"
@@ -144,17 +129,13 @@ open_build_root() {
     check_output_ownership
     [[ $out != *' '* ]] || die 'SQLite configure requires a space-free OUT_DIR.'
 }
-# ============================================================================ OPEN_BUILD_ROOT END
 
-# ============================================================================ LOCK_OUTPUT_ROOT BEGIN
 # Hold the output directory's exclusive lock until this driver exits.
 lock_output_root() {
     exec {lockfd}>"$out/.sqlite-build.lock"
     flock "$lockfd"
 }
-# ============================================================================ LOCK_OUTPUT_ROOT END
 
-# ============================================================================ CHECK_OUTPUT_OWNERSHIP BEGIN
 # Recognize a marked root or claim an unused build root while holding its lock.
 check_output_ownership() {
     local marker=$out/.sqlite-gcc-root path
@@ -165,9 +146,7 @@ check_output_ownership() {
     done
     touch "$marker"
 }
-# ============================================================================ CHECK_OUTPUT_OWNERSHIP END
 
-# ============================================================================ RESOLVE_BUILD_SETTINGS BEGIN
 # Apply preset defaults to unset feature switches and resolve the toolchain.
 resolve_build_settings() {
     : "${USE_ICU=$preset_icu}" "${SQLITE_EXTRA=$preset_stock}" "${USE_EXTRAS=$preset_extras}"
@@ -175,9 +154,7 @@ resolve_build_settings() {
     validate_features
     set_toolchain_defaults
 }
-# ============================================================================ RESOLVE_BUILD_SETTINGS END
 
-# ============================================================================ VALIDATE_FEATURES BEGIN
 # Check Boolean feature switches and the prerequisites of each enabled hook.
 validate_features() {
     local flag
@@ -191,18 +168,14 @@ validate_features() {
         die 'RegexpMatches requires SQLITE_EXTRA=1 (stock regexp.c).'
     fi
 }
-# ============================================================================ VALIDATE_FEATURES END
 
-# ============================================================================ SET_TOOLCHAIN_DEFAULTS BEGIN
 # Select the compiler, optimization flags, and positive Make parallelism.
 set_toolchain_defaults() {
     : "${CC:=gcc}" "${CFLAGS:=-O2}" "${JOBS:=$(getconf _NPROCESSORS_ONLN)}"
     [[ $JOBS =~ ^[1-9][0-9]*$ ]] || die 'JOBS must be a positive integer.'
     export CC CFLAGS
 }
-# ============================================================================ SET_TOOLCHAIN_DEFAULTS END
 
-# ============================================================================ LOAD_BUILD_HELPERS BEGIN
 # Load the dependency and source helpers used by this driver and its hooks.
 load_build_helpers() {
     # shellcheck source=tool/dependencies.sh
@@ -210,9 +183,7 @@ load_build_helpers() {
     # shellcheck source=tool/sources.sh
     source "$base/tool/sources.sh"
 }
-# ============================================================================ LOAD_BUILD_HELPERS END
 
-# ============================================================================ CREATE_WORKSPACE BEGIN
 # Create the per-run staging directory, install cleanup traps, and open the cache.
 create_workspace() {
     work=$(mktemp -d "$out/.work.XXXXXXXX")
@@ -224,9 +195,7 @@ create_workspace() {
     stage=$work/prefix
     mkdir -p -- "$cache"
 }
-# ============================================================================ CREATE_WORKSPACE END
 
-# ============================================================================ CLEANUP_WORKSPACE BEGIN
 # Remove temporary files on exit and preserve a failed build or signal status.
 cleanup_workspace() {
     local status=$1 cleanup_status=0
@@ -234,26 +203,20 @@ cleanup_workspace() {
     if (( status != 0 )); then exit "$status"; fi
     exit "$cleanup_status"
 }
-# ============================================================================ CLEANUP_WORKSPACE END
 
-# ============================================================================ PREPARE_SQLITE_SOURCE BEGIN
 # Acquire the canonical archive and make its matching source tree available.
 prepare_sqlite_source() {
     fetch_sqlite_archive
     refresh_sqlite_source
 }
-# ============================================================================ PREPARE_SQLITE_SOURCE END
 
-# ============================================================================ FETCH_SQLITE_ARCHIVE BEGIN
 # Populate the SQLite archive cache and record the digest of the selected ZIP.
 fetch_sqlite_archive() {
     download https://sqlite.org/src/zip/sqlite.zip "$sqlite_zip"
     archive_hash=$(sha256sum < "$sqlite_zip")
     archive_hash=${archive_hash%% *}
 }
-# ============================================================================ FETCH_SQLITE_ARCHIVE END
 
-# ============================================================================ REFRESH_SQLITE_SOURCE BEGIN
 # Replace the extracted SQLite tree when its recorded archive digest differs.
 refresh_sqlite_source() {
     local unpacked
@@ -265,18 +228,14 @@ refresh_sqlite_source() {
     if [[ -e $src ]]; then mv -T -- "$src" "$work/previous-source"; fi
     mv -T -- "$unpacked" "$src"
 }
-# ============================================================================ REFRESH_SQLITE_SOURCE END
 
-# ============================================================================ SET_BUILD_OPTIONS BEGIN
 # Assemble the default SQLite options and flags for the selected dependencies.
 set_build_options() {
     set_sqlite_defaults
     if (( USE_ICU )); then add_icu_flags; fi
     if (( SQLITE_EXTRA )); then add_zlib_flags; fi
 }
-# ============================================================================ SET_BUILD_OPTIONS END
 
-# ============================================================================ SET_SQLITE_DEFAULTS BEGIN
 # Initialize the upstream configure arguments and SQLite compile-time options.
 set_sqlite_defaults() {
     configure_args=(--prefix="$out" --enable-shared --enable-static --soname=legacy --disable-rpath
@@ -289,9 +248,7 @@ set_sqlite_defaults() {
         -DSQLITE_OMIT_DEPRECATED -DSQLITE_DEFAULT_FOREIGN_KEYS=1 -DSQLITE_DEFAULT_SYNCHRONOUS=1
         -DSQLITE_USE_URI=1 -DSQLITE_SOUNDEX -DSQLITE_ENABLE_STMTVTAB -DSQLITE_ENABLE_BYTECODE_VTAB)
 }
-# ============================================================================ SET_SQLITE_DEFAULTS END
 
-# ============================================================================ ADD_ICU_FLAGS BEGIN
 # Link ICU's common and internationalization C APIs and enable ICU collations.
 add_icu_flags() {
     local cflags libs
@@ -300,27 +257,21 @@ add_icu_flags() {
     configure_args+=("--with-icu-ldflags=$libs" "--with-icu-cflags=$cflags" --enable-icu-collations)
     export CPPFLAGS="${CPPFLAGS:-} $cflags"
 }
-# ============================================================================ ADD_ICU_FLAGS END
 
-# ============================================================================ ADD_ZLIB_FLAGS BEGIN
 # Give configure the zlib headers and library search paths for the stock modules.
 add_zlib_flags() {
     CPPFLAGS="${CPPFLAGS:-} $(pkg-config --cflags zlib)"
     LDFLAGS="${LDFLAGS:-} $(pkg-config --libs-only-L zlib)"
     export CPPFLAGS LDFLAGS
 }
-# ============================================================================ ADD_ZLIB_FLAGS END
 
-# ============================================================================ COLLECT_EXTENSIONS BEGIN
 # Register stock sources first, then project hooks, and finalize the Make inputs.
 collect_extensions() {
     if (( SQLITE_EXTRA )); then register_stock_extensions; fi
     if (( USE_EXTRAS )); then load_project_hooks; fi
     finalize_extension_list
 }
-# ============================================================================ COLLECT_EXTENSIONS END
 
-# ============================================================================ REGISTER_STOCK_EXTENSIONS BEGIN
 # Register the 15 stock sources and their build macros in amalgamation order.
 register_stock_extensions() {
     local name macro
@@ -333,9 +284,7 @@ register_stock_extensions() {
         add_source "$src/ext/misc/$name.c" "$macro"
     done
 }
-# ============================================================================ REGISTER_STOCK_EXTENSIONS END
 
-# ============================================================================ LOAD_PROJECT_HOOKS BEGIN
 # Source each project hook in filename order so it can register sources and callbacks.
 load_project_hooks() {
     local hook
@@ -345,9 +294,7 @@ load_project_hooks() {
         source "$hook"
     done
 }
-# ============================================================================ LOAD_PROJECT_HOOKS END
 
-# ============================================================================ FINALIZE_EXTENSION_LIST BEGIN
 # Set the selected extension macros and append the dispatcher to EXTRA_SRC.
 finalize_extension_list() {
     if (( ${#names[@]} )); then
@@ -355,16 +302,12 @@ finalize_extension_list() {
         extra_src=("${names[@]/#/tsrc/}" tsrc/misc_ext_init.c)
     fi
 }
-# ============================================================================ FINALIZE_EXTENSION_LIST END
 
-# ============================================================================ REPORT_BUILD_SETTINGS BEGIN
 # Display the effective preset switches and output root.
 report_build_settings() {
     printf 'Preset %s | ICU=%s stock=%s project hooks=%s | %s\n' "$preset" "$USE_ICU" "$SQLITE_EXTRA" "$USE_EXTRAS" "$out"
 }
-# ============================================================================ REPORT_BUILD_SETTINGS END
 
-# ============================================================================ WRITE_BUILD_INPUTS BEGIN
 # Write the compiler, dependency, and source records used to detect stale builds.
 write_build_inputs() {
     {
@@ -373,9 +316,7 @@ write_build_inputs() {
         write_input_digests
     } > "$inputs"
 }
-# ============================================================================ WRITE_BUILD_INPUTS END
 
-# ============================================================================ WRITE_TOOLCHAIN_INPUTS BEGIN
 # Emit the SQLite archive identity, compiler identity, flags, and search paths.
 write_toolchain_inputs() {
     local var
@@ -387,9 +328,7 @@ write_toolchain_inputs() {
         printf '%s=%s\n' "$var" "${!var-}"
     done
 }
-# ============================================================================ WRITE_TOOLCHAIN_INPUTS END
 
-# ============================================================================ WRITE_DEPENDENCY_INPUTS BEGIN
 # Record dependency versions and flags, probing optional zlib when metadata is absent.
 write_dependency_inputs() {
     local module
@@ -407,25 +346,19 @@ write_dependency_inputs() {
         fi
     done
 }
-# ============================================================================ WRITE_DEPENDENCY_INPUTS END
 
-# ============================================================================ SYSTEM_ZLIB_AVAILABLE BEGIN
 # Return success if the compiler can link a trivial program against system zlib.
 system_zlib_available() {
     printf '#include <zlib.h>\nint main(void){return !zlibVersion();}\n' |
         "$CC" -x c - -lz -o "$work/check-zlib" 2>/dev/null
 }
-# ============================================================================ SYSTEM_ZLIB_AVAILABLE END
 
-# ============================================================================ WRITE_INPUT_DIGESTS BEGIN
 # Emit SHA-256 records for the build scripts, registered sources and header archives.
 write_input_digests() {
     sha256sum -- "$base/sqlite_build.sh" "$base"/tool/*.sh "$base"/tool/*.tcl \
         "${hooks[@]}" "${sources[@]}" "${header_archives[@]}"
 }
-# ============================================================================ WRITE_INPUT_DIGESTS END
 
-# ============================================================================ CONFIGURE_SQLITE_IF_NEEDED BEGIN
 # Reconfigure on a manifest change and record inputs after all configure checks succeed.
 configure_sqlite_if_needed() {
     if cmp -s "$inputs" "$build/build-inputs.txt"; then return 0; fi
@@ -433,25 +366,19 @@ configure_sqlite_if_needed() {
     if (( SQLITE_EXTRA )); then verify_configured_zlib; fi
     cp -- "$inputs" "$build/build-inputs.txt"
 }
-# ============================================================================ CONFIGURE_SQLITE_IF_NEEDED END
 
-# ============================================================================ CONFIGURE_SQLITE BEGIN
 # Recreate the out-of-tree build directory and run SQLite configure in it.
 configure_sqlite() {
     rm -rf -- "${build:?}"
     mkdir -p -- "$build"
     (cd "$build" && "$src/configure" "${configure_args[@]}")
 }
-# ============================================================================ CONFIGURE_SQLITE END
 
-# ============================================================================ VERIFY_CONFIGURED_ZLIB BEGIN
 # Require configure to have found zlib before compiling the stock extensions.
 verify_configured_zlib() {
     grep -Eq '^LDFLAGS\.zlib *=.*-lz' "$build/Makefile" || die 'SQLite configure did not find the required zlib.'
 }
-# ============================================================================ VERIFY_CONFIGURED_ZLIB END
 
-# ============================================================================ PREPARE_TARGET_SOURCES BEGIN
 # Generate the target source tree and restage selected extensions when needed.
 prepare_target_sources() {
     prepare_target_tree
@@ -466,17 +393,13 @@ prepare_target_sources() {
         mark_extensions_ready
     fi
 }
-# ============================================================================ PREPARE_TARGET_SOURCES END
 
-# ============================================================================ PREPARE_TARGET_TREE BEGIN
 # Run the upstream target-source rule, forcing regeneration for a missing header.
 prepare_target_tree() {
     if [[ ! -s $tsrc/sqlite3.h ]]; then rm -f -- "$build/.target_source"; fi
     make_sqlite .target_source
 }
-# ============================================================================ PREPARE_TARGET_TREE END
 
-# ============================================================================ EXTENSIONS_NEED_STAGING BEGIN
 # Return success when selected source files or their preparation stamp are stale.
 extensions_need_staging() {
     local staged
@@ -487,31 +410,23 @@ extensions_need_staging() {
     done
     return 1
 }
-# ============================================================================ EXTENSIONS_NEED_STAGING END
 
-# ============================================================================ INVALIDATE_EXTENSION_STAMP BEGIN
 # Leave staging retryable if a copy, project callback, or Tcl step fails.
 invalidate_extension_stamp() {
     rm -f -- "$extension_stamp"
 }
-# ============================================================================ INVALIDATE_EXTENSION_STAMP END
 
-# ============================================================================ COPY_EXTENSION_SOURCES BEGIN
 # Copy the selected stock and project C sources into the target tree.
 copy_extension_sources() {
     cp -- "${sources[@]}" "$tsrc/"
 }
-# ============================================================================ COPY_EXTENSION_SOURCES END
 
-# ============================================================================ RUN_EXTENSION_PREPARE_HOOKS BEGIN
 # Run the preparation callbacks registered by the selected project hooks.
 run_extension_prepare_hooks() {
     local prepare
     for prepare in "${prepare_steps[@]}"; do "$prepare"; done
 }
-# ============================================================================ RUN_EXTENSION_PREPARE_HOOKS END
 
-# ============================================================================ SELECT_TCL_INTERPRETER BEGIN
 # Select system Tcl when available, otherwise build SQLite's bundled Jim.
 select_tcl_interpreter() {
     if command -v tclsh >/dev/null; then
@@ -521,17 +436,13 @@ select_tcl_interpreter() {
         tcl=$build/jimsh
     fi
 }
-# ============================================================================ SELECT_TCL_INTERPRETER END
 
-# ============================================================================ GENERATE_EXTENSION_DISPATCHER BEGIN
 # Patch extension initializers and generate a fresh misc_ext_init.c in the target tree.
 generate_extension_dispatcher() {
     rm -f -- "$tsrc/misc_ext_init.c"
     (cd "$tsrc" && "$tcl" "$base/tool/patch_sqlite_misc_autoext.tcl" "${names[@]}")
 }
-# ============================================================================ GENERATE_EXTENSION_DISPATCHER END
 
-# ============================================================================ VERIFY_DISPATCHER_ENTRIES BEGIN
 # Require one generated dispatcher entry for every registered build macro.
 verify_dispatcher_entries() {
     local macro
@@ -539,37 +450,27 @@ verify_dispatcher_entries() {
         grep -Fxq "#ifdef SQLITE_ENABLE_$macro" "$tsrc/misc_ext_init.c" || die "Missing dispatcher entry: $macro"
     done
 }
-# ============================================================================ VERIFY_DISPATCHER_ENTRIES END
 
-# ============================================================================ BUNDLE_EXTENSION_HEADERS BEGIN
 # Inline local extension headers in the staged C sources using the selected Tcl.
 bundle_extension_headers() {
     (cd "$tsrc" && BUNDLE_EXTRA_SRC_TRACE=${BUNDLE_EXTRA_SRC_TRACE:-0} "$tcl" "$base/tool/bundle_extra_src.tcl" "${names[@]}")
 }
-# ============================================================================ BUNDLE_EXTENSION_HEADERS END
 
-# ============================================================================ MARK_EXTENSIONS_READY BEGIN
 # Mark the fully prepared target sources as available for the next build.
 mark_extensions_ready() {
     touch "$extension_stamp"
 }
-# ============================================================================ MARK_EXTENSIONS_READY END
 
-# ============================================================================ COMPILE_SQLITE BEGIN
 # Compile the CLI, shared library, and static archive with the selected sources.
 compile_sqlite() {
     make_sqlite "EXTRA_SRC=${extra_src[*]}" sqlite3 libsqlite3.so libsqlite3.a
 }
-# ============================================================================ COMPILE_SQLITE END
 
-# ============================================================================ MAKE_SQLITE BEGIN
 # Run GNU Make in the configured tree with the effective options and supplied targets.
 make_sqlite() {
     make -C "$build" -j "$JOBS" "OPTIONS=${options[*]}" "$@"
 }
-# ============================================================================ MAKE_SQLITE END
 
-# ============================================================================ STAGE_PACKAGE BEGIN
 # Assemble a complete distribution under the private staging prefix.
 stage_package() {
     version=$(<"$src/VERSION")
@@ -579,16 +480,12 @@ stage_package() {
     stage_headers
     write_pkgconfig
 }
-# ============================================================================ STAGE_PACKAGE END
 
-# ============================================================================ STAGE_CLI BEGIN
 # Install the SQLite command-line executable in the staged bin directory.
 stage_cli() {
     install -m755 -- "$build/sqlite3" "$stage/bin/"
 }
-# ============================================================================ STAGE_CLI END
 
-# ============================================================================ STAGE_LIBRARIES BEGIN
 # Install the versioned SQLite library, its linker and SONAME links, and the archive.
 stage_libraries() {
     local library_file="libsqlite3.so.$version"
@@ -597,24 +494,18 @@ stage_libraries() {
     ln -s "$library_file" "$stage/lib/libsqlite3.so"
     install -m644 -- "$build/libsqlite3.a" "$stage/lib/"
 }
-# ============================================================================ STAGE_LIBRARIES END
 
-# ============================================================================ STAGE_HEADERS BEGIN
 # Install the public SQLite and session headers in the staged include directory.
 stage_headers() {
     install -m644 -- "$build"/{sqlite3.h,sqlite3ext.h,sqlite3session.h} "$stage/include/"
 }
-# ============================================================================ STAGE_HEADERS END
 
-# ============================================================================ WRITE_PKGCONFIG BEGIN
 # Write a sqlite3.pc whose prefix follows the location of the packaged file.
 write_pkgconfig() {
     # shellcheck disable=SC2016
     sed 's|^prefix=.*|prefix=${pcfiledir}/../..|' "$build/sqlite3.pc" > "$stage/lib/pkgconfig/sqlite3.pc"
 }
-# ============================================================================ WRITE_PKGCONFIG END
 
-# ============================================================================ VERIFY_PACKAGE BEGIN
 # Verify the staged CLI version and run every SQL check registered by the hooks.
 verify_package() {
     local query
@@ -624,9 +515,7 @@ verify_package() {
         [[ $("${cli[@]}" "$query") == 1 ]] || die "Packaged CLI check failed: $query"
     done
 }
-# ============================================================================ VERIFY_PACKAGE END
 
-# ============================================================================ PUBLISH_PACKAGE BEGIN
 # Expose the verified generation atomically and then retire previous generations.
 publish_package() {
     local generation=".packages/prefix.${work##*.}"
@@ -634,9 +523,7 @@ publish_package() {
     switch_package_generation "$generation"
     prune_old_generations "$generation"
 }
-# ============================================================================ PUBLISH_PACKAGE END
 
-# ============================================================================ ENSURE_PACKAGE_LINKS BEGIN
 # Establish and validate the public bin, include and lib links through package/.
 ensure_package_links() {
     local dir
@@ -645,9 +532,7 @@ ensure_package_links() {
         [[ $(readlink -- "$out/$dir") == "package/$dir" ]] || die "Unexpected package path: $out/$dir"
     done
 }
-# ============================================================================ ENSURE_PACKAGE_LINKS END
 
-# ============================================================================ SWITCH_PACKAGE_GENERATION BEGIN
 # Move the staged prefix to relative path $1 and atomically switch the package link.
 switch_package_generation() {
     local generation=$1
@@ -655,9 +540,7 @@ switch_package_generation() {
     ln -s "$generation" "$work/current"
     mv -Tf -- "$work/current" "$out/package"
 }
-# ============================================================================ SWITCH_PACKAGE_GENERATION END
 
-# ============================================================================ PRUNE_OLD_GENERATIONS BEGIN
 # Remove obsolete generations, retaining the published relative path supplied as $1.
 prune_old_generations() {
     local keep="$out/$1" old
@@ -665,15 +548,10 @@ prune_old_generations() {
         if [[ $old != "$keep" ]]; then rm -rf -- "$old"; fi
     done
 }
-# ============================================================================ PRUNE_OLD_GENERATIONS END
 
-# ============================================================================ REPORT_SUCCESS BEGIN
 # Report the SQLite version and output root of the successful build.
 report_success() {
     printf 'Built SQLite %s in %s\n' "$version" "$out"
 }
-# ============================================================================ REPORT_SUCCESS END
 
-# ============================================================================ DISPATCHER BEGIN
 main "$@"
-# ============================================================================ DISPATCHER END
