@@ -238,15 +238,46 @@ set_build_options() {
 
 # Initialize the upstream configure arguments and SQLite compile-time options.
 set_sqlite_defaults() {
-    configure_args=(--prefix="$out" --enable-shared --enable-static --soname=legacy --disable-rpath
-        --disable-tcl --enable-session --enable-fts3 --enable-fts4 --enable-fts5 --enable-rtree
-        --enable-geopoly --enable-column-metadata --enable-dbpage --enable-dbstat --enable-carray)
-    options=(-DSQLITE_ENABLE_RBU -DSQLITE_ENABLE_API_ARMOR -DSQLITE_ENABLE_NORMALIZE
-        -DSQLITE_ENABLE_FTS3_PARENTHESIS -DSQLITE_ENABLE_FTS3_TOKENIZER -DSQLITE_ENABLE_EXPLAIN_COMMENTS=1
-        -DSQLITE_ENABLE_OFFSET_SQL_FUNC=1 -DSQLITE_ENABLE_QPSG -DSQLITE_ENABLE_STAT4 -DSQLITE_DQS=0
-        -DSQLITE_LIKE_DOESNT_MATCH_BLOBS -DSQLITE_MAX_EXPR_DEPTH=100 -DSQLITE_MAX_ATTACHED=100
-        -DSQLITE_OMIT_DEPRECATED -DSQLITE_DEFAULT_FOREIGN_KEYS=1 -DSQLITE_DEFAULT_SYNCHRONOUS=1
-        -DSQLITE_USE_URI=1 -DSQLITE_SOUNDEX -DSQLITE_ENABLE_STMTVTAB -DSQLITE_ENABLE_BYTECODE_VTAB)
+    configure_args=(
+        --prefix="$out"
+        --enable-shared
+        --enable-static
+        --soname=legacy
+        --disable-rpath
+        --disable-tcl
+        --enable-session
+        --enable-fts3
+        --enable-fts4
+        --enable-fts5
+        --enable-rtree
+        --enable-geopoly
+        --enable-column-metadata
+        --enable-dbpage
+        --enable-dbstat
+        --enable-carray
+    )
+    options=(
+        -DSQLITE_ENABLE_RBU
+        -DSQLITE_ENABLE_API_ARMOR
+        -DSQLITE_ENABLE_NORMALIZE
+        -DSQLITE_ENABLE_FTS3_PARENTHESIS
+        -DSQLITE_ENABLE_FTS3_TOKENIZER
+        -DSQLITE_ENABLE_EXPLAIN_COMMENTS=1
+        -DSQLITE_ENABLE_OFFSET_SQL_FUNC=1
+        -DSQLITE_ENABLE_QPSG
+        -DSQLITE_ENABLE_STAT4
+        -DSQLITE_DQS=0
+        -DSQLITE_LIKE_DOESNT_MATCH_BLOBS
+        -DSQLITE_MAX_EXPR_DEPTH=100
+        -DSQLITE_MAX_ATTACHED=100
+        -DSQLITE_OMIT_DEPRECATED
+        -DSQLITE_DEFAULT_FOREIGN_KEYS=1
+        -DSQLITE_DEFAULT_SYNCHRONOUS=1
+        -DSQLITE_USE_URI=1
+        -DSQLITE_SOUNDEX
+        -DSQLITE_ENABLE_STMTVTAB
+        -DSQLITE_ENABLE_BYTECODE_VTAB
+    )
 }
 
 # Link ICU's common and internationalization C APIs and enable ICU collations.
