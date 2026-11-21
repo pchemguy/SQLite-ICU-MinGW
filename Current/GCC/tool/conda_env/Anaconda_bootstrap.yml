@@ -1,0 +1,15 @@
+name: conda_bootstrap
+channels:
+  - conda-forge
+  - nodefaults
+dependencies:
+  - python
+  - conda
+  - mamba
+  - micromamba
+  - uv
+  - pipx
+  - git
+  - hatch
+  - ruff
+  - mypy
