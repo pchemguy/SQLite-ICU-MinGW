@@ -1,3 +1,17 @@
+# SQLite GCC harness
+
+`./sqlite_build.sh` builds the SQLite CLI and shared and static libraries on Linux. The `./sqlite_ext_*.sh` hooks register project extensions. Build helpers live in `./tool/`, the Conda bootstrap in `./tool/conda_env/`, and preset tests in `./tests/`.
+
+## Conda Python with custom SQLite
+
+Install and verify the requested preset in `./out/conda` with [./sqlite_build_conda.sh](./sqlite_build_conda.sh). Select `full` for all project extensions.
+
+```bash
+./sqlite_build_conda.sh --preset full && source ./out/conda_activate.sh
+```
+
+Use `./out/conda/bin/python` directly for scripts and tests. [Setup and extension checks](./README.md#use-the-build-from-conda-python)
+
 ## Bash design
 
 Follow the [Google Shell Style Guide](https://google.github.io/styleguide/shellguide.html) for Bash code.
@@ -11,13 +25,3 @@ Follow the [Google Shell Style Guide](https://google.github.io/styleguide/shellg
   export LC_ALL=C
   shopt -s nullglob
   ```
-
-## Conda Python with custom SQLite
-
-From `Current/GCC`, build the requested preset and activate the environment in the current Bash shell. Use `full` for all project extensions.
-
-```bash
-./sqlite_build_conda.sh --preset full && source out/conda_activate.sh
-```
-
-For scripts and tests, invoke `out/conda/bin/python` directly. Rerunning the wrapper reuses the environment, removes `out/bin` and `out/build`, and verifies that the prefix's Python loads the rebuilt SQLite. [Setup and extension checks](README.md#use-the-build-from-conda-python)
