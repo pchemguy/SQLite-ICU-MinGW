@@ -72,7 +72,7 @@ For a shared-library consumer, point `PKG_CONFIG_PATH` at the local `sqlite3.pc`
 
 ## Source preparation and reuse
 
-Start at `main()` to follow the build in execution order. `collect_extensions()` selects the sources, `prepare_target_sources()` stages them for the amalgamation, and `publish_package()` switches the verified prefix into place. Each function has named `BEGIN` and `END` fences. [Build driver](sqlite_build.sh)
+Start at `main()` to follow the build in execution order. `collect_extensions()` selects the sources, `prepare_target_sources()` stages them for the amalgamation, and `publish_package()` switches the verified prefix into place. [Build driver](sqlite_build.sh)
 
 The first build fetches SQLite's canonical `sqlite.zip`, the enabled project sources from their `main` branches and FP16 from `master` when PBLOB is selected. Downloads follow redirects, retry, and enter the cache only after a complete HTTP 200 response with a non-HTML body. Extraction checks the expected source files before publishing the source tree. A warm build reuses the cache and prepared inputs. To refresh a moving upstream source, move its cached file aside and run the build again. [SQLite source](https://sqlite.org/src/zip/sqlite.zip) · [ICUex](https://github.com/pchemguy/SQLiteICUex) · [PBLOB](https://github.com/pchemguy/SQLitePackedBlob) · [RegexpMatches](https://github.com/pchemguy/SQLiteRegexpMatches) · [FP16](https://github.com/Maratyszcza/FP16)
 

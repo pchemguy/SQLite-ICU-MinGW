@@ -1,6 +1,5 @@
 # Package operations are limited to missing requirements of the selected build.
 
-# ============================================================================ INSTALL_PACKAGES BEGIN
 # Install the supplied APT or DNF packages, refreshing the APT index once per run.
 install_packages() {
     local deb_names=$1 rpm_names=$2
@@ -24,9 +23,7 @@ install_packages() {
     fi
     "${elevate[@]}" "${command[@]}" "${packages[@]}" || die "Failed to run: ${command[*]} ${packages[*]}"
 }
-# ============================================================================ INSTALL_PACKAGES END
 
-# ============================================================================ ENSURE_DEPENDENCIES BEGIN
 # Probe the selected ICU and zlib modules, install missing packages, and verify them.
 ensure_dependencies() {
     local apt_updated=0
@@ -52,4 +49,3 @@ ensure_dependencies() {
     if (( ${#deb[@]} )); then install_packages "${deb[*]}" "${rpm[*]}"; fi
     pkg-config --print-errors --exists "${modules[@]}" || die "Missing pkg-config modules: ${modules[*]}"
 }
-# ============================================================================ ENSURE_DEPENDENCIES END
