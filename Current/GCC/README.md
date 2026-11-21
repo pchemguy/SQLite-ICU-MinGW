@@ -72,11 +72,13 @@ For a shared-library consumer, point `PKG_CONFIG_PATH` at the local `sqlite3.pc`
 
 ## Source preparation and reuse
 
+Start at `main()` to follow the build in execution order. `collect_extensions()` selects the sources, `prepare_target_sources()` stages them for the amalgamation, and `publish_package()` switches the verified prefix into place. Each function has named `BEGIN` and `END` fences. [Build driver](sqlite_build.sh)
+
 The first build fetches SQLite's canonical `sqlite.zip`, the enabled project sources from their `main` branches and FP16 from `master` when PBLOB is selected. Downloads follow redirects, retry, and enter the cache only after a complete HTTP 200 response with a non-HTML body. Extraction checks the expected source files before publishing the source tree. A warm build reuses the cache and prepared inputs. To refresh a moving upstream source, move its cached file aside and run the build again. [SQLite source](https://sqlite.org/src/zip/sqlite.zip) · [ICUex](https://github.com/pchemguy/SQLiteICUex) · [PBLOB](https://github.com/pchemguy/SQLitePackedBlob) · [RegexpMatches](https://github.com/pchemguy/SQLiteRegexpMatches) · [FP16](https://github.com/Maratyszcza/FP16)
 
 After `make .target_source`, the two Tcl helpers patch the selected extension initializers, generate `misc_ext_init.c` and bundle local headers. The ordered `EXTRA_SRC` list puts the stock regex engine before RegexpMatches, which uses its private definitions. Both PBLOB and RegexpMatches also use SQLite's private JSON code. The PBLOB hook declares `SQLITE_RESULT_SUBTYPE` on the staged `pblob_unpack` registration so the strict upstream CLI can return nested JSON. The cached upstream source stays available for subsequent builds.
 
-The Bash hooks beside the driver run in filename order after the stock modules. A hook can use `project_source REPOSITORY BASENAME MACRO` to fetch a C file and add it to the amalgamation, or `add_source PATH MACRO` for a local file. The PBLOB hook shows how to track a header archive, prepare files in `tsrc/`, and add a SQL smoke check. The driver rebuilds generated code when effective settings or inputs change and serializes builds using the same output root.
+The Bash hooks beside the driver run in filename order after the stock modules. A hook can use `project_source REPOSITORY BASENAME MACRO` to fetch a C file and add it to the amalgamation, or `add_source PATH MACRO` for a local file. Preparation callbacks run later, during `prepare_target_sources()`. The PBLOB hook assigns its FP16 archive path when it registers the callback so the callback can read it during staging. The driver rebuilds generated code when effective settings or inputs change and serializes builds using the same output root. [PBLOB hook](sqlite_ext_pblob.sh)
 
 `./sqlite_build.sh clean` removes the managed source, build and package outputs while retaining `out/cache/`. Use a separate `OUT_DIR` to keep several presets available side by side.
 

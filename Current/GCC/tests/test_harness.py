@@ -132,3 +132,48 @@ def test_clean_preserves_unmanaged_directory(tmp_path):
     result = subprocess.run([BASE / "sqlite_build.sh", "clean"], env=dict(os.environ, OUT_DIR=str(tmp_path)),
                             capture_output=True, text=True)
     assert result.returncode and valuable.is_dir()
+
+
+def test_help_precedes_preset_validation_and_output_creation(tmp_path):
+    root = tmp_path / "missing"
+    result = subprocess.run([BASE / "sqlite_build.sh", "--preset", "unused", "--help"],
+                            env=dict(os.environ, OUT_DIR=str(root)), capture_output=True, text=True, check=True)
+    assert result.stdout.startswith("Usage: sqlite_build.sh") and not root.exists()
+
+
+def test_clean_missing_root_does_not_create_it(tmp_path):
+    root = tmp_path / "missing"
+    subprocess.run([BASE / "sqlite_build.sh", "clean"], env=dict(os.environ, OUT_DIR=str(root)), check=True)
+    assert not root.exists()
+
+
+def test_clean_managed_root_retains_cache_and_user_files(tmp_path):
+    (tmp_path / ".sqlite-gcc-root").touch()
+    (tmp_path / "cache").mkdir()
+    (tmp_path / "cache/sqlite.zip").write_bytes(b"archive")
+    (tmp_path / "notes").write_text("keep")
+    (tmp_path / "build").mkdir()
+    subprocess.run([BASE / "sqlite_build.sh", "clean"], env=dict(os.environ, OUT_DIR=str(tmp_path)), check=True)
+    assert not (tmp_path / "build").exists()
+    assert (tmp_path / "cache/sqlite.zip").read_bytes() == b"archive"
+    assert (tmp_path / "notes").read_text() == "keep"
+
+
+@pytest.mark.parametrize(("command", "status"), [
+    ("exit 73", 73),
+    ('kill -TERM "$BUILD_PROCESS_ID"', 143),
+])
+def test_workspace_cleanup_preserves_exit_status(tmp_path, command, status):
+    root = tmp_path / "out"
+    (root / "cache").mkdir(parents=True)
+    (root / "cache/sqlite.zip").write_bytes(b"cached")
+    digest = tmp_path / "sha256sum"
+    digest.write_text(f"#!/bin/sh\n{command}\n")
+    digest.chmod(0o755)
+    env = dict(os.environ, OUT_DIR=str(root), PATH=f"{tmp_path}{os.pathsep}{os.environ['PATH']}")
+    # exec keeps the driver's PID available to the signal-injecting child.
+    result = subprocess.run(["bash", "-c", 'export BUILD_PROCESS_ID=$$; exec "$@"', "test",
+                             BASE / "sqlite_build.sh", "--preset", "bare"], env=env)
+    assert result.returncode == status
+    assert not list(root.glob(".work.*"))
+    assert (root / "cache/sqlite.zip").read_bytes() == b"cached"

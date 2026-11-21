@@ -133,7 +133,11 @@ def verify_cached_rebuild(root, tmp_path, env):
     curl.write_text('#!/bin/sh\necho "unexpected network request" >&2\nexit 89\n')
     curl.chmod(0o755)
     env = dict(env, PATH=f"{commands}{os.pathsep}{env['PATH']}")
+    manifest = root / "build/build-inputs.txt"
+    ready = root / "build/tsrc/.extensions-ready"
+    prepared = (manifest.stat().st_mtime_ns, ready.stat().st_mtime_ns)
     subprocess.run([HARNESS], env=env, cwd=tmp_path, check=True)
+    assert (manifest.stat().st_mtime_ns, ready.stat().st_mtime_ns) == prepared
     published = (root / "package").resolve()
     install = commands / "install"
     env["REAL_INSTALL"] = shutil.which("install", path=env["PATH"])
@@ -142,4 +146,5 @@ def verify_cached_rebuild(root, tmp_path, env):
     failure = subprocess.run([HARNESS], env=env, cwd=tmp_path)
     assert failure.returncode == 73
     assert (root / "package").resolve() == published
+    assert not list(root.glob(".work.*"))
     assert sql([root / "bin/sqlite3", "-batch", "-init", "/dev/null", ":memory:"], "SELECT str_casefold('ABC')") == "abc"
