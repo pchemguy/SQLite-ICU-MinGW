@@ -1,6 +1,8 @@
 This project explores the building process of the SQLite library and the SQLiteODBC driver on Windows with two toolchains: Microsoft Visual C++ Build Tools (MSVC) and MSYS2/MinGW. The particular focus is on the SQLite-specific building workflow and customizing/extending the building process. The project provides several scripts producing custom builds of the SQLite library and the SQLiteODBC driver. These builds incorporate extended SQLite-related functionality, and the scripts can be used as templates and further tailored to specific needs.
 
-### Features
+For native Linux builds, the Bash/GCC harness produces the SQLite CLI, shared library and static archive with optional built-in extensions. It uses system ICU and zlib packages. [Linux build instructions and presets](Current/GCC/README.md)
+
+### Windows features
 
   - **ICU enabled builds**  
     SQLite does not support insensitive string operations of non-Latin characters, which is essential for user-oriented applications. Instead, the ICU extension enables this functionality. ICU is disabled by default, and no ICU-enabled binaries are available from the official website. Enabling the ICU extension on Windows is not a straightforward process, but I could not find any adequate building/usage instruction on the Internet, so I am sharing my recipe.
@@ -16,7 +18,7 @@ This project explores the building process of the SQLite library and the SQLiteO
     Three SQLite extensions, ICU and Zipfile/SQLAR, require external dependencies (ICU and Zlib). Since I have encountered problems with static linking of Zlib, I linked both ICU and Zlib dynamically. The building scripts, in turn, copy the Zlib and ICU dependencies as necessary into the folder containing built SQLite binaries.
   - **MSVC Build Tools and MSYS2/MinGW shell scripts**  
 
-### Usage
+### Windows usage
 
 **N.B.: these scripts are from the *Current* folder! Do not use scripts from MinGW/MSVC folders (these are dev folders)!**
 
