@@ -59,6 +59,8 @@ call :CORE_ENV                || exit /b !ERRORLEVEL!
 
 call "%~dp0msbuild_check.bat" || exit /b !ERRORLEVEL!
 
+call :BUILD_OPTIONS           || exit /b !ERRORLEVEL!
+
 if "%USE_ICU%"=="1" (
     call :ICU_OPTIONS         || exit /b !ERRORLEVEL!
 )
@@ -66,8 +68,6 @@ if "%USE_ICU%"=="1" (
 if "%USE_ZLIB%"=="1" (
     call :ZLIB_OPTIONS        || exit /b !ERRORLEVEL!
 )
-
-call :BUILD_OPTIONS           || exit /b !ERRORLEVEL!
 
 call :MAKE_DEBUG %*           || exit /b !ERRORLEVEL!
 
@@ -170,11 +170,11 @@ set "SECTION=CORE_ENV"
 
 set "TAR=%windir%\System32\tar.exe"
 
+set "PROJDIR=%~dp0"
+set "PROJDIR=%PROJDIR:~0,-1%"
+
 set "TOOLDIR="
-if exist "%~dp0patch_sqlite_misc_autoext.tcl" (
-    set "TOOLDIR=%~dp0"
-    set "TOOLDIR=%TOOLDIR:~0,-1%"
-) else if exist "%~dp0tool\patch_sqlite_misc_autoext.tcl" (
+if exist "%~dp0tool\patch_sqlite_misc_autoext.tcl" (
     set "TOOLDIR=%~dp0tool"
 ) else if exist "%~dp0tools\patch_sqlite_misc_autoext.tcl" (
     set "TOOLDIR=%~dp0tools"
@@ -185,13 +185,8 @@ if not defined TOOLDIR (
     echo %ERROR% Failed to locate patch_sqlite_misc_autoext.tcl.
     exit /b 1
 )
-echo %INFO% TOOLDIR: %TOOLDIR%.
+echo:
 
-cd /d "%TOOLDIR%\.."
-set "PROJDIR=%CD%"
-echo %INFO% PROJDIR: %PROJDIR%.
-
-set "OPT_XTRA="
 if not defined USE_ICU       (set "USE_ICU=1")
 if not defined USE_ZLIB      (set "USE_ZLIB=1")
 if not defined SQLITE_EXTRA  (set "SQLITE_EXTRA=1")
@@ -231,6 +226,9 @@ if "%USE_EXTRAS%"=="1" (
 echo %MSG%
 
 set "OUT=%PROJDIR%\out"
+if exist "%OUT%" (
+    echo %WARN% Output directory already exist {this is a warning, not a hard error}.
+)
 call :MKDIR__DIR "%OUT%" || exit /b !ERRORLEVEL!
 set "STDOUTLOG=%OUT%\stdout.log"
 set "STDERRLOG=%OUT%\stderr.log"
@@ -243,6 +241,9 @@ call :MKDIR__DIR "%SQLITEDIR%" || exit /b !ERRORLEVEL!
 set "THIRDDIR=%SQLITEDIR%\compat"
 call :MKDIR__DIR "%THIRDDIR%" || exit /b !ERRORLEVEL!
 set "BUILDDIR=%OUT%\build"
+if exist "%BUILDDIR%" (
+    echo %WARN% Build directory already exist {this is a warning, not a hard error}.
+)
 call :MKDIR__DIR "%BUILDDIR%" || exit /b !ERRORLEVEL!
 set "TSRC=%BUILDDIR%\tsrc"
 call :MKDIR__DIR "%TSRC%" || exit /b !ERRORLEVEL!
@@ -258,11 +259,70 @@ call :MKDIR__DIR "%BINDIR%" || exit /b !ERRORLEVEL!
 set "TCLSH_CMD=%BUILDDIR%\jimsh0.exe"
 
 echo:
+echo %WARN% Project directories
+echo %INFO% --------------------------------------------------------------------
+echo %INFO% ROOT:            %PROJDIR%
+echo %INFO% OUTPUT:          %OUT%
+echo %INFO% TOOLS:           %TOOLDIR%
+echo %INFO% Downloads:       %CACHEDIR%
+echo %INFO% SQLite source:   %SQLITEDIR%
+echo %INFO% Extras:          %THIRDDIR%
+echo %INFO% Build:           %BUILDDIR%
+echo %INFO% SQLite tsrc:     %TSRC%
+echo %INFO% Includes:        %INCDIR%
+echo %INFO% Import library:  %LIBDIR_IMPORT%
+echo %INFO% Static library:  %LIBDIR_STATIC%
+echo %INFO% Build artifacts: %BINDIR%
+echo %INFO% --------------------------------------------------------------------
+
+echo:
 echo %INFO% ~~~~~ %SECTION% ~~~~~
 echo:
 exit /b 0
 :: ============================================================================
 :: ============================================================================ CORE_ENV END
+
+
+:: ============================================================================ BUILD_OPTIONS BEGIN
+:: ============================================================================
+:BUILD_OPTIONS
+
+set "SECTION=BUILD_OPTIONS"
+
+set "SQLITE_MAKEFILE=%SQLITEDIR%\Makefile.msc"
+set "SESSION=1"
+set "RBU=1"
+set "API_ARMOR=1"
+set "SYMBOLS=0"
+rem set "WITHOUT_JIMSH=1"
+set "EXTRA_SRC="
+
+set "OPT_XTRA="
+set OPT_XTRA=%OPT_XTRA% ^
+    -DSQLITE_ENABLE_NORMALIZE ^
+    -DSQLITE_ENABLE_FTS4=1 ^
+    -DSQLITE_ENABLE_FTS3_PARENTHESIS ^
+    -DSQLITE_ENABLE_FTS3_TOKENIZER ^
+    -DSQLITE_ENABLE_EXPLAIN_COMMENTS=1 ^
+    -DSQLITE_ENABLE_OFFSET_SQL_FUNC=1 ^
+    -DSQLITE_ENABLE_QPSG ^
+    -DSQLITE_ENABLE_STAT4 ^
+    -DSQLITE_DQS=0 ^
+    -DSQLITE_LIKE_DOESNT_MATCH_BLOBS ^
+    -DSQLITE_MAX_EXPR_DEPTH=100 ^
+    -DSQLITE_MAX_ATTACHED=100 ^
+    -DSQLITE_OMIT_DEPRECATED ^
+    -DSQLITE_DEFAULT_FOREIGN_KEYS=1 ^
+    -DSQLITE_DEFAULT_SYNCHRONOUS=1 ^
+    -DSQLITE_USE_URI=1 ^
+    -DSQLITE_SOUNDEX
+
+echo:
+echo %INFO% ~~~~~ %SECTION% ~~~~~
+echo:
+exit /b 0
+:: ============================================================================
+:: ============================================================================ BUILD_OPTIONS END
 
 
 :: ============================================================================ ZLIB_OPTIONS BEGIN
@@ -307,47 +367,6 @@ echo:
 exit /b 0
 :: ============================================================================
 :: ============================================================================ ICU_OPTIONS END
-
-
-:: ============================================================================ BUILD_OPTIONS BEGIN
-:: ============================================================================
-:BUILD_OPTIONS
-
-set "SECTION=BUILD_OPTIONS"
-
-set "SQLITE_MAKEFILE=%SQLITEDIR%\Makefile.msc"
-set "SESSION=1"
-set "RBU=1"
-set "API_ARMOR=1"
-set "SYMBOLS=0"
-rem set "WITHOUT_JIMSH=1"
-set "EXTRA_SRC="
-
-set OPT_XTRA=%OPT_XTRA% ^
-    -DSQLITE_ENABLE_NORMALIZE ^
-    -DSQLITE_ENABLE_FTS4=1 ^
-    -DSQLITE_ENABLE_FTS3_PARENTHESIS ^
-    -DSQLITE_ENABLE_FTS3_TOKENIZER ^
-    -DSQLITE_ENABLE_EXPLAIN_COMMENTS=1 ^
-    -DSQLITE_ENABLE_OFFSET_SQL_FUNC=1 ^
-    -DSQLITE_ENABLE_QPSG ^
-    -DSQLITE_ENABLE_STAT4 ^
-    -DSQLITE_DQS=0 ^
-    -DSQLITE_LIKE_DOESNT_MATCH_BLOBS ^
-    -DSQLITE_MAX_EXPR_DEPTH=100 ^
-    -DSQLITE_MAX_ATTACHED=100 ^
-    -DSQLITE_OMIT_DEPRECATED ^
-    -DSQLITE_DEFAULT_FOREIGN_KEYS=1 ^
-    -DSQLITE_DEFAULT_SYNCHRONOUS=1 ^
-    -DSQLITE_USE_URI=1 ^
-    -DSQLITE_SOUNDEX
-
-echo:
-echo %INFO% ~~~~~ %SECTION% ~~~~~
-echo:
-exit /b 0
-:: ============================================================================
-:: ============================================================================ BUILD_OPTIONS END
 
 
 :: ============================================================================ MAKE_DEBUG BEGIN
