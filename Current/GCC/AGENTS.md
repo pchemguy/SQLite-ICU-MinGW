@@ -11,3 +11,13 @@ Follow the [Google Shell Style Guide](https://google.github.io/styleguide/shellg
   export LC_ALL=C
   shopt -s nullglob
   ```
+
+## Conda Python with custom SQLite
+
+From `Current/GCC`, build the requested preset and activate the environment in the current Bash shell. Use `full` for all project extensions.
+
+```bash
+./sqlite_build_conda.sh --preset full && source out/conda_activate.sh
+```
+
+For scripts and tests, invoke `out/conda/bin/python` directly. Rerunning the wrapper reuses the environment, removes `out/bin` and `out/build`, and verifies that the prefix's Python loads the rebuilt SQLite. [Setup and extension checks](README.md#use-the-build-from-conda-python)

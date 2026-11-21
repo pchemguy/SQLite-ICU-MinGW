@@ -15,14 +15,56 @@ The full build returns `abc|blob|["12","3"]`. The script resolves its paths from
 
 ### Use the build from Conda Python
 
+From `Current/GCC`, run the wrapper with the SQLite preset you want. The default is `full`, which includes ICUex, PBLOB and RegexpMatches. The bundled Conda bootstrap supports glibc-based x86-64 and AArch64 Linux. Choose a writable output path without whitespace. [Presets and switches](#presets-and-switches)
+
 ```bash
 ./sqlite_build_conda.sh --preset full
-out/conda/bin/python -c 'import sqlite3; print(sqlite3.sqlite_version)'
 ```
 
-The wrapper accepts the same presets and defaults to `full`. It runs the bundled Conda bootstrap with both manifests when `out/conda/bin/python` is missing. Subsequent runs reuse that Python. The bootstrap also creates `out/conda_activate.sh` for interactive use. [Bootstrap manifests](tool/conda_env)
+The wrapper checks for an executable `out/conda/bin/python`. On first setup the bootstrap downloads Micromamba, creates the environment from `Anaconda_bootstrap.yml`, installs the project packages from `Anaconda.yml`, and generates `out/conda_activate.sh`. Later runs reuse that environment. [Bootstrap files](tool/conda_env)
 
-Each run removes `out/bin` and `out/build`, retains the download cache and SQLite source tree, and invokes `sqlite_build.sh` with the selected preset. The wrapper atomically replaces the file behind Conda's `lib/libsqlite3.so.0`, preserving its symlinks and package cache. It then runs the prefix's Python, queries SQLite, checks the loaded library path in `/proc/self/maps`, and compares the file with the build output. A failed verification restores the previous library. Set `OUT_DIR` to use another dedicated output root. The prefix is always `$OUT_DIR/conda`.
+Each run removes `out/bin` and `out/build`, reuses the cached sources, and passes the preset to `sqlite_build.sh`. It then atomically replaces the file behind `out/conda/lib/libsqlite3.so.0`, preserving Conda's library symlinks and cached package.
+
+The wrapper starts `out/conda/bin/python` in isolated mode, opens a SQLite connection, checks the library path in `/proc/self/maps`, and compares the loaded file byte for byte with `out/lib/libsqlite3.so.0`. On success it prints the interpreter, the loaded library path, and SQLite's runtime version and source ID. The library filename can still carry Conda's original version. If verification fails, the wrapper restores the previous library.
+
+#### Run Python and check the extensions
+
+For scripts and tests, invoke the environment's Python directly. This query exercises all three project extensions on one connection after a `full` build.
+
+```bash
+out/conda/bin/python -I - <<'PY'
+import sqlite3
+
+with sqlite3.connect(":memory:") as db:
+    row = db.execute("""
+        SELECT str_casefold('ABC'),
+               typeof(pblob_pack('[1,2]')),
+               regexp_matches('[0-9]+', 'a12b3')
+    """).fetchone()
+    print(row)
+PY
+```
+
+The expected result is `('abc', 'blob', '["12","3"]')`.
+
+For interactive work, source the generated launcher in each new Bash shell. This prints the active interpreter and its SQLite version.
+
+```bash
+source out/conda_activate.sh
+python -c 'import sqlite3, sys; print(sys.executable, sqlite3.sqlite_version)'
+conda deactivate
+```
+
+#### Switch presets or keep separate environments
+
+Rerun the wrapper with a different `--preset` to replace SQLite in the same environment. Start a fresh Python process to load the replacement. If a Conda package update reinstalls its own `libsqlite`, rerun the wrapper with your chosen preset.
+
+To keep a second preset alongside the full build, set `OUT_DIR` to a separate directory. Its interpreter is `$OUT_DIR/conda/bin/python` and its launcher is `$OUT_DIR/conda_activate.sh`.
+
+```bash
+OUT_DIR="$PWD/out-bare" ./sqlite_build_conda.sh --preset bare
+out-bare/conda/bin/python -c 'import sqlite3; print(sqlite3.sqlite_version)'
+```
 
 ### Presets and switches
 
