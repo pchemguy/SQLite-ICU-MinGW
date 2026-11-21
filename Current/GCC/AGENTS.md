@@ -1,4 +1,4 @@
-# Bash design
+## Bash design
 
 Follow the [Google Shell Style Guide](https://google.github.io/styleguide/shellguide.html) for Bash code.
 
