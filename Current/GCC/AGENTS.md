@@ -1,6 +1,8 @@
 # Bash design
 
-- Give each distinct workflow step its own function. Define `main()` at the top to coordinate workflow and end the file with `main "$@"`.
+- Give each distinct workflow step its own function.
+- Keep step functions focused, coherent, while avoiding excessive fragmentation.
+- Define `main()` at the top to coordinate workflow and end the file with `main "$@"`.
 - Put a brief comment immediately above each non-trivial function describing its purpose or side effects.
 - Store multi-flag option lists in arrays with one option (and its argument, if any) per line, e.g.:
 
