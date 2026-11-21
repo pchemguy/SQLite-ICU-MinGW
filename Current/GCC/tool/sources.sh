@@ -1,5 +1,7 @@
 # Shared by the driver and the sqlite_ext_*.sh hooks.
 
+# ============================================================================ DOWNLOAD BEGIN
+# Cache URL $1 at path $2 only after a complete, non-HTML HTTP 200 response.
 download() {
     local url=$1 target=$2 response code media
     if [[ -s $target && -f $target ]]; then return; fi
@@ -16,7 +18,10 @@ download() {
     fi
     mv -fT -- "$work/download.part" "$target"
 }
+# ============================================================================ DOWNLOAD END
 
+# ============================================================================ UNPACK_ZIP BEGIN
+# Extract ZIP $1 under $2, verify the requested files, and print the source root.
 unpack_zip() {
     local archive=$1 destination=$2
     shift 2
@@ -31,16 +36,23 @@ unpack_zip() {
     done
     printf '%s\n' "${roots[0]}"
 }
+# ============================================================================ UNPACK_ZIP END
 
+# ============================================================================ ADD_SOURCE BEGIN
+# Append a C source path and its feature macro to the ordered extension lists.
 add_source() {
     sources+=("$1")
     names+=("${1##*/}")
     macros+=("$2")
 }
+# ============================================================================ ADD_SOURCE END
 
+# ============================================================================ PROJECT_SOURCE BEGIN
+# Fetch and register a project extension by repository, source basename, and macro.
 project_source() {
     local repo=$1 name=$2 macro=$3
     local file="${cache:?}/$repo/src/$name.c"
     download "https://raw.githubusercontent.com/pchemguy/$repo/refs/heads/main/src/$name.c" "$file"
     add_source "$file" "$macro"
 }
+# ============================================================================ PROJECT_SOURCE END
