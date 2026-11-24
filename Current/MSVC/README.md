@@ -25,7 +25,7 @@ After a default build, check `out\bin` for `sqlite3.exe`, `sqlite3.dll`, and the
 The build harness includes
 
 - `sqlite_msbuild.bat`: Main script.
-- [`msbuild.bat`](msbuild.bat): MSVC discovery, activation and verification helper. It reuses an active x86/x64 MSVC environment or, when none is active, discovers and activates x64 Build Tools/Visual Studio before validating the compiler, linker and supporting tools.
+- `msbuild.bat`: MSVC discovery, activation and verification helper. It reuses an active x86/x64 MSVC environment or, when none is active, discovers and activates x64 Build Tools/Visual Studio before validating the compiler, linker and supporting tools.
 - `download_file.bat`: cURL download helper.
 - `extract_archive.bat`: tar archive extraction helper.
 - `sqlite_ext_icuex.bat`:  [ICUex](https://github.com/pchemguy/SQLiteICUex) extension activation.
