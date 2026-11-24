@@ -57,7 +57,7 @@ call :COLOR_SCHEME
 
 call :CORE_ENV                || exit /b !ERRORLEVEL!
 
-call "%~dp0msbuild_check.bat" || exit /b !ERRORLEVEL!
+call "%~dp0msbuild.bat"       || exit /b !ERRORLEVEL!
 
 call :BUILD_OPTIONS           || exit /b !ERRORLEVEL!
 
