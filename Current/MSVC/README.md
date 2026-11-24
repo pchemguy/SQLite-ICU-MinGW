@@ -10,8 +10,8 @@ url: https://chatgpt.com/c/6a786079-f408-83eb-87b1-e0d35b2804a5
 
 ## Run a build
 
-1. Open an **x64** or **x86 Native Tools Command Prompt** with the MSVC C/C++ tools and Windows SDK installed (available with [Visual Studio or Build Tools](https://visualstudio.microsoft.com/downloads/)). Use Windows CMD.
-2. For the default build, activate a Conda environment containing ICU for that same target architecture. For a build without ICU or Conda, use the [bare preset](#build-presets). For a custom build without ICU, set both `USE_ICU=0` and `SQLITE_ENABLE_ICUEX=0` (or skip all project hooks with `USE_EXTRAS=0`).
+1. Use Windows CMD with the MSVC C/C++ tools and Windows SDK installed (available with [Visual Studio or Build Tools](https://visualstudio.microsoft.com/downloads/)). You may start from an already initialized **x64** or **x86 Native Tools Command Prompt**. If no MSVC environment is active, [msbuild.bat](msbuild.bat) can discover and activate an **x64** toolchain automatically; x86 builds require an already initialized x86 MSVC prompt.
+2. For the default build, activate a Conda environment containing ICU for the same target architecture. For a build without ICU or Conda, use the [bare preset](#build-presets). For a custom build without ICU, set both `USE_ICU=0` and `SQLITE_ENABLE_ICUEX=0` (or skip all project hooks with `USE_EXTRAS=0`).
 3. From a directory containing a copy of the build harness, run:
 
 ```cmd
@@ -25,7 +25,7 @@ After a default build, check `out\bin` for `sqlite3.exe`, `sqlite3.dll`, and the
 The build harness includes
 
 - `sqlite_msbuild.bat`: Main script.
-- `msbuild_check.bat`: MS Build environment check.
+- [`msbuild.bat`](msbuild.bat): MSVC discovery, activation and verification helper. It reuses an active x86/x64 MSVC environment or, when none is active, discovers and activates x64 Build Tools/Visual Studio before validating the compiler, linker and supporting tools.
 - `download_file.bat`: cURL download helper.
 - `extract_archive.bat`: tar archive extraction helper.
 - `sqlite_ext_icuex.bat`:  [ICUex](https://github.com/pchemguy/SQLiteICUex) extension activation.
@@ -74,19 +74,29 @@ Ordinary arguments are forwarded to the **final** NMake invocation. A named targ
 
 If the **first** argument is `env`, `tcl-env` or `tcl-test`, the harness runs that diagnostic against `out\sqlite\Makefile.msc` after preflight and option setup, **before** any download or extraction. The SQLite source tree must already exist. Once dispatched, the diagnostic returns **100** regardless of NMake's status and stops the normal build. An earlier preflight failure is a different exit path.
 
-## Environment checks
+## MSVC activation and environment verification
 
-[msbuild_check.bat](msbuild_check.bat) runs **once**, before architecture-specific paths are selected. It checks the local environment, not the cache or network.
+[msbuild.bat](msbuild.bat) runs **once** near the start of the SQLite harness, before architecture-specific dependency paths are selected. Despite its name, it does not build SQLite with MSBuild and does not install Visual Studio or Build Tools. Its job is to establish or validate the MSVC command-line environment required by the NMake build.
+
+If `VSINSTALLDIR` is already defined, the helper treats the MSVC environment as active and proceeds directly to verification. This preserves an explicitly selected x86 or x64 Native Tools environment.
+
+If no MSVC environment is active, the helper searches for `vcvars64.bat` and activates an x64 toolchain. Discovery proceeds through an explicit `VCVARS` setting or `vcvars64.bat` on `PATH`, installed Visual Studio locations, local/sibling Build Tools locations, and the `MSBUILDTOOLS`, `BUILDTOOLS`, and `MSBUILD` directory variables. Automatic discovery activates **x64**; use an already initialized x86 Native Tools Command Prompt for x86 builds.
+
+After reuse or activation, the helper verifies the resulting environment:
 
 | Check | Requirement |
 |---|---|
-| MSVC shell | `VisualStudioVersion` and `VCINSTALLDIR` must be set. `VSCMD_ARG_TGT_ARCH` must be `x86` or `x64` (case-insensitive). The host architecture is not used to select the target. |
-| Executables on `PATH` | `cl.exe`, `nmake.exe`, `dumpbin.exe`, `lib.exe` and `curl.exe` are required, including on a warm build. The harness uses NMake, not `msbuild.exe`. |
+| MSVC environment | `VisualStudioVersion` and `VCINSTALLDIR` must be set. `VSCMD_ARG_TGT_ARCH` must be `x86` or `x64` (case-insensitive). The host architecture is not used to select the target. |
+| Required executables | `cl.exe`, `nmake.exe`, `link.exe`, `lib.exe`, `dumpbin.exe` and `curl.exe` must resolve on `PATH`, including on a warm build. SQLite itself is built with NMake, not `msbuild.exe`. |
+| Microsoft linker | The resolved `link.exe` must identify as the Microsoft Incremental Linker. The helper also compares its location with the active `cl.exe` toolset and detects common MSYS/Git/Conda linker collisions. |
+| Linker collision recovery | For the supported local Conda/MSYS layout, the helper may rename the conflicting `Library\usr\bin\link.exe` to `link_.exe`, resolve `link.exe` again, and require the recovered linker to be the Microsoft linker from the compiler directory. Unsupported collisions fail with guidance for manual resolution. |
 | Windows tar | `%windir%\System32\tar.exe` must exist. A different `tar.exe` on `PATH` does not satisfy this check. |
-| External Tcl | `tclsh.exe` on `PATH` is reported if present. Its absence is a **warning**, not an error. The harness sets `TCLSH_CMD` to `out\build\jimsh0.exe` for the stock extension tools; it does not search `TCL_HOME` or modify `PATH` to locate Tcl. |
-| Conda ICU (`USE_ICU=1`) | After the preceding checks pass, `CONDA_PREFIX` must be set and `Library\bin` must contain a versioned `icuuc<digits>.dll`. `dumpbin /headers` checks each matching DLL's PE machine: `14C` for x86, `8664` for x64. A missing, unreadable or mismatched DLL fails preflight; a match is printed with its path, machine and target. This check also runs when the staged ICU tree already exists. |
+| External Tcl | `tclsh.exe` on `PATH` is reported if present. Its absence is a **warning**, not an error. The SQLite harness sets `TCLSH_CMD` to `out\build\jimsh0.exe` for the stock extension tools; it does not search `TCL_HOME` or modify `PATH` to locate Tcl. |
+| Conda ICU (`USE_ICU=1`) | `CONDA_PREFIX` must be set and `Library\bin` must contain a versioned `icuuc<digits>.dll`. `dumpbin /headers` checks each matching DLL's PE machine: `14C` for x86, `8664` for x64. A missing, unreadable or mismatched DLL fails verification; a match is printed with its path, machine and target. This check also runs when the staged ICU tree already exists. |
 
-The optional [pyenv bootstrap](pyenv/Anaconda.bat) downloads the `win-64` Micromamba executable; [conda_far.bat](pyenv/conda_far.bat) is the environment launcher. The SQLite harness does not install Conda or ICU. An x86 ICU build needs **both** an x86 MSVC prompt and a separately prepared x86 Conda environment with ICU. An x86 compiler paired with x64 ICU is not sufficient. To suppress console colors, set `NO_COLOR=1` or `NOCOLOR=1`.
+The optional [pyenv bootstrap](pyenv/Anaconda.bat) downloads the `win-64` Micromamba executable; [conda_far.bat](pyenv/conda_far.bat) is the environment launcher. That launcher calls its sibling `pyenv\msbuild.bat` before Conda activation so the MSVC toolchain and resolved linker are verified first; on success it sets `DISTUTILS_USE_SDK=1` for setuptools. The SQLite harness itself does not install Conda, ICU, Visual Studio or Build Tools.
+
+An x86 ICU build needs **both** an already activated x86 MSVC environment and a separately prepared x86 Conda environment with ICU. An x86 compiler paired with x64 ICU is not sufficient. To suppress console colors, set `NO_COLOR=1` or `NOCOLOR=1`.
 
 ## Build sequence and paths
 
