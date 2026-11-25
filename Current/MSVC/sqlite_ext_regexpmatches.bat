@@ -46,20 +46,18 @@ exit /b %EXIT_STATUS%
 setlocal
 set "SECTION=REGEXPMATCHES_DOWNLOAD"
 
-call :MKDIR__DIR "%CACHEDIR%\SQLiteRegexpMatches\src"
+call :MKDIR__DIR "%CACHEDIR%\SQLiteRegexpMatches\src" || exit /b !ERRORLEVEL!
 
 set "NAME=RegexpMatches"
 set "DISTRO=%CACHEDIR%\SQLiteRegexpMatches\src\regexpmatches.c"
 set "URL=https://raw.githubusercontent.com/pchemguy/SQLiteRegexpMatches/refs/heads/main/src/regexpmatches.c"
 
-call "%~dp0download_file.bat" "%NAME%" "%DISTRO%" "%URL%"
-set "EXIT_STATUS=%ERRORLEVEL%"
+call "%~dp0download_file.bat" "%NAME%" "%DISTRO%" "%URL%" || exit /b !ERRORLEVEL!
 
 echo:
 echo %INFO% ~~~~~ %SECTION% ~~~~~
 echo:
-if not defined EXIT_STATUS (set "EXIT_STATUS=0")
-endlocal & exit /b %EXIT_STATUS%
+endlocal & exit /b 0
 :: ============================================================================
 :: ============================================================================ REGEXPMATCHES_DOWNLOAD END
 

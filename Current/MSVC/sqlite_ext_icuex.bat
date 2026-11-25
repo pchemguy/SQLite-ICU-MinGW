@@ -46,20 +46,18 @@ exit /b %EXIT_STATUS%
 setlocal
 set "SECTION=ICUEX_DOWNLOAD"
 
-call :MKDIR__DIR "%CACHEDIR%\SQLiteICUex\src"
+call :MKDIR__DIR "%CACHEDIR%\SQLiteICUex\src" || exit /b !ERRORLEVEL!
 
 set "NAME=ICUex"
 set "DISTRO=%CACHEDIR%\SQLiteICUex\src\icuex.c"
 set "URL=https://raw.githubusercontent.com/pchemguy/SQLiteICUex/refs/heads/main/src/icuex.c"
 
-call "%~dp0download_file.bat" "%NAME%" "%DISTRO%" "%URL%"
-set "EXIT_STATUS=%ERRORLEVEL%"
+call "%~dp0download_file.bat" "%NAME%" "%DISTRO%" "%URL%" || exit /b !ERRORLEVEL! 
 
 echo:
 echo %INFO% ~~~~~ %SECTION% ~~~~~
 echo:
-if not defined EXIT_STATUS (set "EXIT_STATUS=0")
-endlocal & exit /b %EXIT_STATUS%
+endlocal & exit /b 0
 :: ============================================================================
 :: ============================================================================ ICUEX_DOWNLOAD END
 

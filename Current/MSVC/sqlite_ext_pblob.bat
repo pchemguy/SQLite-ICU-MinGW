@@ -48,20 +48,18 @@ exit /b %EXIT_STATUS%
 setlocal
 set "SECTION=PBLOB_DOWNLOAD"
 
-call :MKDIR__DIR "%CACHEDIR%\SQLitePackedBlob\src"
+call :MKDIR__DIR "%CACHEDIR%\SQLitePackedBlob\src" || exit /b !ERRORLEVEL!
 
 set "NAME=PBLOB"
 set "DISTRO=%CACHEDIR%\SQLitePackedBlob\src\pblob.c"
 set "URL=https://raw.githubusercontent.com/pchemguy/SQLitePackedBlob/refs/heads/main/src/pblob.c"
 
-call "%~dp0download_file.bat" "%NAME%" "%DISTRO%" "%URL%"
-set "EXIT_STATUS=%ERRORLEVEL%"
+call "%~dp0download_file.bat" "%NAME%" "%DISTRO%" "%URL%" || exit /b !ERRORLEVEL!
 
 echo:
 echo %INFO% ~~~~~ %SECTION% ~~~~~
 echo:
-if not defined EXIT_STATUS (set "EXIT_STATUS=0")
-endlocal & exit /b %EXIT_STATUS%
+endlocal & exit /b 0
 :: ============================================================================
 :: ============================================================================ PBLOB_DOWNLOAD END
 
