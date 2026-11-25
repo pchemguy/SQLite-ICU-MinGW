@@ -6,7 +6,7 @@
 :: ============================================================================
 :MAIN
 
-set "ERROR_STATUS=0"
+set "EXIT_STATUS=0"
 
 call :COLOR_SCHEME
 
@@ -30,7 +30,8 @@ echo %WARN% Completed SQLite PBLOB preparation.
 echo --------------------------------------------------------------------------------
 echo:
 
-exit /b %ERROR_STATUS%
+if not defined EXIT_STATUS (set "EXIT_STATUS=0")
+exit /b %EXIT_STATUS%
 :: ============================================================================
 :: ============================================================================ MAIN END
 
@@ -54,12 +55,13 @@ set "DISTRO=%CACHEDIR%\SQLitePackedBlob\src\pblob.c"
 set "URL=https://raw.githubusercontent.com/pchemguy/SQLitePackedBlob/refs/heads/main/src/pblob.c"
 
 call "%~dp0download_file.bat" "%NAME%" "%DISTRO%" "%URL%"
-set "ERROR_STATUS=%ERRORLEVEL%"
+set "EXIT_STATUS=%ERRORLEVEL%"
 
 echo:
 echo %INFO% ~~~~~ %SECTION% ~~~~~
 echo:
-endlocal && exit /b %ERROR_STATUS%
+if not defined EXIT_STATUS (set "EXIT_STATUS=0")
+endlocal & exit /b %EXIT_STATUS%
 :: ============================================================================
 :: ============================================================================ PBLOB_DOWNLOAD END
 
@@ -76,12 +78,13 @@ set "DISTRO=%CACHEDIR%\fp16_master.zip"
 set "URL=https://github.com/Maratyszcza/FP16/archive/refs/heads/master.zip"
 
 call "%~dp0download_file.bat" "%NAME%" "%DISTRO%" "%URL%"
-set "ERROR_STATUS=%ERRORLEVEL%"
+set "EXIT_STATUS=%ERRORLEVEL%"
 
 echo:
 echo %INFO% ~~~~~ %SECTION% ~~~~~
 echo:
-endlocal && exit /b %ERROR_STATUS%
+if not defined EXIT_STATUS (set "EXIT_STATUS=0")
+endlocal & exit /b %EXIT_STATUS%
 :: ============================================================================
 :: ============================================================================ FP16_DOWNLOAD END
 
@@ -99,20 +102,21 @@ set "SRC=%CACHEDIR%\fp16_master.zip"
 set "DST=%THIRDDIR%"
 
 call "%~dp0extract_archive.bat" "%NAME%" "%FLAG%" "%SRC%" "%DST%"
-set "ERROR_STATUS=%ERRORLEVEL%"
-if not "%ERROR_STATUS%"=="0" goto :FP16_EXTRACT_EXIT
+set "EXIT_STATUS=%ERRORLEVEL%"
+if not "%EXIT_STATUS%"=="0" goto :FP16_EXTRACT_EXIT
 
 echo %INFO% ========== Copy %NAME% ===========
 
 xcopy /H /Y /B /E /Q "%THIRDDIR%\FP16-master\include\*" "%TSRC%"
-set "ERROR_STATUS=%ERRORLEVEL%"
+set "EXIT_STATUS=%ERRORLEVEL%"
 
 :FP16_EXTRACT_EXIT
 
 echo:
 echo %INFO% ~~~~~ %SECTION% ~~~~~
 echo:
-endlocal && exit /b %ERROR_STATUS%
+if not defined EXIT_STATUS (set "EXIT_STATUS=0")
+endlocal & exit /b %EXIT_STATUS%
 :: ============================================================================
 :: ============================================================================ FP16_EXTRACT END
 
@@ -153,7 +157,7 @@ set EXTRA_SRC=%EXTRA_SRC% ^
 echo:
 echo %INFO% ~~~~~ %SECTION% ~~~~~
 echo:
-exit /b %ERRORLEVEL%
+exit /b 0
 :: ============================================================================
 :: ============================================================================ EXTRA_SRC_THIRD END
 
@@ -171,40 +175,38 @@ exit /b %ERRORLEVEL%
 
 setlocal
 set "SECTION=MKDIR__DIR"
+set "EXIT_STATUS=0"
 
 if "%~1"=="" (
-    set "ERROR_STATUS=1"
+    set "EXIT_STATUS=1"
     echo %ERROR% Missing required target directory.
     echo %INFO%  USAGE: call :MKDIR__DIR "{FULL TARGET DIRECTORY PATH}"
     goto :MKDIR__DIR_EXIT
 )
 
 set "TARGETDIR=%~1"
-set "MKDIR_FAILED="
-set "ERROR_STATUS=0"
 
 if exist "%TARGETDIR%" (
     echo %INFO% "%TARGETDIR%" already exists.
     goto :MKDIR__DIR_EXIT
 )
 
-cmd /c mkdir "%TARGETDIR%" || set "MKDIR_FAILED=1"
-if not exist "%TARGETDIR%"   (set "MKDIR_FAILED=1")
+cmd /c mkdir "%TARGETDIR%" || set "EXIT_STATUS=1"
+if not exist "%TARGETDIR%"   (set "EXIT_STATUS=1")
 
-if defined MKDIR_FAILED (
-    set "ERROR_STATUS=1"
+if not "%EXIT_STATUS%"=="0" (
     echo %ERROR% Failed to create "%TARGETDIR%"
-    goto :MKDIR__DIR_EXIT
+) else (
+    echo %INFO% Created "%TARGETDIR%".
 )
-
-echo %INFO% Created "%TARGETDIR%".
 
 :MKDIR__DIR_EXIT
 
 echo:
 echo %INFO% ~~~~~ %SECTION% ~~~~~
 echo:
-endlocal && exit /b %ERROR_STATUS%
+if not defined EXIT_STATUS (set "EXIT_STATUS=0")
+endlocal & exit /b %EXIT_STATUS%
 :: ============================================================================
 :: ============================================================================ MKDIR__DIR END
 

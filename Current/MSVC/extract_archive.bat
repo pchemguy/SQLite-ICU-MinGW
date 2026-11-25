@@ -16,7 +16,7 @@
 
 setlocal EnableExtensions EnableDelayedExpansion
 
-set "ERROR_STATUS=0"
+set "EXIT_STATUS=0"
 
 call :COLOR_SCHEME
 
@@ -26,7 +26,7 @@ echo %WARN% Extracting archive.
 echo:
 
 if "%~4"=="" (
-    set "ERROR_STATUS=1"
+    set "EXIT_STATUS=1"
     echo %ERROR% Missing required parameters.
     echo %INFO%  USAGE: call extract_archive.bat "NAME" "FLAG" "SRC" "DST"
     goto :EXTRACT_EXIT
@@ -39,19 +39,19 @@ set "DST=%~f4"
 if not defined TAR set "TAR=%SystemRoot%\System32\tar.exe"
 
 if not exist "%SRC%" (
-    set "ERROR_STATUS=1"
+    set "EXIT_STATUS=1"
     echo %ERROR% Archive "%SRC%" not found.
     goto :EXTRACT_EXIT
 )
 
 if exist "%SRC%\" (
-    set "ERROR_STATUS=1"
+    set "EXIT_STATUS=1"
     echo %ERROR% Expected an archive file, not a directory: "%SRC%".
     goto :EXTRACT_EXIT
 )
 
 if not exist "%DST%\." (
-    set "ERROR_STATUS=1"
+    set "EXIT_STATUS=1"
     echo %ERROR% Directory "%DST%" not found.
     goto :EXTRACT_EXIT
 )
@@ -65,11 +65,11 @@ echo %INFO% ===== Extracting %NAME% =====
 echo:
 
 "%TAR%" -x -f "%SRC%" -C "%DST%"
-set "ERROR_STATUS=%ERRORLEVEL%"
-if "%ERROR_STATUS%"=="0" (
+set "EXIT_STATUS=%ERRORLEVEL%"
+if "%EXIT_STATUS%"=="0" (
     echo %OKOK% Extracted %NAME%.
 ) else (
-    echo %ERROR% Failed to extract %NAME%. Error Code: %ERROR_STATUS%.
+    echo %ERROR% Failed to extract %NAME%. Error Code: %EXIT_STATUS%.
 )
 
 :EXTRACT_EXIT
@@ -79,7 +79,8 @@ echo %WARN% Completed archive extraction.
 echo --------------------------------------------------------------------------------
 echo:
 
-endlocal && exit /b %ERROR_STATUS%
+if not defined EXIT_STATUS (set "EXIT_STATUS=0")
+endlocal & exit /b %EXIT_STATUS%
 :: ============================================================================
 :: ============================================================================ MAIN END
 

@@ -51,7 +51,7 @@ exit /b %ERRORLEVEL%
 
 setlocal EnableExtensions EnableDelayedExpansion
 
-set "ERROR_STATUS=0"
+set "EXIT_STATUS=0"
 
 call :COLOR_SCHEME
 
@@ -100,7 +100,6 @@ call :COLLECT_BINARIES
 echo:
 echo %OKOK% Completed SQLite built.
 echo:
-
 endlocal && exit /b 0
 :: ============================================================================
 :: ============================================================================ MAIN END
@@ -124,40 +123,38 @@ endlocal && exit /b 0
 
 setlocal
 set "SECTION=MKDIR__DIR"
+set "EXIT_STATUS=0"
 
 if "%~1"=="" (
-    set "ERROR_STATUS=1"
+    set "EXIT_STATUS=1"
     echo %ERROR% Missing required target directory.
     echo %INFO%  USAGE: call :MKDIR__DIR "{FULL TARGET DIRECTORY PATH}"
     goto :MKDIR__DIR_EXIT
 )
 
 set "TARGETDIR=%~1"
-set "MKDIR_FAILED="
-set "ERROR_STATUS=0"
 
 if exist "%TARGETDIR%" (
     echo %INFO% "%TARGETDIR%" already exists.
     goto :MKDIR__DIR_EXIT
 )
 
-cmd /c mkdir "%TARGETDIR%" || set "MKDIR_FAILED=1"
-if not exist "%TARGETDIR%"   (set "MKDIR_FAILED=1")
+cmd /c mkdir "%TARGETDIR%" || set "EXIT_STATUS=1"
+if not exist "%TARGETDIR%"   (set "EXIT_STATUS=1")
 
-if defined MKDIR_FAILED (
-    set "ERROR_STATUS=1"
+if not "%EXIT_STATUS%"=="0" (
     echo %ERROR% Failed to create "%TARGETDIR%"
-    goto :MKDIR__DIR_EXIT
+) else (
+    echo %INFO% Created "%TARGETDIR%".
 )
-
-echo %INFO% Created "%TARGETDIR%".
 
 :MKDIR__DIR_EXIT
 
 echo:
 echo %INFO% ~~~~~ %SECTION% ~~~~~
 echo:
-endlocal && exit /b %ERROR_STATUS%
+if not defined EXIT_STATUS (set "EXIT_STATUS=0")
+endlocal & exit /b %EXIT_STATUS%
 :: ============================================================================
 :: ============================================================================ MKDIR__DIR END
 
@@ -406,12 +403,12 @@ set "DISTRO=%CACHEDIR%\sqlite.zip"
 set "URL=https://sqlite.org/src/zip/sqlite.zip"
 
 call "%~dp0download_file.bat" "%NAME%" "%DISTRO%" "%URL%"
-set "ERROR_STATUS=%ERRORLEVEL%"
+set "EXIT_STATUS=%ERRORLEVEL%"
 
 echo:
 echo %INFO% ~~~~~ %SECTION% ~~~~~
 echo:
-endlocal && exit /b %ERROR_STATUS%
+endlocal & exit /b %EXIT_STATUS%
 :: ============================================================================
 :: ============================================================================ SQLITE_DOWNLOAD END
 
@@ -429,12 +426,13 @@ set "SRC=%CACHEDIR%\sqlite.zip"
 set "DST=%OUT%"
 
 call "%~dp0extract_archive.bat" "%NAME%" "%FLAG%" "%SRC%" "%DST%"
-set "ERROR_STATUS=%ERRORLEVEL%"
+set "EXIT_STATUS=%ERRORLEVEL%"
 
 echo:
 echo %INFO% ~~~~~ %SECTION% ~~~~~
 echo:
-endlocal && exit /b %ERROR_STATUS%
+if not defined EXIT_STATUS (set "EXIT_STATUS=0")
+endlocal & exit /b %EXIT_STATUS%
 :: ============================================================================
 :: ============================================================================ SQLITE_EXTRACT END
 
@@ -457,6 +455,7 @@ echo %OKOK% Using previously downloaded ZLIB: "%DISTRO%"
 exit /b 0
 
 :ZLIB_DOWNLOAD_LATEST
+
 rem set "URL=https://zlib.net/current/zlib.tar.gz"
 set "URL_PREFIX=https://github.com/madler/zlib/releases"
 
@@ -479,12 +478,13 @@ if not defined ZLIB_VERSION (
 set "URL=%URL_PREFIX%/download/%ZLIB_VERSION%/zlib-%ZLIB_VERSION:~1%.tar.gz"
 
 call "%~dp0download_file.bat" "%NAME%" "%DISTRO%" "%URL%"
-set "ERROR_STATUS=%ERRORLEVEL%"
+set "EXIT_STATUS=%ERRORLEVEL%"
 
 echo:
 echo %INFO% ~~~~~ %SECTION% ~~~~~
 echo:
-endlocal && exit /b %ERROR_STATUS%
+if not defined EXIT_STATUS (set "EXIT_STATUS=0")
+endlocal & exit /b %EXIT_STATUS%
 :: ============================================================================
 :: ============================================================================ ZLIB_DOWNLOAD END
 
@@ -516,12 +516,14 @@ ren "%DST%\%ROOT%" "zlib" || exit /b !ERRORLEVEL!
 echo %OKOK% Renamed "%ROOT%" to "%ZLIBDIR%".
 
 :ZLIB_EXTRACT_DONE
+
 echo:
 echo %INFO% ~~~~~ %SECTION% ~~~~~
 echo:
 endlocal && exit /b 0
 
 :ZLIB_EXTRACT_BAD_ROOT
+
 echo %ERROR% Expected one versioned zlib directory containing win32\Makefile.msc.
 exit /b 1
 :: ============================================================================
@@ -540,11 +542,11 @@ if not exist "%ZLIBDIR%\zlib1.dll" (
     echo %INFO% ===== Building ZLIB =====
     cd /d "%SQLITEDIR%"
     nmake /nologo "TOP=%SQLITEDIR%" "ZLIBLIB=all" /f "%SQLITE_MAKEFILE%" zlib
-    set "ERROR_STATUS=!ERRORLEVEL!"
-    if "!ERROR_STATUS!"=="0" (
+    set "EXIT_STATUS=!ERRORLEVEL!"
+    if "!EXIT_STATUS!"=="0" (
         echo %INFO% ----- Built ZLIB -----
     ) else (
-        echo %ERROR% Failed to build ZLIB. Error Code: !ERROR_STATUS!.
+        echo %ERROR% Failed to build ZLIB. Error Code: !EXIT_STATUS!.
     )
 ) else (
     echo %INFO% ===== Using previously built ZLIB =====
@@ -553,7 +555,8 @@ if not exist "%ZLIBDIR%\zlib1.dll" (
 echo:
 echo %INFO% ~~~~~ %SECTION% ~~~~~
 echo:
-endlocal && exit /b %ERROR_STATUS%
+if not defined EXIT_STATUS (set "EXIT_STATUS=0")
+endlocal & exit /b %EXIT_STATUS%
 :: ============================================================================
 :: ============================================================================ ZLIB_BUILD END
 
@@ -565,7 +568,7 @@ endlocal && exit /b %ERROR_STATUS%
 setlocal
 set "SECTION=ICU_CONDA"
 
-set "ERROR_STATUS=0"
+set "EXIT_STATUS=0"
 set "STAGE=%ICUDIR%.stage"
 set "ROOT=%STAGE%"
 if exist "%ICUDIR%" (
@@ -576,13 +579,13 @@ if exist "%ICUDIR%" (
 )
 set "PREREQ=%CONDA_PREFIX%\python.exe"
 if not exist "%PREREQ%" (
-    set "ERROR_STATUS=1"
+    set "EXIT_STATUS=1"
     echo %ERROR% Conda ICU is selected, but "%PREREQ%" does not exist.
     goto :ICU_CONDA_EXIT
 )
 set "PREREQ=%CONDA_PREFIX%\Library\bin\icuinfo.exe"
 if not exist "%PREREQ%" (
-    set "ERROR_STATUS=1"
+    set "EXIT_STATUS=1"
     echo %ERROR% Conda ICU is selected, but "%PREREQ%" does not exist.
     goto :ICU_CONDA_EXIT
 )
@@ -632,20 +635,25 @@ echo %OKOK% Staged ICU from "%CONDA_PREFIX%" in "%ICUDIR%".
 goto :ICU_CONDA_EXIT
 
 :ICU_CONDA_BAD_VERSION
+
 echo %ERROR% Expected one versioned ICU common DLL in "%ROOT%\bin%ARCH%".
 goto :ICU_CONDA_INVALID
 
 :ICU_CONDA_BAD_FILE
+
 echo %ERROR% Missing or invalid ICU file: "%REQUIRED%".
 
 :ICU_CONDA_INVALID
+
 if "%ROOT%"=="%ICUDIR%" goto :ICU_CONDA_INCOMPLETE
 
 :ICU_CONDA_FAILED
+
 echo %ERROR% Could not stage ICU. Inspect "%STAGE%" and move it aside before retrying.
 exit /b 1
 
 :ICU_CONDA_INCOMPLETE
+
 echo %ERROR% Incomplete ICU tree at "%ICUDIR%". Move it aside before retrying.
 exit /b 1
 
@@ -654,7 +662,8 @@ exit /b 1
 echo:
 echo %INFO% ~~~~~ %SECTION% ~~~~~
 echo:
-endlocal && exit /b %ERROR_STATUS%
+if not defined EXIT_STATUS (set "EXIT_STATUS=0")
+endlocal & exit /b %EXIT_STATUS%
 :: ============================================================================
 :: ============================================================================ ICU_CONDA END
 
@@ -668,12 +677,13 @@ set "SECTION=SQLITE_BUILD_INIT"
 cd /d "%BUILDDIR%" || exit /b !ERRORLEVEL!
 
 nmake /nologo "TOP=%SQLITEDIR%" /f "%SQLITE_MAKEFILE%" .target_source
-set "ERROR_STATUS=%ERRORLEVEL%"
+set "EXIT_STATUS=%ERRORLEVEL%"
 
 echo:
 echo %INFO% ~~~~~ %SECTION% ~~~~~
 echo:
-exit /b %ERROR_STATUS%
+if not defined EXIT_STATUS (set "EXIT_STATUS=0")
+exit /b %EXIT_STATUS%
 :: ============================================================================
 :: ============================================================================ SQLITE_BUILD_INIT END
 
@@ -760,7 +770,7 @@ set EXTRA_SRC=%EXTRA_SRC% ^
 echo:
 echo %INFO% ~~~~~ %SECTION% ~~~~~
 echo:
-exit /b %ERRORLEVEL%
+exit /b 0
 :: ============================================================================
 :: ============================================================================ EXTRA_SRC_STOCK END
 
@@ -779,7 +789,7 @@ for %%P in (%~dp0sqlite_ext_*) do (
 echo:
 echo %INFO% ~~~~~ %SECTION% ~~~~~
 echo:
-exit /b %ERRORLEVEL%
+exit /b 0
 :: ============================================================================
 :: ============================================================================ EXTRA_SRC_THIRD END
 
@@ -832,7 +842,7 @@ if not "%ERRORLEVEL%"=="0" (
 echo:
 echo %INFO% ~~~~~ %SECTION% ~~~~~
 echo:
-exit /b %ERRORLEVEL%
+exit /b 0
 :: ============================================================================
 :: ============================================================================ SQLITE_BUILD END
 

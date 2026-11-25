@@ -39,6 +39,7 @@ echo %OKOK% Using previously downloaded "%NAME%": "%TARGET%"
 exit /b 0
 
 :USAGE
+
 echo %ERROR% Usage: "%~nx0" "NAME" "TARGET" "URL"
 exit /b 1
 :: ============================================================================
@@ -86,10 +87,14 @@ echo %OKOK% Downloaded "%NAME%": "%TARGET%"
 exit /b 0
 
 :BAD_RESPONSE
+
 echo %ERROR% Unexpected HTTP status or media type. See "%META%".
 
 :FAILED
+
 if exist "%PART%" if not exist "%PART%\" del /q "%PART%"
+
+if not defined RC (set "RC=1")
 exit /b %RC%
 :: ============================================================================
 :: ============================================================================ FETCH END
