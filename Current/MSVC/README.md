@@ -6,21 +6,25 @@ urls:
 
 # Building SQLite with MSVC on Windows
 
-[sqlite_msbuild.bat](sqlite_msbuild.bat) builds the SQLite shell, DLL and static library with MSVC. It generates an import library for the DLL and collects the distribution under `out/`. The default build includes ZLIB, ICU from the active Conda environment, select stock SQLite `ext/misc` modules and three project extensions: [ICUex](https://github.com/pchemguy/SQLiteICUex), [PBlob](https://github.com/pchemguy/SQLitePackedBlob) and [RegexpMatches](https://github.com/pchemguy/SQLiteRegexpMatches). All configurations use this same harness in this directory.
+## Overview
 
-**One base directory is for one build.** Use a separate copy of the harness and its tool directory for each target architecture, build configuration or dependency installation. The script derives its structure relative to the main script [sqlite_msbuild.bat](sqlite_msbuild.bat), not based on the current directory. Starting another developer prompt in a different working directory does not isolate an x86 build from an x64 build.
+[sqlite_msbuild.bat](sqlite_msbuild.bat) builds a customized SQLite distribution for x86 or x64 Windows using MSVC and SQLite's `Makefile.msc`. It prepares selected extensions as part of the SQLite amalgamation (`sqlite3.c`) before compilation. A generated dispatcher registers their SQL functions and collations when a connection opens, so applications do not have to load separate extension DLLs.
+
+The default build includes ZLIB, ICU from the active Conda environment, 15 stock SQLite `ext/misc` modules, and three project extensions: [ICUex](https://github.com/pchemguy/SQLiteICUex), [PBLOB](https://github.com/pchemguy/SQLitePackedBlob), and [RegexpMatches](https://github.com/pchemguy/SQLiteRegexpMatches). The PBLOB hook stages the FP16 headers it needs. Smaller [presets](#presets) use the same harness. The outputs under `out\` are the shell and runtime DLLs, SQLite headers, a static library, and the import library for `sqlite3.dll`.
+
+**One base directory is for one build.** Use a separate copy of the harness and its tools for each target architecture, build configuration or dependency installation. Output paths are relative to `sqlite_msbuild.bat`, not the caller's current directory. Opening another developer prompt in a different directory does not isolate an x86 build from an x64 build.
 
 ## Run a build
 
 1. Use Windows CMD with the MSVC C/C++ tools and Windows SDK installed (available with [Visual Studio or Build Tools](https://visualstudio.microsoft.com/downloads/)). You may start from an already initialized **x64** or **x86 Native Tools Command Prompt**. If no MSVC environment is active, [msbuild.bat](msbuild.bat) can discover and activate an **x64** toolchain automatically; x86 builds require an already initialized x86 MSVC prompt.
-2. For the default build, activate a Conda environment containing ICU for the same target architecture. For a build without ICU or Conda, use the [bare preset](#build-presets). For a custom build without ICU, set both `USE_ICU=0` and `SQLITE_ENABLE_ICUEX=0` (or skip all project hooks with `USE_EXTRAS=0`).
+2. For the default build, activate a Conda environment containing ICU for the same target architecture. For a build without ICU or Conda, use the [bare preset](#presets). For a custom build without ICU, set `USE_ICU=0` and also set either `SQLITE_ENABLE_ICUEX=0` (skip ICUex) or `USE_EXTRAS=0` (skip all project hooks).
 3. From a directory containing a copy of the build harness, run:
 
 ```cmd
 sqlite_msbuild.bat
 ```
 
-After a default build, check `out\bin` for `sqlite3.exe`, `sqlite3.dll`, and the versioned ICU DLLs, if applicable. For example, run `out\bin\sqlite3.exe :memory: "SELECT sqlite_version();"` to exercise the packaged shell. That does not test linkage against the packaged import library; see [Packaged artifacts](#packaged-artifacts).
+After a default build, check `out\bin` for `sqlite3.exe`, `sqlite3.dll`, `zlib1.dll` and the versioned ICU DLLs. For example, run `out\bin\sqlite3.exe :memory: "SELECT sqlite_version();"` to exercise the packaged shell. That does not test linkage against the packaged import library; see [Packaged artifacts](#packaged-artifacts).
 
 ### Harness
 
@@ -46,6 +50,8 @@ Use `0` or `1`. Defaults apply when the variables are unset.
 | `SQLITE_EXTRA` |     `1` | Integrate the stock `ext\misc` modules. Any value other than `0` forces `USE_ZLIB=1`; only `1` runs the extension stage.                                                    |
 | `USE_EXTRAS`   |     `1` | Run the [project extension hooks](#project-extension-hooks) for ICUex, PBLOB and RegexpMatches. Set to `0` to skip all three without changing `SQLITE_EXTRA` or `USE_ZLIB`. |
 
+Stock and project extensions have separate switches but share a registration mechanism. Keep `SQLITE_EXTRA=1` for the shipped project hooks: the stock stage supplies the [dispatcher](#how-extensions-enter-the-amalgamation), even for project extensions that do not use a stock module. RegexpMatches also needs the stock `regexp.c` itself. ICUex needs `USE_ICU=1`; PBLOB stages its own FP16 headers. To omit just one project extension, use its [individual switch](#project-extension-hooks).
+
 ### Presets
 
 Run one launcher from its own build base:
@@ -65,6 +71,8 @@ sqlite_msbuild.bat
 ```
 
 ### NMake targets and diagnostics
+
+Invocation: `sqlite_msbuild.bat [NMAKE_TARGET_OR_OPTION ...]`. For example:
 
 ```cmd
 sqlite_msbuild.bat sqlite3.dll
@@ -88,7 +96,7 @@ After reuse or activation, the helper verifies the resulting environment:
 
 | Check | Requirement |
 |---|---|
-| MSVC environment | `VisualStudioVersion` and `VCINSTALLDIR` must be set. `VSCMD_ARG_TGT_ARCH` must be `x86` or `x64` (case-insensitive). The host architecture is not used to select the target. |
+| MSVC environment | `VisualStudioVersion` must be set and `VCINSTALLDIR` must name an existing location. `VSCMD_ARG_TGT_ARCH` must be `x86` or `x64` (case-insensitive). The host architecture is not used to select the target. |
 | Required executables | `cl.exe`, `nmake.exe`, `link.exe`, `lib.exe`, `dumpbin.exe` and `curl.exe` must resolve on `PATH`, including on a warm build. SQLite itself is built with NMake, not `msbuild.exe`. |
 | Microsoft linker | The resolved `link.exe` must identify as the Microsoft Incremental Linker. The helper also compares its location with the active `cl.exe` toolset and detects common MSYS/Git/Conda linker collisions. |
 | Linker collision recovery | For the supported local Conda/MSYS layout, the helper may rename the conflicting `Library\usr\bin\link.exe` to `link_.exe`, resolve `link.exe` again, and require the recovered linker to be the Microsoft linker from the compiler directory. Unsupported collisions fail with guidance for manual resolution. |
@@ -96,13 +104,30 @@ After reuse or activation, the helper verifies the resulting environment:
 | External Tcl | `tclsh.exe` on `PATH` is reported if present. Its absence is a **warning**, not an error. The SQLite harness sets `TCLSH_CMD` to `out\build\jimsh0.exe` for the stock extension tools; it does not search `TCL_HOME` or modify `PATH` to locate Tcl. |
 | Conda ICU (`USE_ICU=1`) | `CONDA_PREFIX` must be set and `Library\bin` must contain a versioned `icuuc<digits>.dll`. `dumpbin /headers` checks each matching DLL's PE machine: `14C` for x86, `8664` for x64. A missing, unreadable or mismatched DLL fails verification; a match is printed with its path, machine and target. This check also runs when the staged ICU tree already exists. |
 
+During the build, `nmake.exe` drives `Makefile.msc`, `cl.exe` compiles the generated SQLite source, and `link.exe` links the DLL and shell. `dumpbin.exe` serves two purposes: identifying the ICU DLL architecture during verification and listing symbols from the static SQLite library during export generation. `lib.exe` turns the resulting export definition into the DLL import library. Downloads use `curl.exe`, extraction uses Windows tar, and the harness runs its Tcl source-preparation tools with SQLite's `jimsh0.exe`.
+
 The optional [pyenv bootstrap](pyenv/Anaconda.bat) downloads the `win-64` Micromamba executable; [conda_far.bat](pyenv/conda_far.bat) is the environment launcher. That launcher calls its sibling `pyenv\msbuild.bat` before Conda activation so the MSVC toolchain and resolved linker are verified first; on success it sets `DISTUTILS_USE_SDK=1` for setuptools. The SQLite harness itself does not install Conda, ICU, Visual Studio or Build Tools.
 
-An x86 ICU build needs **both** an already activated x86 MSVC environment and a separately prepared x86 Conda environment with ICU. An x86 compiler paired with x64 ICU is not sufficient. To suppress console colors, set `NO_COLOR=1` or `NOCOLOR=1`.
+An x86 ICU build needs **both** an already activated x86 MSVC environment and a separately prepared x86 Conda environment with ICU. An x86 compiler paired with x64 ICU is not sufficient. The same target determines the staged [ICU library and binary directories](#conda-icu-staging) (`lib`/`bin` for x86, `lib64`/`bin64` for x64) and the `/machine:` argument used to generate [SQLite's import library](#exports-and-import-library). To suppress console colors, set `NO_COLOR=1` or `NOCOLOR=1`.
 
 ## Build sequence and paths
 
-The main script locates `patch_sqlite_misc_autoext.tcl` under `tool\`, `tools\` or `extra\`. Its directory becomes `TOOLDIR`; the main script's directory is `PROJDIR`. Paths below are relative to that base.
+### Directory layout
+
+The main script's directory is `PROJDIR`. It searches `tool\`, `tools\` and `extra\` in order for `patch_sqlite_misc_autoext.tcl`; the first matching directory becomes `TOOLDIR`. Paths below are relative to `PROJDIR`.
+
+| Location | What belongs there |
+|---|---|
+| `tool\` (in the shipped layout) | Harness tools, including the extension patcher and include bundler. This is distinct from SQLite's own `out\sqlite\tool\`. |
+| `out\cache\` | Downloaded SQLite and ZLIB archives, the enabled extension C sources, and the FP16 archive if PBLOB is enabled. |
+| `out\sqlite\` | Extracted SQLite source tree, including `Makefile.msc`, `ext\misc\` and SQLite's own build tools. |
+| `out\sqlite\compat\` | Dependencies prepared for this build: `zlib\`, `icu\`, and `FP16-master\` when enabled. |
+| `out\build\` | NMake working directory: generated sources, `jimsh0.exe`, intermediate libraries and build products before packaging. |
+| `out\build\tsrc\` | Generated target-source workspace. The harness patches and bundles copies here, not the maintained source files. |
+| `out\bin\` | Packaged shell and runtime DLLs. |
+| `out\include\`, `out\lib\import\`, `out\lib\static\` | Packaged headers, DLL link artifacts, and static library, respectively. See [Packaged artifacts](#packaged-artifacts) for filenames. |
+
+### Build workflow
 
 | Order | Stage | Main location or result |
 |---:|---|---|
@@ -122,7 +147,13 @@ The main script locates `patch_sqlite_misc_autoext.tcl` under `tool\`, `tools\` 
 | Project extension sources | Each enabled hook downloads its single C file from its project's `main` branch. | `out\cache\SQLiteICUex\src\icuex.c`, `out\cache\SQLitePackedBlob\src\pblob.c`, `out\cache\SQLiteRegexpMatches\src\regexpmatches.c` |
 | FP16 (PBLOB only) | Fetch the [FP16](https://github.com/Maratyszcza/FP16) `master` archive. | `out\cache\fp16_master.zip` |
 
-If the target file exists, the download stage returns success without inspecting its contents or contacting the server. For ZLIB this also skips the latest-release lookup. There is no automatic refresh, hash check, ETag check or version comparison. For repeatable builds, retain the exact archives and cached extension sources, and record the Conda package versions, MSVC toolset and build settings.
+If the target file exists, the download stage returns success without inspecting its contents or contacting the server. For ZLIB this also skips the latest-release lookup. There is no automatic refresh, checksum verification, ETag check or version comparison. See [Reproducing a build](#reproducing-a-build) for what to retain.
+
+#### Network access
+
+A first build fetches the SQLite snapshot from `sqlite.org`. Enabled components may also need `github.com` (ZLIB releases and the FP16 archive), the hosts to which GitHub redirects those downloads, and `raw.githubusercontent.com` (the project C sources). The SQLite harness stages ICU from the active Conda prefix; it does not fetch an ICU release. On a fully cached build none of these downloads requires a network request, but the local tool and ICU environment checks still apply.
+
+#### Download validation and logs
 
 The shared [download_file.bat](download_file.bat) interface is `download_file.bat "NAME" "TARGET" "URL"`. On a miss, it downloads into `<target>.part` using a redirect-following GET with retries, not a separate HEAD request. It requires a successful cURL exit and final HTTP status `200` and rejects `text/html` irrespective of case or media-type parameters before renaming the partial file to the final name. A missing or generic content type is not by itself an error. A leftover `.part` is never a cache hit.
 
@@ -138,11 +169,11 @@ For SQLite, the flag is `out\sqlite\Makefile.msc`, supplied by `sqlite.zip`. Its
 
 `:ZLIB_EXTRACT` passes the existing `out\sqlite\compat` directory to the extractor. For a new build, it renames the single `zlib-<dotted-numeric-version>` directory containing `win32\Makefile.msc` to `zlib`. Keep unrelated or leftover `zlib-*` directories out of `compat`; the harness will not choose between multiple matches. The rename will not overwrite an existing `zlib` directory.
 
-The extractor requires the cached archive on every run. If `compat\zlib\win32\Makefile.msc` already exists, it skips extraction. If `compat\zlib\zlib1.dll` is absent, the harness invokes `Makefile.msc`'s `zlib` target; otherwise it reuses the DLL.
+The extractor requires the cached archive on every run. If `compat\zlib\win32\Makefile.msc` already exists, it skips extraction. If `compat\zlib\zlib1.dll` is absent, the harness invokes `Makefile.msc`'s `zlib` target with `ZLIBLIB=all` from the SQLite source directory; otherwise it reuses the DLL. The collector copies `zlib1.dll` to `out\bin` if it is present.
 
 ### Conda ICU staging
 
-Conda is the only ICU source in this harness. The staging checks below establish file presence, nonzero size and matching runtime names; they do **not** exercise a data-dependent ICU operation.
+Conda is the only ICU source in this harness. The earlier Visual Studio source build produced a small `icudt` stub DLL rather than the full ICU data DLL. Staging the headers, import libraries and data-bearing runtime DLLs from one Conda installation avoids that limitation. The checks below establish file presence, nonzero size and matching runtime names; they do **not** exercise a data-dependent ICU operation.
 
 On first use, `:ICU_CONDA` checks for `%CONDA_PREFIX%\python.exe` and `%CONDA_PREFIX%\Library\bin\icuinfo.exe`. Neither executable is run. It copies one installation into a fresh `out\sqlite\compat\icu.stage`, removes unversioned `icu??.dll` and `icutest*.dll` there, validates the set, writes `.icu-staged`, then renames the directory to `icu`. Compilation, linking and packaging continue to use the established paths:
 
@@ -162,21 +193,58 @@ On later runs, the harness requires `.icu-staged` and revalidates the files alre
 
 ## SQLite build settings and stock extensions
 
-`:BUILD_OPTIONS` sets `SESSION=1`, `RBU=1`, `API_ARMOR=1` and `SYMBOLS=0`. The script does not set `NO_TCL` or `WITHOUT_JIMSH`. It initializes `EXTRA_SRC` empty and constructs `OPT_XTRA` itself; an inherited `OPT_XTRA` is cleared during setup. The base definitions are:
+### Makefile settings
+
+`:BUILD_OPTIONS` sets the following `Makefile.msc` variables:
+
+| Setting | Role |
+|---|---|
+| `SESSION=1` | Enable the SQLite session extension. |
+| `RBU=1` | Enable resumable bulk updates. |
+| `API_ARMOR=1` | Enable additional SQLite API misuse checks. |
+| `SYMBOLS=0` | Do not request debug symbols through this setting. This is separate from generating DLL exports. |
+
+The script does not set `NO_TCL` or `WITHOUT_JIMSH`. It initializes `EXTRA_SRC` to an empty list of source paths. Stock preparation and project hooks extend that list; it is separate from the compiler definitions below.
+
+### SQLite compile-time options
+
+The harness also clears inherited `OPT_XTRA` and builds its own compiler options. The base definitions, in script order, are:
 
 ```text
-SQLITE_ENABLE_NORMALIZE           SQLITE_SOUNDEX
-SQLITE_ENABLE_FTS3_PARENTHESIS    SQLITE_ENABLE_FTS4=1
-SQLITE_ENABLE_EXPLAIN_COMMENTS=1  SQLITE_ENABLE_FTS3_TOKENIZER
-SQLITE_ENABLE_QPSG                SQLITE_ENABLE_OFFSET_SQL_FUNC=1
-SQLITE_DQS=0                      SQLITE_ENABLE_STAT4
-SQLITE_MAX_EXPR_DEPTH=100         SQLITE_LIKE_DOESNT_MATCH_BLOBS
-SQLITE_MAX_ATTACHED=100           SQLITE_MAX_ATTACHED=100
-SQLITE_OMIT_DEPRECATED            SQLITE_DEFAULT_FOREIGN_KEYS=1
-SQLITE_DEFAULT_SYNCHRONOUS=1      SQLITE_USE_URI=1
+SQLITE_ENABLE_NORMALIZE
+SQLITE_ENABLE_FTS4=1
+SQLITE_ENABLE_FTS3_PARENTHESIS
+SQLITE_ENABLE_FTS3_TOKENIZER
+SQLITE_ENABLE_EXPLAIN_COMMENTS=1
+SQLITE_ENABLE_OFFSET_SQL_FUNC=1
+SQLITE_ENABLE_QPSG
+SQLITE_ENABLE_STAT4
+SQLITE_DQS=0
+SQLITE_LIKE_DOESNT_MATCH_BLOBS
+SQLITE_MAX_EXPR_DEPTH=100
+SQLITE_MAX_ATTACHED=100
+SQLITE_OMIT_DEPRECATED
+SQLITE_DEFAULT_FOREIGN_KEYS=1
+SQLITE_DEFAULT_SYNCHRONOUS=1
+SQLITE_USE_URI=1
+SQLITE_SOUNDEX
 ```
 
-`USE_ICU=1` also adds `SQLITE_ENABLE_ICU_COLLATIONS`. With `SQLITE_EXTRA=1`, `:EXTRA_SRC_STOCK` uses `out\build\jimsh0.exe` and SQLite's `tool\cp.tcl` to copy the following `ext\misc` modules into `tsrc`. The corresponding definitions are:
+`USE_ICU=1` also adds `SQLITE_ENABLE_ICU_COLLATIONS`. Each enabled extension stage appends its own definitions.
+
+### Target-source initialization
+
+Before staging any extension, `:SQLITE_BUILD_INIT` changes to `out\build` and runs:
+
+```cmd
+nmake /nologo "TOP=%SQLITEDIR%" /f "%SQLITE_MAKEFILE%" .target_source
+```
+
+Directory setup creates `out\build\tsrc`, but an empty directory is not a prepared source tree. When SQLite's [`.target_source` rule](https://github.com/sqlite/sqlite/blob/915d9c4acea4a9036d1df7dcf9e8bd747ba726c4/Makefile.msc#L1957-L1969) runs, it recreates and populates `tsrc` with the sources and generated files needed for the target. The extension steps work on those copies, after generation and before compilation. Do not maintain edits in `tsrc`.
+
+### Stock SQLite extensions
+
+With `SQLITE_EXTRA=1`, `:EXTRA_SRC_STOCK` selects the following 15 modules from SQLite's `ext\misc`. The corresponding definitions are:
 
 | Sources                                                       | Compile definitions, in the same order                                                                                  |
 | ------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
@@ -184,9 +252,17 @@ SQLITE_DEFAULT_SYNCHRONOUS=1      SQLITE_USE_URI=1
 | `prefixes.c`, `regexp.c`, `remember.c`, `rot13.c`, `series.c` | `SQLITE_ENABLE_PREFIXES`, `SQLITE_ENABLE_REGEXP`, `SQLITE_ENABLE_REMEMBER`, `SQLITE_ENABLE_ROT`, `SQLITE_ENABLE_SERIES` |
 | `sha1.c`, `shathree.c`, `sqlar.c`, `uint.c`, `uuid.c`         | `SQLITE_ENABLE_SHA`, `SQLITE_ENABLE_SHATHREE`, `SQLITE_ENABLE_SQLAR`, `SQLITE_ENABLE_UINT`, `SQLITE_ENABLE_UUID`        |
 
-In `tsrc`, [patch_sqlite_misc_autoext.tcl](tool/patch_sqlite_misc_autoext.tcl) adapts the extensions for built-in registration and generates `misc_ext_init.c`. Then [bundle_extra_src.tcl](tool/bundle_extra_src.tcl) inlines local source dependencies. The harness passes extension translation units and `misc_ext_init.c` to NMake through `EXTRA_SRC` and sets `SQLITE_EXTRA_AUTOEXT=sqlite3ExtraAutoExtInit`. These modules do not require separate loadable-extension DLLs.
+### How extensions enter the amalgamation
 
-This project uses a custom workflow to integrate selected stock SQLite extensions sources into SQLite amalgamation `sqlite3.c` before SQLite compilation, including extensions omitting integration features necessary for such a built. The same workflow combined with focused hooks is used for integrating custom extensions. For further details, see [SQLiteExtensionTemplate](https://github.com/pchemguy/SQLiteExtensionTemplate) and ["SQLite MSVC Build / Amalgamation Integration" field note](https://github.com/pchemguy/Field-Notes/tree/main/notes/11-sqlite-msvc-build).
+There are two distinct jobs: put the extension's C code in `sqlite3.c`, and arrange for SQLite to call its initializer on each new connection. An entry in `EXTRA_SRC` does the first, not the second.
+
+1. **Copy the inputs into `tsrc`.** The stock stage runs SQLite's `tool\cp.tcl` with `out\build\jimsh0.exe` to copy the selected `ext\misc` sources. Each enabled project hook later copies its own cached C source into the same workspace.
+2. **Adapt the initializers and update the dispatcher.** [patch_sqlite_misc_autoext.tcl](tool/patch_sqlite_misc_autoext.tcl) adapts loadable-extension entry points for a core build, or recognizes an existing `sqlite3<Name>Init(sqlite3*)` initializer. It writes `misc_ext_init.c`, preserving earlier registrations when a later hook runs. The generated `sqlite3ExtraAutoExtInit` calls only initializers whose `SQLITE_ENABLE_*` definitions are enabled and stops on the first error.
+3. **Bundle local includes.** [bundle_extra_src.tcl](tool/bundle_extra_src.tcl) expands literal includes that resolve to local files in `tsrc`. Bare `sqlite3.h` and `sqlite3ext.h` are not embedded again; ordinary nonlocal includes are left to the compiler. This lets the prepared C files carry their local dependencies into the amalgamation.
+4. **Assemble `EXTRA_SRC`.** The stock stage appends its prepared modules and `misc_ext_init.c`, and sets `SQLITE_EXTRA_AUTOEXT=sqlite3ExtraAutoExtInit` in `OPT_XTRA`. Each project hook appends its prepared C file and enables its own definition without replacing earlier entries.
+5. **Generate and compile `sqlite3.c`.** `Makefile.msc` passes the ordered `EXTRA_SRC` list to SQLite's amalgamation generator. The extension code becomes part of the same C translation unit as SQLite; for example, RegexpMatches follows and can use the stock `regexp.c` implementation. When an application opens a connection, SQLite invokes the selected dispatcher. No separate extension DLLs or `.load` commands are needed.
+
+For an example of adapting this workflow to another extension, see [SQLiteExtensionTemplate](https://github.com/pchemguy/SQLiteExtensionTemplate). The [SQLite MSVC Build / Amalgamation Integration field note](https://github.com/pchemguy/Field-Notes/tree/main/notes/11-sqlite-msvc-build) discusses the underlying SQLite build mechanisms.
 
 ## Project extension hooks
 
@@ -198,6 +274,12 @@ Each of the three shipped hooks runs by default when `USE_EXTRAS=1`. Set an indi
 | [PBLOB](sqlite_ext_pblob.bat)                 | `SQLITE_ENABLE_PBLOB`         | `pblob_pack()` and `pblob_unpack()` convert between one-dimensional numeric JSON arrays and binary16 or binary32 floating-point BLOBs. It uses SQLite’s internal JSON routines. The hook copies the headers from `out\sqlite\compat\FP16-master\include` into `out\build\tsrc`; no FP16 library is built. |
 | [RegexpMatches](sqlite_ext_regexpmatches.bat) | `SQLITE_ENABLE_REGEXPMATCHES` | `regexp_matches()` and `regexpi_matches()` return successive matches as a JSON array. Keep `SQLITE_EXTRA=1`: the module uses SQLite's JSON internals and must follow the stock `regexp.c` in the amalgamation.                                                                                            |
 
+### FP16 headers for PBLOB
+
+The [PBLOB hook](sqlite_ext_pblob.bat) uses `out\cache\fp16_master.zip`. It extracts the archive under `out\sqlite\compat` unless `FP16-master\` already exists, then copies the contents of `FP16-master\include\` into `out\build\tsrc\` before bundling `pblob.c`. Reusing the extracted directory skips unpacking, not the header copy. There is no separate FP16 library to link or DLL to distribute; disabling PBLOB skips this dependency.
+
+### Post-build registration checks
+
 To check that all three registered in the packaged shell, run this after a full build:
 
 ```cmd
@@ -205,8 +287,6 @@ out\bin\sqlite3.exe :memory: "SELECT str_casefold('ABC'), typeof(pblob_pack('[1,
 ```
 
 Expected output: `abc|blob|["12","3"]`.
-
-### Post-build registration checks
 
 From the build base, start the packaged shell with `out\bin\sqlite3.exe :memory:`. Run the query for each extension you enabled and compare its rows with the expected results below.
 
@@ -263,9 +343,28 @@ The shipped hooks update the generated dispatcher, but only `:EXTRA_SRC_STOCK` a
 
 ## Exports and import library
 
-From `out\build`, `:SQLITE_BUILD` runs NMake for `sqlite3.def` with the selected `EXTRA_SRC`. It then replaces the generated definition file: it writes `EXPORTS`, filters `dumpbin /linkermember:2 libsqlite3.lib` into `exports.txt`, appends the sorted names to `sqlite3.def` and removes `exports.txt`. The harness then runs NMake with the caller's arguments and recreates `sqlite3.lib` with `lib.exe` using `/machine:%VSCMD_ARG_TGT_ARCH%`.
+`:SQLITE_BUILD` works in `out\build`. The definition file and the two `.lib` files have different roles in its four steps:
 
-The export list is not independently validated, and the temporary list is opened for append. After an interrupted run, do not assume the next `.def` is complete or free of stale entries. For a binary distribution, inspect the actual DLL exports and link and run a client against the packaged import library in the matching MSVC environment.
+1. **Build the initial definition target.** The `sqlite3.def` NMake target depends on `libsqlite3.lib`. Passing the configured source list here makes the static library available for symbol inspection:
+
+   ```cmd
+   nmake /nologo "EXTRA_SRC=%EXTRA_SRC%" "TOP=%SQLITEDIR%" /f "%SQLITE_MAKEFILE%" sqlite3.def
+   ```
+
+2. **Replace `sqlite3.def`.** The harness starts the file with `EXPORTS`, runs `dumpbin /linkermember:2 libsqlite3.lib`, and writes the names that match its filter to `exports.txt`. It appends the sorted names to `sqlite3.def` and removes the temporary list. This derives the DLL export list from the customized build rather than keeping SQLite's original list.
+3. **Run the requested build.** The final NMake invocation uses the same prepared sources. Here `%*` is the target or options passed to the main batch file; with no arguments NMake uses its default target:
+
+   ```cmd
+   nmake /nologo "EXTRA_SRC=%EXTRA_SRC%" "TOP=%SQLITEDIR%" /f "%SQLITE_MAKEFILE%" %*
+   ```
+
+4. **Regenerate the import library.** `lib.exe` uses the replacement definition file and the active MSVC target (`x86` or `x64`). Its output is `sqlite3.lib`, not the static `libsqlite3.lib` inspected in step 2:
+
+   ```cmd
+   lib /def:"%BUILDDIR%\sqlite3.def" /out:"%BUILDDIR%\sqlite3.lib" /machine:%VSCMD_ARG_TGT_ARCH%
+   ```
+
+The export list is not independently validated, and the temporary list is opened for append. After an interrupted run, do not assume the next `.def` is complete or free of stale entries. For a binary distribution, inspect the actual DLL with `dumpbin /exports out\bin\sqlite3.dll`, then link and run a client against the packaged import library for each target architecture you distribute.
 
 ## Packaged artifacts
 
@@ -279,7 +378,28 @@ The export list is not independently validated, and the temporary list is opened
 
 **Collection is best effort.** `:COLLECT_BINARIES` clears files directly under `out\bin` before copying available products. It does not clear the include or library directories, so older files can remain there. The collector returns success even if an expected artifact is absent or a copy fails. Exit `0` is **not** a guarantee of a complete or current distribution; check the files required by your consumer. Do not keep unrelated files in `out\bin`.
 
+### Static library vs. import library
+
+Link `out\lib\static\libsqlite3.lib` when SQLite's object code should become part of the client binary. This does not make optional dependencies such as ICU static. Link `out\lib\import\sqlite3.lib` instead when the client should call into `sqlite3.dll` at runtime. The import library is needed by the linker, not the running client; the matching DLL and its enabled runtime dependencies must be available at runtime.
+
 ## Recovery and reproducibility
+
+### What is reused?
+
+A cache hit, an extraction flag, and a validated installation skip different work:
+
+| Existing item (relative to the build base) | What it skips | What still happens |
+|---|---|---|
+| Target file under `out\cache\` (archive or extension C source) | Download; for `zlib.tar.gz`, also the latest-release lookup | The harness still runs preflight. A cache hit does not verify the bytes or invalidate later build products. |
+| `out\sqlite\Makefile.msc` | SQLite ZIP extraction | The extractor still requires the source archive and destination directory. Other extracted files are not checked. |
+| `out\sqlite\compat\zlib\win32\Makefile.msc` | ZLIB archive extraction | The archive is still required; the harness checks the staged directory layout separately. |
+| `out\sqlite\compat\zlib\zlib1.dll` | The ZLIB NMake build | Collection still attempts to copy the DLL if ZLIB is enabled. |
+| `out\sqlite\compat\FP16-master\` | FP16 extraction | With PBLOB enabled, the ZIP is still required and the headers are copied into `tsrc`. |
+| `out\sqlite\compat\icu\.icu-staged` | Copying a new ICU installation | With ICU enabled, preflight still checks the active prefix, and staging revalidates the files in the existing tree. The marker alone is not enough. |
+
+### Cleaning and rebuilding
+
+`sqlite_msbuild.bat clean` forwards `clean` to the final NMake invocation. It is not a project reset: the download cache, extracted source and staged dependencies are separate from NMake's outputs. Replacing just a cached file does not force regeneration of `tsrc`, `sqlite3.c` or its binaries.
 
 | Situation | Action |
 |---|---|
@@ -289,7 +409,21 @@ The export list is not independently validated, and the temporary list is opened
 | ICU staging stopped and left `icu.stage` | Inspect the staging directory and move it aside before retrying. Fresh ICU staging requires a new directory. |
 | You need a different architecture, feature configuration, dependency version or clean source snapshot | Start in a separate clean base. Replacing a cached archive alone does not invalidate an already completed extraction or rebuild its dependent artifacts. |
 
-Most build stages stop on error; the diagnostic status and best-effort collection described above are exceptions to interpreting the final status as a build result. A fully cached normal build does not fetch upstream releases, but it still needs the local tools and, if enabled, the matching active Conda ICU. To reset the **same** build completely, move aside that base's generated `out` directory after retaining any artifacts you need.
+To reset the **same** build completely, move aside that base's generated `out` directory after retaining any artifacts you need. For a **different** architecture, configuration, or dependency installation, use a separate base.
+
+### Reproducing a build
+
+The default inputs are not pinned: a fresh cache can select a different SQLite snapshot, ZLIB release, revision of any project extension (`main`), or FP16 revision (`master`). To reconstruct a build, retain:
+
+- The exact archives and extension C sources with their hashes; record the SQLite check-in, ZLIB release, and extension and FP16 commits.
+- The Conda ICU package version, build identifier and target architecture. ICU comes from the active prefix, not the download cache.
+- The MSVC toolset, target architecture and build switches, including any individual extension overrides.
+
+Reusing a cache avoids downloading different source bytes; it does not reproduce the toolchain or Conda environment.
+
+### Exit status
+
+Most stages stop on a nonzero status. A dispatched diagnostic returns `100` and ends the build before downloads. Normal completion returns `0`, but [artifact collection](#packaged-artifacts) is best effort: a missing output or failed copy does not necessarily change that status.
 
 ## Harness tests
 
@@ -299,4 +433,12 @@ From this `README.md`'s directory in a Windows MSVC developer prompt with Python
 python -m pytest tests
 ```
 
-The [cache tests](tests/test_download_cache.py) use a loopback HTTP server; the [preflight tests](tests/test_msbuild_check.py) cover target selection and PE-machine checking; the [staging tests](tests/test_dependency_staging.py) cover explicit extraction destinations, reuse of extracted files, ZLIB release handling and ICU set validation. Some cases require real MSVC tools. These tests do not replace a native end-to-end build and link test for each target architecture.
+The [cache tests](tests/test_download_cache.py) use a loopback HTTP server. The [staging tests](tests/test_dependency_staging.py) exercise extraction destinations, reuse of extracted files, ZLIB release handling and ICU set validation.
+
+**Preflight coverage limitation:** [test_msbuild_check.py](tests/test_msbuild_check.py) still asserts that the main script calls `msbuild_check.bat` and its fixture invokes that filename. The harness now calls [msbuild.bat](msbuild.bat); the assertion does not match and the fixture does not verify the current helper's activation, linker or ICU machine checks.
+
+Pytest exercises the harness; the [post-build SQL checks](#post-build-registration-checks) exercise the packaged shell. To check the DLL interface for a target architecture, compile a small client that calls `sqlite3_open()` with the packaged header (`out\include\sqlite3.h`), link it against `out\lib\import\sqlite3.lib`, and run it with the matching `out\bin\sqlite3.dll` and its runtime dependencies. A successful shell query does not replace this link-and-run check.
+
+## Summary
+
+To use the build, start `out\bin\sqlite3.exe` and run the registration checks for the extensions you selected. Applications using the DLL need `out\include` and `out\lib\import\sqlite3.lib` at build time, and the matching `sqlite3.dll` and its runtime dependencies at run time. Use `out\lib\static\libsqlite3.lib` instead to incorporate SQLite code directly into a client. Before handing off either build, check that the required artifacts were collected and test the interface the consumer will actually use.
