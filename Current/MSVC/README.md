@@ -8,9 +8,12 @@ urls:
 
 ## Overview
 
-[sqlite_msbuild.bat](sqlite_msbuild.bat) builds a customized SQLite distribution for x86 or x64 Windows using MSVC and SQLite's `Makefile.msc`. It prepares selected extensions as part of the SQLite amalgamation (`sqlite3.c`) before compilation. A generated dispatcher registers their SQL functions and collations when a connection opens, so applications do not have to load separate extension DLLs.
+[sqlite_msbuild.bat](sqlite_msbuild.bat) builds a customized SQLite distribution for x86 or x64 Windows using MSVC and SQLite’s `Makefile.msc`. Smaller [presets](#presets) use the same harness. The default build:
 
-The default build includes ZLIB, ICU from the active Conda environment, 15 stock SQLite `ext/misc` modules, and three project extensions: [ICUex](https://github.com/pchemguy/SQLiteICUex), [PBLOB](https://github.com/pchemguy/SQLitePackedBlob), and [RegexpMatches](https://github.com/pchemguy/SQLiteRegexpMatches). The PBLOB hook stages the FP16 headers it needs. Smaller [presets](#presets) use the same harness. The outputs under `out\` are the shell and runtime DLLs, SQLite headers, a static library, and the import library for `sqlite3.dll`.
+- Builds or reuses ZLIB and stages ICU from the active Conda environment.
+- Compiles 15 stock SQLite `ext/misc` modules and three project extensions into the SQLite amalgamation (`sqlite3.c`): [ICUex](https://github.com/pchemguy/SQLiteICUex), [PBLOB](https://github.com/pchemguy/SQLitePackedBlob), and [RegexpMatches](https://github.com/pchemguy/SQLiteRegexpMatches). The PBLOB hook stages its FP16 headers.
+- Registers the extensions’ SQL functions and collations through a generated dispatcher when each connection opens. Applications do not need to load separate extension DLLs.
+- Packages the shell, runtime DLLs, SQLite headers, static library, and import library for `sqlite3.dll` under `out\`.
 
 **One base directory is for one build.** Use a separate copy of the harness and its tools for each target architecture, build configuration or dependency installation. Output paths are relative to `sqlite_msbuild.bat`, not the caller's current directory. Opening another developer prompt in a different directory does not isolate an x86 build from an x64 build.
 
@@ -441,4 +444,9 @@ Pytest exercises the harness; the [post-build SQL checks](#post-build-registrati
 
 ## Summary
 
-To use the build, start `out\bin\sqlite3.exe` and run the registration checks for the extensions you selected. Applications using the DLL need `out\include` and `out\lib\import\sqlite3.lib` at build time, and the matching `sqlite3.dll` and its runtime dependencies at run time. Use `out\lib\static\libsqlite3.lib` instead to incorporate SQLite code directly into a client. Before handing off either build, check that the required artifacts were collected and test the interface the consumer will actually use.
+Use the packaged build according to how your application consumes SQLite:
+
+- **Shell:** Start `out\bin\sqlite3.exe` and run the [registration checks](#post-build-registration-checks) for the extensions you selected.
+- **DLL client:** Compile with the headers in `out\include`, link against `out\lib\import\sqlite3.lib`, and deploy the matching `sqlite3.dll` and its runtime dependencies.
+- **Static client:** Link against `out\lib\static\libsqlite3.lib` to incorporate SQLite code directly into the client.
+- **Before distribution:** Check that the [required artifacts](#packaged-artifacts) were collected and test the interface the consumer will actually use.
