@@ -1,5 +1,7 @@
 ---
-url: https://chatgpt.com/c/6a786079-f408-83eb-87b1-e0d35b2804a5
+urls:
+  - https://chatgpt.com/c/6a9e37b0-95bc-83eb-9a9d-5cc7db64b388
+  - https://chatgpt.com/c/6a786079-f408-83eb-87b1-e0d35b2804a5
 ---
 
 # Building SQLite with MSVC on Windows
