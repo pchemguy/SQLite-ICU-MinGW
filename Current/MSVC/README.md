@@ -410,7 +410,8 @@ The export list is not independently validated, and the temporary list is opened
 | Files collected | Destination | Use |
 |---|---|---|
 | `sqlite3.exe`, `sqlite3.dll` | `out\bin` | Command-line shell and SQLite runtime |
-| `zlib1.dll`, `icu*.dll` | `out\bin` | Runtime dependencies when the respective features are enabled |
+| `zlib1.dll` | `out\bin` | Collected when ZLIB is enabled and the file is present; the default `sqlite3.dll` links ZLIB statically. |
+| `icu*.dll` | `out\bin` | ICU runtime libraries when ICU is enabled. |
 | `sqlite3*.h` from `out\build` | `out\include` | Generated SQLite headers; project `src\*.h` files are not collected |
 | `sqlite3.def`, `sqlite3.lib` | `out\lib\import` | Export definition and import library for linking against `sqlite3.dll` |
 | `libsqlite3.lib` | `out\lib\static` | Static SQLite library, not the DLL import library |
@@ -423,6 +424,25 @@ The export list is not independently validated, and the temporary list is opened
 |---|---|---|
 | Static linking | `out\lib\static\libsqlite3.lib` | SQLite's object code is part of the client. Optional dependencies such as ICU do not become static as a result. |
 | DLL linking | `out\lib\import\sqlite3.lib` | The client needs the matching `sqlite3.dll` and its enabled runtime dependencies. The import library itself is not needed at runtime. |
+
+### Use SQLite from Python in a Windows Conda environment
+
+Activate the Conda environment that supplied ICU for the build. With the default build, copy only `sqlite3.dll`: ZLIB is linked statically, and the matching ICU DLLs are already in `%CONDA_PREFIX%\Library\bin`.
+
+1. From the harness directory, run `python tool\sqlite3_dll_path.py` to see which DLL Python’s `sqlite3` module loads. Continue only if it reports the `sqlite3.dll` in the active environment’s `Library\bin` and your build matches Python’s architecture (x86 or x64).
+2. Close any processes using that DLL and back up the original. Then replace it:
+
+   ```cmd
+   copy /y "out\bin\sqlite3.dll" "%CONDA_PREFIX%\Library\bin\sqlite3.dll"
+   ```
+
+3. Start a fresh Python process to use the replacement. With the default build, this ICUex check prints `abc`:
+
+   ```cmd
+   python -c "import sqlite3; db = sqlite3.connect(':memory:'); print(db.execute('SELECT str_casefold(?)', ('ABC',)).fetchone()[0])"
+   ```
+
+For further details, refer to [SQLiteExtensionTemplate](https://github.com/pchemguy/SQLiteExtensionTemplate/blob/main/README.md)
 
 ## Recovery and reproducibility
 
