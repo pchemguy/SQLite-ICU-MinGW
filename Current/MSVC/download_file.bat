@@ -66,18 +66,19 @@ if not "%RC%"=="0" (
     goto :MAIN_EXIT
 )
 
+:: Verify HTTP code and Content-Type response.
+
+call :PARSE_HEADERS || (
+    set "RC=1"
+    goto :MAIN_EXIT
+)
+
 :: Rename temp file.
 
 ren "%PART%" "%~nx2" || (
     set "RC=1"
     echo %ERROR% Could not publish "%TARGET%".
-    goto :MAIN_EXIT
 )
-
-:: Verify HTTP code and Content-Type response.
-
-call :PARSE_HEADERS
-set "RC=%ERRORLEVEL%"
 
 :MAIN_EXIT
 
