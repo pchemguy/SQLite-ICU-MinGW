@@ -21,22 +21,70 @@
 :MAIN
 
 setlocal EnableExtensions EnableDelayedExpansion
+set "RC=0"
+
 call :COLOR_SCHEME
 
 set "NAME=%~1"
 set "TARGET=%~f2"
+set "PART=%TARGET%.part"
+set "HEADER_LOG=%~dpf2.log"
 set "URL=%~3"
 if not defined NAME goto :USAGE
 if "%~2"=="" goto :USAGE
 if not defined URL goto :USAGE
-if exist "%TARGET%\" (
-    echo %ERROR% Expected a file, not a directory: "%TARGET%"
-    exit /b 1
+
+:: If TARGET exists, use cached file.
+
+if exist "%TARGET%" (
+    if not exist "%TARGET%/" (
+        set "RC=0"
+        echo %OKOK% Using previously downloaded "%NAME%": "%TARGET%"
+    ) else (
+        set "RC=1"
+        echo %ERROR% Expected a file, not a directory: "%TARGET%"
+    )
+    goto :MAIN_EXIT
 )
 
-if not exist "%TARGET%" goto :FETCH
-echo %OKOK% Using previously downloaded "%NAME%": "%TARGET%"
-endlocal & exit /b 0
+:: If HEADER_LOG exists, delete it.
+
+if exist "%HEADER_LOG%" del /q "%HEADER_LOG%" || (
+    set "RC=1"
+    echo %ERROR% Could not delete header log "%HEADER_LOG%".
+    goto :MAIN_EXIT
+)
+
+:: Download to temp file.
+
+echo %INFO% Downloading "%NAME%" to "%PART%"
+curl.exe -L --globoff --retry 3 --dump-header "%HEADER_LOG%" --output "%PART%" -- "%URL%"
+set "RC=%ERRORLEVEL%"
+if not "%RC%"=="0" (
+    set "RC=1"
+    echo %ERROR% %NAME% download failure.
+    goto :MAIN_EXIT
+)
+
+:: Rename temp file.
+
+ren "%PART%" "%~nx2" || (
+    set "RC=1"
+    echo %ERROR% Could not publish "%TARGET%".
+    goto :MAIN_EXIT
+)
+
+:: Verify HTTP code and Content-Type response.
+
+call :PARSE_HEADERS
+set "RC=%ERRORLEVEL%"
+
+:MAIN_EXIT
+
+if exist "%PART%" if not exist "%PART%/" del /q "%PART%" || (set "RC=1")
+
+if not defined RC (set "RC=0")
+endlocal & exit /b %RC%
 
 :USAGE
 
@@ -51,45 +99,12 @@ endlocal & exit /b 1
 :: ############################################################################
 
 
-:: ============================================================================ FETCH BEGIN
-:: ============================================================================
-:FETCH
-
-set "PART=%TARGET%.part"
-set "HEADER_LOG=%~dpf2.log"
-
-echo %INFO% Downloading "%NAME%" to "%PART%"
-
-:: Clear any earlier headers in case curl fails before receiving a response.
-
-if exist "%HEADER_LOG%" del /q "%HEADER_LOG%" || (
-    set "RC=1"
-    echo %ERROR% Could not delete header log "%HEADER_LOG%".
-    goto :FAILED
-)
-
-:: Keep HTTP error headers so the response log includes the final status.
-
-curl.exe -L --globoff --retry 3 --dump-header "%HEADER_LOG%" --output "%PART%" -- "%URL%"
-set "RC=%ERRORLEVEL%"
-
-
-if exist "%PART%" if not exist "%PART%\" del /q "%PART%"
-
-if not defined RC (set "RC=1")
-exit /b %RC%
-:: ============================================================================
-:: ============================================================================ FETCH END
-
-
 :: ============================================================================ PARSE_HEADERS BEGIN
 :: ============================================================================
 :PARSE_HEADERS
 
 setlocal
 set "RC=0"
-
-set "HEADER_LOG=%~1"
 
 set "HTTP_CODE="
 set "CONTENT_TYPE="
