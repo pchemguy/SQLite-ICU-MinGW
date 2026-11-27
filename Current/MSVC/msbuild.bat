@@ -108,7 +108,7 @@ set "_EXIT_STATUS=0"
 for %%P in (
     "%ProgramFiles%\Microsoft Visual Studio" 
     "%ProgramFiles(x86)%\Microsoft Visual Studio"
-    "%~dp0..\Microsoft Visual Studio"
+    "%~d0\dev\Microsoft Visual Studio"
 ) do (
     echo %INFO% MSBuild: Checking for VS editions in "%%~P\{VERSION}\{KIND}".
     for /f "usebackq delims=" %%Y in (`dir /b /ad /O:-N "%%~P" 2^>nul`) do (

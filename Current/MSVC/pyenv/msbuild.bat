@@ -108,7 +108,7 @@ set "_EXIT_STATUS=0"
 for %%P in (
     "%ProgramFiles%\Microsoft Visual Studio" 
     "%ProgramFiles(x86)%\Microsoft Visual Studio"
-    "%~dp0..\Microsoft Visual Studio"
+    "%~d0\dev\Microsoft Visual Studio"
 ) do (
     echo %INFO% MSBuild: Checking for VS editions in "%%~P\{VERSION}\{KIND}".
     for /f "usebackq delims=" %%Y in (`dir /b /ad /O:-N "%%~P" 2^>nul`) do (
@@ -410,7 +410,7 @@ endlocal & exit /b %EXIT_STATUS%
 :CHECK_ICU_MACHINE
 
 if not defined CONDA_PREFIX (
-    echo %ERROR% USE_ICU=1 requires an active Conda environment.
+    echo %ERROR% USE_ICU=1 requires CONDA_PREFIX pointing to an active Conda environment.
     exit /b 1
 )
 set "ICU_BIN=%CONDA_PREFIX%\Library\bin"
