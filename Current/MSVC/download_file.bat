@@ -12,7 +12,7 @@
 ::     set "NAME=SQLite"
 ::     set "DISTRO=%~dp0sqlite.zip"
 ::     set "URL=https://sqlite.org/src/zip/sqlite.zip"
-::     
+::
 ::     call "%~dp0download_file.bat" "%NAME%" "%DISTRO%" "%URL%"
 
 
@@ -36,12 +36,12 @@ if exist "%TARGET%\" (
 
 if not exist "%TARGET%" goto :FETCH
 echo %OKOK% Using previously downloaded "%NAME%": "%TARGET%"
-exit /b 0
+endlocal & exit /b 0
 
 :USAGE
 
 echo %ERROR% Usage: "%~nx0" "NAME" "TARGET" "URL"
-exit /b 1
+endlocal & exit /b 1
 :: ============================================================================
 :: ============================================================================ MAIN END
 
@@ -56,41 +56,23 @@ exit /b 1
 :FETCH
 
 set "PART=%TARGET%.part"
-set "META=%TARGET%.response.log"
-set "HEADER_LOG=%~dpn2.log"
-if /i "%HEADER_LOG%"=="%TARGET%" set "HEADER_LOG=%TARGET%.headers.log"
+set "HEADER_LOG=%~dpf2.log"
+
 echo %INFO% Downloading "%NAME%" to "%PART%"
 
-:: Write final status and media type from the GET, not a separate HEAD. The
-:: trailing semicolon makes bare and parameterized media types comparable.
-curl.exe -fL --globoff --retry 3 --dump-header "%HEADER_LOG%" --output "%PART%" --write-out "%%{http_code} %%{content_type};\n" -- "%URL%" >"%META%"
-if not "%ERRORLEVEL%"=="0" (
-    set "RC=%ERRORLEVEL%"
-    echo %ERROR% Download failed with status %ERRORLEVEL%.
+:: Clear any earlier headers in case curl fails before receiving a response.
+
+if exist "%HEADER_LOG%" del /q "%HEADER_LOG%" || (
+    set "RC=1"
+    echo %ERROR% Could not delete header log "%HEADER_LOG%".
     goto :FAILED
 )
 
-:: Only accept a full HTTP response (not, for example, unsolicited 206).
-set "RC=1"
-findstr /b /c:"200 " "%META%" >nul || goto :BAD_RESPONSE
-findstr /i /r /b /c:"200 [ 	]*text/html[; 	]" "%META%" >nul
-if not "%ERRORLEVEL%"=="1" goto :BAD_RESPONSE
+:: Keep HTTP error headers so the response log includes the final status.
 
-:: REN stays in the same directory and does not overwrite an existing target.
-ren "%PART%" "%~nx2"
-if not "%ERRORLEVEL%"=="0" (
-    set "RC=%ERRORLEVEL%"
-    echo %ERROR% Could not publish "%TARGET%".
-    goto :FAILED
-)
-echo %OKOK% Downloaded "%NAME%": "%TARGET%"
-exit /b 0
+curl.exe -L --globoff --retry 3 --dump-header "%HEADER_LOG%" --output "%PART%" -- "%URL%"
+set "RC=%ERRORLEVEL%"
 
-:BAD_RESPONSE
-
-echo %ERROR% Unexpected HTTP status or media type. See "%META%".
-
-:FAILED
 
 if exist "%PART%" if not exist "%PART%\" del /q "%PART%"
 
@@ -98,6 +80,53 @@ if not defined RC (set "RC=1")
 exit /b %RC%
 :: ============================================================================
 :: ============================================================================ FETCH END
+
+
+:: ============================================================================ PARSE_HEADERS BEGIN
+:: ============================================================================
+:PARSE_HEADERS
+
+setlocal
+set "RC=0"
+
+set "HEADER_LOG=%~1"
+
+set "HTTP_CODE="
+set "CONTENT_TYPE="
+
+for /f "usebackq tokens=1,2 delims=:; " %%S in ("%HEADER_LOG%") do (
+    set "TYP=%%~S"
+    set "VAL=%%~T"
+    if "!TYP:~0,5!"=="HTTP/" (
+        set "HTTP_CODE=!VAL!"
+        set "CONTENT_TYPE="
+    ) else if /i "!TYP!"=="Content-Type" (
+        set "CONTENT_TYPE=!VAL!"
+    )
+)
+
+set "MSG="
+if not "%HTTP_CODE%"=="200" (
+    set "MSG=%ERROR% HTTP response code: %HTTP_CODE%. Expected: 200."
+) else if not defined CONTENT_TYPE (
+    set "MSG=%ERROR% Failed to extract Content-Type from HTTP response."
+) else if /i "%CONTENT_TYPE%"=="text/html" (
+    set "MSG=%ERROR% HTTP response Content-Type: %CONTENT_TYPE%. Expected NOT text/html."
+)
+
+if defined MSG (
+    set "RC=1"
+) else (
+    set "RC=0"
+    set "MSG=%INFO% Download response is OK. HTTP response code %HTTP_CODE% and Content-Type: %CONTENT_TYPE%."
+)
+
+echo %MSG%
+
+if not defined RC (set "RC=1")
+endlocal & exit /b %RC%
+:: ============================================================================
+:: ============================================================================ PARSE_HEADERS END
 
 
 :: ============================================================================ COLOR_SCHEME BEGIN
