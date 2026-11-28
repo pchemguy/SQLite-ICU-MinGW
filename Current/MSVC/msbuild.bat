@@ -450,9 +450,8 @@ set "WIDTH=25"
 
 echo:
 echo ----------------------------------------------------------------------
-echo Checking environment variables:
-echo     %*
-echo:
+echo %WARN% Checking environment variables:
+echo %INFO%
 
 :NEXT_VAR
 
@@ -462,7 +461,7 @@ set "VAR_LABEL=%~1=%PAD10%%PAD10%%PAD10%%PAD10%"
 set "VAR_LABEL=!VAR_LABEL:~0,%WIDTH%!"
 
 if defined %~1 (
-    echo %INFO% %VAR_LABEL% ''!%~1!''
+    echo %INFO% %VAR_LABEL% `!%~1!`
 ) else (
     echo %WARN% %VAR_LABEL% not defined.
 )
