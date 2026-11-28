@@ -454,36 +454,7 @@ set "SECTION=ZLIB_DOWNLOAD"
 
 set "NAME=ZLIB"
 set "DISTRO=%CACHEDIR%\zlib.tar.gz"
-if not exist "%DISTRO%" goto :ZLIB_DOWNLOAD_LATEST
-if exist "%DISTRO%\" (
-    echo %ERROR% Expected a file, not a directory: "%DISTRO%"
-    exit /b 1
-)
-echo %OKOK% Using previously downloaded ZLIB: "%DISTRO%"
-exit /b 0
-
-:ZLIB_DOWNLOAD_LATEST
-
-rem set "URL=https://zlib.net/current/zlib.tar.gz"
-set "URL_PREFIX=https://github.com/madler/zlib/releases"
-
-set "URL_LOG=%CACHEDIR%\zlib-release-url.txt"
-curl.exe -fsSL -o NUL -w "%%{url_effective}\n" -- "%URL_PREFIX%/latest" >"%URL_LOG%"
-if not "%ERRORLEVEL%"=="0" (
-    echo %ERROR% Failed to resolve the latest ZLIB release.
-    exit /b 1
-)
-:: Accept only dotted numeric versions, such as v1.4 or v1.3.1; reject empty components.
-set "TAG=https://github[.]com/madler/zlib/releases/tag/v[0-9][0-9.]*[.][0-9][0-9]*"
-set "ZLIB_VERSION="
-for /f "usebackq tokens=7 delims=/" %%V in (
-    `findstr /r /x /c:"%TAG%" "%URL_LOG%" ^| findstr /l /v /c:".."`
-) do set "ZLIB_VERSION=%%V"
-if not defined ZLIB_VERSION (
-    echo %ERROR% Unexpected ZLIB release URL. See "%URL_LOG%".
-    exit /b 1
-)
-set "URL=%URL_PREFIX%/download/%ZLIB_VERSION%/zlib-%ZLIB_VERSION:~1%.tar.gz"
+set "URL=https://zlib.net/current/zlib.tar.gz"
 
 call "%~dp0download_file.bat" "%NAME%" "%DISTRO%" "%URL%"
 set "EXIT_STATUS=%ERRORLEVEL%"
@@ -492,7 +463,6 @@ echo:
 echo %INFO% ~~~~~ %SECTION% ~~~~~
 echo --------------------------------------------------------------------------------
 echo:
-if not defined EXIT_STATUS (set "EXIT_STATUS=0")
 endlocal & exit /b %EXIT_STATUS%
 :: ============================================================================
 :: ============================================================================ ZLIB_DOWNLOAD END
@@ -613,6 +583,7 @@ for %%F in ("%STAGE%\bin%ARCH%\icu??.dll" "%STAGE%\bin%ARCH%\icutest*.dll") do (
 )
 
 :ICU_CONDA_VALIDATE
+
 set "COMMON="
 for /f "usebackq delims=" %%F in (
     `dir /b /a:-d "%ROOT%\bin%ARCH%\icuuc*.dll" 2^>nul ^| findstr /i /r /x "icuuc[0-9][0-9]*\.dll"`
