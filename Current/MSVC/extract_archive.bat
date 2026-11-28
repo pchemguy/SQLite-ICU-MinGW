@@ -4,9 +4,9 @@
 :: Extracts archive using Windows Tar.
 ::
 :: %~1 - NAME - User-friendly name shown in logging.
-:: %~2 - FLAG - Path to a file or directory relative to %~4.
+:: %~2 - FLAG - Absolute Path to a file or directory within %~4.
 ::              If it already exists on disk, skip extraction.
-:: %~3 - SRC  - Archive path - MUST exist.
+:: %~3 - SRC  - Absolute archive path - MUST exist.
 :: %~4 - DST  - Extraction directory path - MUST exist.
 ::
 :: Windows tar directly supports .tar.gz and .zip.
@@ -28,7 +28,7 @@
 :: When top-level path element in archive includes version suffix, rename
 :: it automaticaly to match the FLAG.
 ::
-:: Use "%DST%/%NAME%_PROCESSING.flag" flag to ensure atomic extraction.
+:: Use XSTARTED="%~4/%~nx3.part" flag to ensure atomic extraction.
 
 :: ============================================================================ MAIN BEGIN
 :: ============================================================================
@@ -45,10 +45,15 @@ echo ---------------------------------------------------------------------------
 echo %WARN% Processing %NAME% archive.
 echo:
 
-call :PARSE_ARGS %*
+call :PARSE_ARGS %* || (
+    set "EXIT_STATUS=1"
+    goto :EXTRACT_EXIT
+)
 
-if exist "%FLAG%" if not exist "%PROCESSING%" (
+if exist "%DST%/%FLAG%" if not exist "%XSTARTED%" (
     set "EXIT_STATUS=0"
+    echo %INFO% OK - PRESENT - "%DST%/%FLAG%".
+    echo %INFO% OK - ABSENT  - "%XSTARTED%".
     echo %OKOK% ===== Using previously extracted %NAME% =====
     goto :EXTRACT_EXIT
 )
@@ -63,11 +68,13 @@ if not exist "%TAR%" (
 echo %INFO% ===== Extracting %NAME% archive =====
 echo:
 
-if exist "%PROCESSING%" (
-    echo %WARN% Found "%PROCESSING%" flag. Prior extraction was interrupted. Overwriting.
+if exist "%XSTARTED%" (
+    echo %WARN% Found "%XSTARTED%" flag. Prior extraction was interrupted. Overwriting.
 ) else (
-    echo: >"%PROCESSING%"
+    echo: >"%XSTARTED%"
 )
+
+exit
 
 "%TAR%" -x -f "%SRC%" -C "%DST%"
 set "EXIT_STATUS=%ERRORLEVEL%"
@@ -102,10 +109,21 @@ endlocal & exit /b %EXIT_STATUS%
 set "_EXIT_STATUS=0"
 
 set "NAME=%~1"
-set "FLAG=%~f2"
-set "SRC=%~f3"
-set "DST=%~f4"
-set "PROCESSING=%DST%/%NAME%_PROCESSING.flag"
+set "SRC=%~3"
+set "SRC=%SRC:\=/%"
+set "DST=%~4"
+set "DST=%DST:\=/%"
+set "FLAG=%~2"
+set "FLAG=%FLAG:\=/%"
+set "FLAG=!FLAG:%DST%/=!"
+set "XSTARTED=%DST%/%~nx3.part"
+
+echo %INFO% ----------------------------------------------------------------------
+echo %INFO% CLI arguments:
+echo %INFO%
+echo %INFO% %*
+echo %INFO% ----------------------------------------------------------------------
+echo:
 
 if "%~4"=="" (
     set "_EXIT_STATUS=1"
@@ -132,12 +150,79 @@ if not exist "%DST%\." (
     goto :PARSE_ARGS_EXIT
 )
 
+set "VARS_TITLE=Main VARS:"
+call :CHECK_VARS "NAME" "FLAG" "SRC" "DST" "XSTARTED"
+echo:
+set "VARS_TITLE="
+
 :PARSE_ARGS_EXIT
 
 if not defined _EXIT_STATUS (set "_EXIT_STATUS=0")
 exit /b %_EXIT_STATUS%
 :: ============================================================================
 :: ============================================================================ PARSE_ARGS END
+
+
+:: ============================================================================ ARCHIVE_PROBE BEGIN
+:: ============================================================================
+:ARCHIVE_PROBE
+
+set "_EXIT_STATUS=0"
+
+set "TOPDIR="
+set "SUFFIX="
+for /f "usebackq tokens=1,* delims=/" %%P in (`tar -tf zlib.tar.gz "%FLAG%" 2^>nul`) do (
+    set "TOPDIR=%%~P"
+    set "SUFFIX=%%~Q"
+)
+
+if not defined _EXIT_STATUS (set "_EXIT_STATUS=0")
+exit /b %_EXIT_STATUS%
+:: ============================================================================
+:: ============================================================================ ARCHIVE_PROBE END
+
+
+:: ============================================================================ CHECK_VARS BEGIN
+:: ============================================================================
+:CHECK_VARS
+:: 
+:: Accepts variable number of variable name candidates. For each name reports,
+:: if the corresponding variable is undefined or its value, if defined.
+:: Set VARS_TITLE before calling to replace default title.
+
+setlocal
+
+set "PAD10=          "
+set "WIDTH=25"
+if not defined VARS_TITLE (set "VARS_TITLE=Checking environment variables:")
+
+echo:
+echo ----------------------------------------------------------------------
+echo %WARN% %VARS_TITLE%
+echo %INFO%
+
+:NEXT_VAR
+
+if "%~1"=="" goto :CHECK_VARS_EXIT
+
+set "VAR_LABEL=%~1=%PAD10%%PAD10%%PAD10%%PAD10%"
+set "VAR_LABEL=!VAR_LABEL:~0,%WIDTH%!"
+
+if defined %~1 (
+    echo %INFO% %VAR_LABEL% `!%~1!`
+) else (
+    echo %WARN% %VAR_LABEL% not defined.
+)
+shift & goto :NEXT_VAR
+
+:CHECK_VARS_EXIT
+
+echo ----------------------------------------------------------------------
+echo:
+
+endlocal & exit /b 0
+:: ============================================================================
+:: ============================================================================ CHECK_VARS END
 
 
 :: ============================================================================ COLOR_SCHEME BEGIN
