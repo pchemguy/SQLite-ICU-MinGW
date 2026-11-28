@@ -20,8 +20,8 @@
 ::        is stripped after extraction.
 ::   
 :: The script tests for possible presense of version suffix in top-level path
-:: element of archive member corresponding to the on-disk %~2 FLAG, taking into
-:: account a special case of possible extension, and derives archive PROBE, e.g.:
+:: element of archive member corresponding to the on-disk %~2 FLAG {extensions
+:: are not supported} and derives archive PROBE, e.g.:
 ::     - "zlib.EXT/win32/Makefile.msc" would yield "zlib*.EXT/win32/Makefile.msc".
 ::
 :: Archive must pass the test with the derived PROBE or fail otherwise.
@@ -173,8 +173,6 @@ set "_EXIT_STATUS=0"
 
 set "FLAG_LEAD="
 set "FLAG_TAIL="
-set "FLAG_NAME="
-set "FLAG_EXTS="
 
 ::                                           LEAD + TAIL
 :: Split path like zlib/win32/Makefile.msc = zlib + win32/Makefile.msc
@@ -184,20 +182,11 @@ for /f "usebackq tokens=1,* delims=/" %%P in ('%FLAG%') do (
     set "FLAG_TAIL=%%~Q"
 )
 
-::                             NAME + EXTS
-:: Split path like zlib.EXTS = zlib + .EXTS
-
-for /f "usebackq tokens=1,* delims=." %%P in ('%FLAG_LEAD%') do (
-    set "FLAG_NAME=%%~P"
-    set "FLAG_EXTS=%%~Q"
-)
-
-set "PROBE=%FLAG_NAME%"
-if defined FLAG_EXTS (set "PROBE=%PROBE%*.%FLAG_EXTS%")
+set "PROBE=%FLAG_LEAD%"
 if defined FLAG_TAIL (set "PROBE=%PROBE%/%FLAG_TAIL%")
 
 set "VARS_TITLE=Disk FLAG components"
-call :CHECK_VARS "PROBE" "FLAG_LEAD" "FLAG_TAIL" "FLAG_NAME" "FLAG_EXTS"
+call :CHECK_VARS "PROBE" "FLAG_LEAD" "FLAG_TAIL"
 echo:
 set "VARS_TITLE="
 
