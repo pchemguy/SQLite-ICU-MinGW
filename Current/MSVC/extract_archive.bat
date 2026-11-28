@@ -3,12 +3,32 @@
 ::
 :: Extracts archive using Windows Tar.
 ::
-:: %~1 - Name.
-:: %~2 - Path to a file or directory from the archive.
-::       If it already exists on disk, skip extraction.
-:: %~3 - Archive path - MUST exist.
-:: %~4 - Extraction directory path - MUST exist.
+:: %~1 - NAME - User-friendly name shown in logging.
+:: %~2 - FLAG - Path to a file or directory relative to %~4.
+::              If it already exists on disk, skip extraction.
+:: %~3 - SRC  - Archive path - MUST exist.
+:: %~4 - DST  - Extraction directory path - MUST exist.
 ::
+:: Windows tar directly supports .tar.gz and .zip.
+:: Archive content is extracted directly into %~4.
+::
+:: %~2 FLAG is assumed to not include version suffix even if archive content
+:: naming convention uses one. For example, for zlib.tar.gz verion 1.4 expect
+::     - "zlib-1.4" - top-level container;
+::     - "zlib-1.4/win32/Makefile.msc" - probe inside archive;
+::     - "zlib/win32/Makefile.msc" - %~2 FLAG, probe on disk - version suffix
+::        is stripped after extraction.
+::   
+:: The script tests for possible presense of version suffix in top-level path
+:: element of archive member corresponding to the on-disk %~2 FLAG, taking into
+:: account a special case of possible extension, and derives archive PROBE, e.g.:
+::     - "zlib.EXT/win32/Makefile.msc" would yield "zlib*.EXT/win32/Makefile.msc".
+::
+:: Archive must pass the test with the derived PROBE or fail otherwise.
+:: When top-level path element in archive includes version suffix, rename
+:: it automaticaly to match the FLAG.
+::
+:: Use "%DST%/%NAME%_PROCESSING.flag" flag to ensure atomic extraction.
 
 :: ============================================================================ MAIN BEGIN
 :: ============================================================================
@@ -22,47 +42,32 @@ call :COLOR_SCHEME
 
 echo:
 echo --------------------------------------------------------------------------------
-echo %WARN% Extracting archive.
+echo %WARN% Processing %NAME% archive.
 echo:
 
-if "%~4"=="" (
-    set "EXIT_STATUS=1"
-    echo %ERROR% Missing required parameters.
-    echo %INFO%  USAGE: call extract_archive.bat "NAME" "FLAG" "SRC" "DST"
-    goto :EXTRACT_EXIT
-)
+call :PARSE_ARGS %*
 
-set "NAME=%~1"
-set "FLAG=%~f2"
-set "SRC=%~f3"
-set "DST=%~f4"
-if not defined TAR set "TAR=%SystemRoot%\System32\tar.exe"
-
-if not exist "%SRC%" (
-    set "EXIT_STATUS=1"
-    echo %ERROR% Archive "%SRC%" not found.
-    goto :EXTRACT_EXIT
-)
-
-if exist "%SRC%\" (
-    set "EXIT_STATUS=1"
-    echo %ERROR% Expected an archive file, not a directory: "%SRC%".
-    goto :EXTRACT_EXIT
-)
-
-if not exist "%DST%\." (
-    set "EXIT_STATUS=1"
-    echo %ERROR% Directory "%DST%" not found.
-    goto :EXTRACT_EXIT
-)
-
-if exist "%FLAG%" (
+if exist "%FLAG%" if not exist "%PROCESSING%" (
+    set "EXIT_STATUS=0"
     echo %OKOK% ===== Using previously extracted %NAME% =====
     goto :EXTRACT_EXIT
 )
 
-echo %INFO% ===== Extracting %NAME% =====
+if not defined TAR set "TAR=%SystemRoot%\System32\tar.exe"
+if not exist "%TAR%" (
+    set "EXIT_STATUS=1"
+    echo %ERROR% Tar not found: %TAR%.
+    goto :PARSE_ARGS_EXIT
+)
+
+echo %INFO% ===== Extracting %NAME% archive =====
 echo:
+
+if exist "%PROCESSING%" (
+    echo %WARN% Found "%PROCESSING%" flag. Prior extraction was interrupted. Overwriting.
+) else (
+    echo: >"%PROCESSING%"
+)
 
 "%TAR%" -x -f "%SRC%" -C "%DST%"
 set "EXIT_STATUS=%ERRORLEVEL%"
@@ -75,7 +80,7 @@ if "%EXIT_STATUS%"=="0" (
 :EXTRACT_EXIT
 
 echo:
-echo %WARN% Completed archive extraction.
+echo %WARN% Completed %NAME% archive extraction.
 echo --------------------------------------------------------------------------------
 echo:
 
@@ -88,6 +93,51 @@ endlocal & exit /b %EXIT_STATUS%
 :: ############################################################################
 :: ############################################################################
 :: ############################################################################
+
+
+:: ============================================================================ PARSE_ARGS BEGIN
+:: ============================================================================
+:PARSE_ARGS
+
+set "_EXIT_STATUS=0"
+
+set "NAME=%~1"
+set "FLAG=%~f2"
+set "SRC=%~f3"
+set "DST=%~f4"
+set "PROCESSING=%DST%/%NAME%_PROCESSING.flag"
+
+if "%~4"=="" (
+    set "_EXIT_STATUS=1"
+    echo %ERROR% Missing required parameters.
+    echo %INFO%  USAGE: call extract_archive.bat "NAME" "FLAG" "SRC" "DST"
+    goto :PARSE_ARGS_EXIT
+)
+
+if not exist "%SRC%" (
+    set "_EXIT_STATUS=1"
+    echo %ERROR% Archive "%SRC%" not found.
+    goto :PARSE_ARGS_EXIT
+)
+
+if exist "%SRC%/" (
+    set "_EXIT_STATUS=1"
+    echo %ERROR% Expected an archive file, not a directory: "%SRC%".
+    goto :PARSE_ARGS_EXIT
+)
+
+if not exist "%DST%\." (
+    set "_EXIT_STATUS=1"
+    echo %ERROR% Ouput directory "%DST%" not found.
+    goto :PARSE_ARGS_EXIT
+)
+
+:PARSE_ARGS_EXIT
+
+if not defined _EXIT_STATUS (set "_EXIT_STATUS=0")
+exit /b %_EXIT_STATUS%
+:: ============================================================================
+:: ============================================================================ PARSE_ARGS END
 
 
 :: ============================================================================ COLOR_SCHEME BEGIN
