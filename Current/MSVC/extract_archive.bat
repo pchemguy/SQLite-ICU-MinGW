@@ -62,7 +62,7 @@ if not defined TAR set "TAR=%SystemRoot%\System32\tar.exe"
 if not exist "%TAR%" (
     set "EXIT_STATUS=1"
     echo %ERROR% Tar not found: %TAR%.
-    goto :PARSE_ARGS_EXIT
+    goto :EXTRACT_EXIT
 )
 
 echo %INFO% ===== Extracting %NAME% archive =====
@@ -73,6 +73,8 @@ if exist "%XSTARTED%" (
 ) else (
     echo: >"%XSTARTED%"
 )
+
+call :ARCHIVE_PROBE
 
 exit
 
@@ -169,12 +171,35 @@ exit /b %_EXIT_STATUS%
 
 set "_EXIT_STATUS=0"
 
-set "TOPDIR="
-set "SUFFIX="
-for /f "usebackq tokens=1,* delims=/" %%P in (`tar -tf zlib.tar.gz "%FLAG%" 2^>nul`) do (
-    set "TOPDIR=%%~P"
-    set "SUFFIX=%%~Q"
+set "FLAG_LEAD="
+set "FLAG_TAIL="
+set "FLAG_NAME="
+set "FLAG_EXTS="
+
+::                                           LEAD + TAIL
+:: Split path like zlib/win32/Makefile.msc = zlib + win32/Makefile.msc
+
+for /f "usebackq tokens=1,* delims=/" %%P in ('%FLAG%') do (
+    set "FLAG_LEAD=%%~P"
+    set "FLAG_TAIL=%%~Q"
 )
+
+::                             NAME + EXTS
+:: Split path like zlib.EXTS = zlib + .EXTS
+
+for /f "usebackq tokens=1,* delims=." %%P in ('%FLAG_LEAD%') do (
+    set "FLAG_NAME=%%~P"
+    set "FLAG_EXTS=%%~Q"
+)
+
+set "PROBE=%FLAG_NAME%"
+if defined FLAG_EXTS (set "PROBE=%PROBE%*.%FLAG_EXTS%")
+if defined FLAG_TAIL (set "PROBE=%PROBE%/%FLAG_TAIL%")
+
+set "VARS_TITLE=Disk FLAG components"
+call :CHECK_VARS "PROBE" "FLAG_LEAD" "FLAG_TAIL" "FLAG_NAME" "FLAG_EXTS"
+echo:
+set "VARS_TITLE="
 
 if not defined _EXIT_STATUS (set "_EXIT_STATUS=0")
 exit /b %_EXIT_STATUS%
